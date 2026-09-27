@@ -95,6 +95,7 @@ describe('flashcard review + spaced repetition', () => {
     const reasons = (queue.body.data.cards as { reason: string }[]).map((card) => card.reason);
     expect(reasons).toContain('new');
     expect(reasons).toContain('incorrect'); // failed card is flagged
+    expect(reasons).toContain('reviewed'); // studied-not-due card is labeled honestly
     expect(queue.body.data.title).toBe('Biology basics');
   });
 

@@ -40,7 +40,7 @@ export function StudyPage() {
     if (!loading) setPhase(error ? 'error' : 'session');
   }, [loading, error]);
 
-  // Prioritized study queue (due → incorrect → difficult → new). Falls back
+  // Prioritized study queue (due → incorrect → difficult → new → reviewed). Falls back
   // to plain set order when the queue cannot be loaded.
   useEffect(() => {
     if (!setId) return;

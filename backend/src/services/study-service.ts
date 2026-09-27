@@ -11,7 +11,7 @@ import { isDifficult, scheduleReview } from './scheduling-service.js';
 
 export interface PracticeCard {
   card: ReturnType<typeof dto.card>;
-  reason: 'due' | 'incorrect' | 'difficult' | 'new';
+  reason: 'due' | 'incorrect' | 'difficult' | 'new' | 'reviewed';
 }
 
 export interface PracticeQueue {
@@ -27,12 +27,13 @@ interface ClassifiedCard extends PracticeCard {
   isDue: boolean;
 }
 
-/** Study-priority rank: due → incorrect → difficult → new (Phase 5 §5). */
+/** Study-priority rank: due → incorrect → difficult → new → reviewed. */
 const REASON_RANK: Record<QueueReason, number> = {
   due: 0,
   incorrect: 1,
   difficult: 2,
   new: 3,
+  reviewed: 4,
 };
 
 async function requireVisibleSet(db: Database, userId: string | null, setId: string) {
@@ -44,7 +45,7 @@ async function requireVisibleSet(db: Database, userId: string | null, setId: str
 /**
  * Shared card classification: a single pass over the set's cards producing
  * reason-tagged entries. Both queues build on this so the "due / incorrect /
- * difficult / new" definitions live in exactly one place.
+ * difficult / new / reviewed" definitions live in exactly one place.
  */
 async function classifyCards(
   db: Database,
@@ -89,7 +90,8 @@ async function classifyCards(
     } else if (failedBefore) {
       reason = 'incorrect';
     } else {
-      reason = 'new';
+      // Studied before and not due: honest label, lowest priority.
+      reason = 'reviewed';
     }
     entries.push({ card: dto.card(card), reason, isDue });
   }
@@ -150,7 +152,7 @@ export const studyService = {
   },
 
   /**
-   * Practice queue: a mix of due, incorrect, difficult and new cards
+   * Practice queue: a mix of due, incorrect, difficult, new and reviewed cards
    * (spec §6). Guests (no userId) simply get the set's cards as "new".
    */
   async practiceQueue(db: Database, userId: string | null, setId: string): Promise<PracticeQueue> {
@@ -162,19 +164,26 @@ export const studyService = {
       incorrect: [],
       difficult: [],
       new: [],
+      reviewed: [],
     };
     for (const entry of entries) {
       buckets[entry.reason].push({ card: entry.card, reason: entry.reason });
     }
 
     // Interleave the buckets so one category cannot dominate the session.
-    const cards = interleave([buckets.due, buckets.incorrect, buckets.difficult, buckets.new]);
+    const cards = interleave([
+      buckets.due,
+      buckets.incorrect,
+      buckets.difficult,
+      buckets.new,
+      buckets.reviewed,
+    ]);
     return { setId, title, cards };
   },
 
   /**
    * Flashcard study queue in strict scheduling priority: due cards first,
-   * then previously incorrect, difficult and new cards (Phase 5 §5).
+   * then previously incorrect, difficult, new and reviewed cards.
    * Only cards the caller may study are included.
    */
   async studyQueue(db: Database, userId: string | null, setId: string): Promise<PracticeQueue> {

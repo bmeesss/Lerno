@@ -93,10 +93,10 @@ describe('phase 5: study queue', () => {
     expect(entries.map((e) => e.card.question)).toEqual([
       'failed-once?',
       'failed-thrice?',
-      'learned?',
       'untouched?',
+      'learned?',
     ]);
-    expect(entries.map((e) => e.reason)).toEqual(['incorrect', 'difficult', 'new', 'new']);
+    expect(entries.map((e) => e.reason)).toEqual(['incorrect', 'difficult', 'new', 'reviewed']);
     expect(res.body.data.title).toBe('Priority set');
   });
 

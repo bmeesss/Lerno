@@ -12,7 +12,7 @@ export interface SessionCard {
   id: string;
   question: string;
   answer: string;
-  reason?: 'due' | 'incorrect' | 'difficult' | 'new';
+  reason?: 'due' | 'incorrect' | 'difficult' | 'new' | 'reviewed';
 }
 
 export interface SessionSummary {
@@ -35,6 +35,7 @@ const REASON_LABEL: Record<NonNullable<SessionCard['reason']>, string> = {
   incorrect: 'Previously incorrect',
   difficult: 'Difficult card',
   new: 'New card',
+  reviewed: 'Studied before',
 };
 
 export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Props) {

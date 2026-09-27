@@ -3,7 +3,7 @@ import type { CardProgress, DueGroup, ReviewResult, StudySession } from '../type
 
 export interface PracticeCardEntry {
   card: { id: string; question: string; answer: string; position: number };
-  reason: 'due' | 'incorrect' | 'difficult' | 'new';
+  reason: 'due' | 'incorrect' | 'difficult' | 'new' | 'reviewed';
 }
 
 export interface PracticeQueue {

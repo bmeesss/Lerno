@@ -425,7 +425,8 @@ export const mcpTools = {
   startPractice: {
     name: 'lerno_start_practice',
     description:
-      'Start a practice round: the set’s study queue (due, incorrect, difficult and new cards, ' +
+      'Start a practice round: the set’s study queue (due, incorrect, difficult, new and ' +
+      'already-studied cards, ' +
       'same order as the website’s Practice mode) with questions and answers. ' +
       'Ask the questions one by one and check the student’s answers against the answers provided. ' +
       'Read-only: answering here does not record progress — the student reviews on the website. ' +
