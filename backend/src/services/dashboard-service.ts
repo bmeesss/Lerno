@@ -4,6 +4,7 @@
  */
 import type { Database } from '../lib/db/repository.js';
 import { DEFAULT_TIMEZONE } from '../lib/timezone.js';
+import { discoverService } from './discover-service.js';
 import { progressService } from './progress-service.js';
 import { retentionService } from './retention-service.js';
 import { studyService } from './study-service.js';
@@ -16,12 +17,13 @@ export const dashboardService = {
     displayName: string,
     timeZone: string = DEFAULT_TIMEZONE,
   ) {
-    const [dueGroups, stats, ownSets, favorites, today] = await Promise.all([
+    const [dueGroups, stats, ownSets, favorites, today, suggestions] = await Promise.all([
       studyService.dueGroups(db, userId),
       progressService.stats(db, userId, new Date(), timeZone),
       db.sets.listByOwner(userId),
       db.favorites.listByUser(userId),
       retentionService.today(db, userId, new Date(), timeZone),
+      discoverService.suggestions(db, userId),
     ]);
 
     const favoriteSets = await db.sets.listByIds(favorites.map((favorite) => favorite.setId));
@@ -47,6 +49,7 @@ export const dashboardService = {
       subjectProgress: stats.subjectProgress.slice(0, 5),
       continueSet,
       today,
+      suggestions,
     };
   },
 };

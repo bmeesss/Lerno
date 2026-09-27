@@ -167,6 +167,7 @@ export interface DashboardData {
   subjectProgress: SubjectProgress[];
   continueSet: StudySetSummary | null;
   today: TodaySummary;
+  suggestions: StudySetSummary[];
 }
 
 export interface StreakInfo {
@@ -246,6 +247,7 @@ export interface ProgressStats {
   dueCards: number;
   quizAttempts: number;
   accuracy: number | null;
+  quizAccuracy: number | null;
   studyTimeMinutes: number;
   streakDays: number;
   longestStreak: number;

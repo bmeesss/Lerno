@@ -20,6 +20,7 @@ const STATS: ProgressStats = {
   dueCards: 4,
   quizAttempts: 2,
   accuracy: 0.75,
+  quizAccuracy: 0.5,
   studyTimeMinutes: 35,
   streakDays: 3,
   longestStreak: 5,
@@ -91,6 +92,7 @@ describe('ProgressPage', () => {
   it('labels flashcard accuracy explicitly and shows the today strip', async () => {
     renderPage();
     expect(await screen.findByText('Flashcard accuracy')).toBeInTheDocument();
+    expect(await screen.findByText('Quiz accuracy')).toBeInTheDocument();
     expect(await screen.findByText(/80% card accuracy/)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getByText('4 / 10 cards')).toBeInTheDocument();

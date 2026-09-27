@@ -50,6 +50,13 @@ export function ProgressPage() {
           </div>
         </div>
         <div className="card stat-card">
+          <div className="stat-label">Quiz accuracy</div>
+          <div className="stat-value">
+            {data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}
+          </div>
+          <div className="stat-sub">{data.quizAttempts} attempts</div>
+        </div>
+        <div className="card stat-card">
           <div className="stat-label">Due now</div>
           <div className="stat-value">{data.dueCards}</div>
           <div className="stat-sub">Cards waiting for review</div>
