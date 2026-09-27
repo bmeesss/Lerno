@@ -217,7 +217,9 @@ function StudyDone({
         You went through {total} answer{total === 1 ? '' : 's'} — {summary.correct} correct and{' '}
         {summary.incorrect} incorrect on <strong>{set.title}</strong>.
       </p>
-      <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: '4px 0 0' }}>{accuracy}% flashcard accuracy</p>
+      <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: '4px 0 0' }}>
+        {accuracy}% flashcard accuracy
+      </p>
 
       {!isGuest && today ? <SessionHabit today={today} /> : null}
 

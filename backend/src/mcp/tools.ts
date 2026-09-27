@@ -524,15 +524,11 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: studyPlanInputSchema,
     async run(ctx: McpContext, args: StudyPlanInput): Promise<Record<string, unknown>> {
-      const plan = await retentionService.studyPlan(
-        ctx.db,
-        ctx.userId,
-        {
-          days: args.days,
-          setIds: args.setIds,
-          timeZone: await resolveTimeZone(ctx.db, ctx.userId),
-        },
-      );
+      const plan = await retentionService.studyPlan(ctx.db, ctx.userId, {
+        days: args.days,
+        setIds: args.setIds,
+        timeZone: await resolveTimeZone(ctx.db, ctx.userId),
+      });
       return {
         days: plan.days,
         startDay: plan.startDay,

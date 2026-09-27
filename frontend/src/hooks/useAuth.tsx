@@ -23,7 +23,11 @@ interface AuthContextValue {
   signup: (email: string, password: string, displayName: string) => Promise<SignupResult>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
-  updateProfile: (updates: { displayName?: string; avatarUrl?: string | null; timezone?: string }) => Promise<Profile>;
+  updateProfile: (updates: {
+    displayName?: string;
+    avatarUrl?: string | null;
+    timezone?: string;
+  }) => Promise<Profile>;
   refreshUser: () => Promise<void>;
 }
 
