@@ -13,6 +13,7 @@ import { subjectRoutes } from './routes/subject.routes.js';
 import { progressRoutes, reviewRoutes, studyRoutes } from './routes/study.routes.js';
 import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { discoverRoutes, favoriteRoutes } from './routes/discover.routes.js';
+import { adminRoutes, reportRoutes } from './routes/report.routes.js';
 
 export interface AppDeps {
   /** Lightweight optional database probe for /api/health. */
@@ -59,6 +60,8 @@ export function createApp(deps: AppDeps = {}): Express {
   api.use('/dashboard', dashboardRoutes());
   api.use('/discover', discoverRoutes());
   api.use('/favorites', favoriteRoutes());
+  api.use('/reports', reportRoutes());
+  api.use('/admin', adminRoutes());
   // Feature route groups are mounted here as their phases land.
 
   app.use('/api', api);

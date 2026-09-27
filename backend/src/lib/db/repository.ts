@@ -74,6 +74,7 @@ export interface Database {
     countPublic(filter: SetFilter): Promise<number>;
     listByOwnerAndSubject(ownerId: string, subjectId: string): Promise<StudySetRecord[]>;
     listPublicByOwner(ownerId: string): Promise<StudySetRecord[]>;
+    countAll(): Promise<number>;
     create(data: {
       ownerId: string;
       subjectId: string | null;
@@ -112,6 +113,7 @@ export interface Database {
     ): Promise<CardRecord>;
     delete(id: string): Promise<void>;
     deleteBySet(setId: string): Promise<void>;
+    countAll(): Promise<number>;
   };
 
   progress: {
@@ -143,6 +145,7 @@ export interface Database {
       total: number;
     }): Promise<QuizAttemptRecord>;
     listByUser(userId: string): Promise<QuizAttemptRecord[]>;
+    countAll(): Promise<number>;
   };
 
   sessions: {

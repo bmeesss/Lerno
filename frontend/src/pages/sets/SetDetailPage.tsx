@@ -5,8 +5,10 @@ import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../components/ui/Toast';
-import { IconEdit, IconTrash } from '../../components/ui/Icons';
+import { ReportModal } from '../../components/moderation/ReportModal';
+import { IconEdit, IconFlag, IconHeart, IconStar, IconTrash } from '../../components/ui/Icons';
 import { ApiError } from '../../lib/api';
+import { favoriteService } from '../../services/favoriteService';
 import { studySetService } from '../../services/studySetService';
 import type { StudySetDetail } from '../../types';
 
@@ -19,7 +21,9 @@ export function SetDetailPage() {
     () => studySetService.get(setId ?? ''),
     [setId],
   );
+  const [favorited, setFavorited] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   if (loading) return <LoadingRow large />;
   if (error || !data) {
@@ -30,6 +34,28 @@ export function SetDetailPage() {
         action={<ButtonLink to="/discover">Browse public sets</ButtonLink>}
       />
     );
+  }
+
+  const isFavorited = favorited ?? data.favorited;
+
+  async function toggleFavorite() {
+    if (!user) {
+      navigate('/login?next=' + encodeURIComponent(`/sets/${setId}`));
+      return;
+    }
+    try {
+      if (isFavorited) {
+        await favoriteService.remove(data!.id);
+        setFavorited(false);
+        toast.show('Removed from favorites');
+      } else {
+        await favoriteService.add(data!.id);
+        setFavorited(true);
+        toast.show('Saved to favorites');
+      }
+    } catch (err) {
+      toast.show(err instanceof ApiError ? err.message : 'Could not update favorites', 'error');
+    }
   }
 
   async function share() {
@@ -107,9 +133,18 @@ export function SetDetailPage() {
           <ButtonLink to={`/sets/${data.id}/quiz`} variant="secondary" size="lg">
             Quiz
           </ButtonLink>
+          <Button variant="secondary" size="lg" onClick={() => void toggleFavorite()}>
+            {isFavorited ? <IconHeart size={18} /> : <IconStar size={18} />}
+            {isFavorited ? 'Favorited' : 'Favorite'}
+          </Button>
           <Button variant="ghost" size="lg" onClick={() => void share()}>
             Share
           </Button>
+          {!data.isOwner ? (
+            <Button variant="ghost" size="lg" onClick={() => setReportOpen(true)}>
+              <IconFlag size={18} /> Report
+            </Button>
+          ) : null}
           {data.isOwner ? (
             <>
               <ButtonLink to={`/sets/${data.id}/edit`} variant="ghost" size="lg">
@@ -153,6 +188,14 @@ export function SetDetailPage() {
           }
         />
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="study_set"
+        targetId={data.id}
+        targetLabel="study set"
+      />
     </>
   );
 }

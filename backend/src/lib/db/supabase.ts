@@ -436,6 +436,13 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return (data as Row[]).map(setRow);
       },
+      async countAll() {
+        const { count, error } = await client
+          .from('study_sets')
+          .select('id', { count: 'exact', head: true });
+        throwIfError(error);
+        return count ?? 0;
+      },
       async create(data) {
         const payload = {
           owner_id: data.ownerId,
@@ -540,6 +547,13 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
       async deleteBySet(setId) {
         const { error } = await client.from('cards').delete().eq('set_id', setId);
         throwIfError(error);
+      },
+      async countAll() {
+        const { count, error } = await client
+          .from('cards')
+          .select('id', { count: 'exact', head: true });
+        throwIfError(error);
+        return count ?? 0;
       },
     },
 
@@ -698,6 +712,13 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .order('created_at', { ascending: false });
         throwIfError(error);
         return (data as Row[]).map(attemptRow);
+      },
+      async countAll() {
+        const { count, error } = await client
+          .from('quiz_attempts')
+          .select('id', { count: 'exact', head: true });
+        throwIfError(error);
+        return count ?? 0;
       },
     },
 

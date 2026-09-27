@@ -253,6 +253,9 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           (set) => set.ownerId === ownerId && set.visibility === 'public',
         );
       },
+      async countAll() {
+        return state.sets.size;
+      },
       async create(data) {
         const timestamp = now();
         const record: StudySetRecord = {
@@ -356,6 +359,9 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           if (card.setId === setId) state.cards.delete(key);
         }
       },
+      async countAll() {
+        return state.cards.size;
+      },
     },
 
     progress: {
@@ -449,6 +455,9 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         return state.attempts
           .filter((attempt) => attempt.userId === userId)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async countAll() {
+        return state.attempts.length;
       },
     },
 

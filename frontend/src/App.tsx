@@ -1,9 +1,9 @@
 import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
-import { PlaceholderPage } from './components/PlaceholderPage';
 import { RequireAuth } from './components/layout/RequireAuth';
 import { DiscoverPage } from './pages/DiscoverPage';
 import { FavoritesPage } from './pages/FavoritesPage';
+import { AdminPage } from './pages/AdminPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -57,7 +57,7 @@ export function App() {
         <Route path="/profile" element={authed(<ProfilePage />)} />
         <Route path="/profile/:userId" element={<ProfilePage />} />
         <Route path="/settings" element={authed(<SettingsPage />)} />
-        <Route path="/admin" element={authed(<PlaceholderPage title="Admin" description="Moderation." />)} />
+        <Route path="/admin" element={authed(<AdminPage />)} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
