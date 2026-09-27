@@ -8,7 +8,7 @@
  * exclusively by the lazily-imported consent page.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getAccessToken, getRefreshToken } from './api';
+import { getAccessToken, getRefreshToken, setTokens } from './api';
 import { config } from './config';
 
 let cached: SupabaseClient | null = null;
@@ -36,9 +36,16 @@ export async function attachLernoSession(client: SupabaseClient): Promise<boolea
   const accessToken = getAccessToken();
   const refreshToken = getRefreshToken();
   if (!accessToken || !refreshToken) return false;
-  const { error } = await client.auth.setSession({
+  const { data, error } = await client.auth.setSession({
     access_token: accessToken,
     refresh_token: refreshToken,
   });
-  return !error;
+  if (error || !data.session) return false;
+  // setSession can refresh an expired access token and rotate the refresh
+  // token. Keep the website session in sync, or the next consent/REST request
+  // would reuse a stale refresh token and could log the student out.
+  if (data.session.access_token !== accessToken || data.session.refresh_token !== refreshToken) {
+    setTokens(data.session.access_token, data.session.refresh_token);
+  }
+  return true;
 }

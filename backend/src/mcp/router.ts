@@ -14,6 +14,7 @@ import { asyncHandler } from '../lib/http.js';
 import { errors } from '../lib/errors.js';
 import { publicRateLimit } from '../middleware/rate-limit.js';
 import { backendOrigin, sendMcpUnauthorized } from './metadata.js';
+import { mayUseMcp } from './authorization.js';
 import { createMcpServer } from './server.js';
 
 export function mcpRoutes(): Router {
@@ -23,12 +24,14 @@ export function mcpRoutes(): Router {
     '/',
     publicRateLimit,
     asyncHandler(async (req, res) => {
-      const userId = req.auth?.id;
-      if (!userId) {
-        // 401 with the RFC 9728 discovery challenge (never any user data).
-        sendMcpUnauthorized(res, backendOrigin(req));
+      // Check both the verified identity and the resource audience before
+      // exposing any tool. Regular website and other-resource JWTs are not MCP
+      // access tokens in Supabase-backed environments.
+      if (!mayUseMcp(req.auth)) {
+        sendMcpUnauthorized(res, backendOrigin());
         return;
       }
+      const userId = req.auth!.id;
       if (req.body === undefined || req.body === null || typeof req.body !== 'object') {
         throw errors.validation('Expected a JSON-RPC object with Content-Type application/json');
       }

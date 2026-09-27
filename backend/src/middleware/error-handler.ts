@@ -27,8 +27,9 @@ export function errorHandler(
     return;
   }
 
-  // Unknown error: log server-side, never leak internals to the client.
-  console.error('Unhandled error:', err);
+  // Unknown errors can include Supabase request headers or OAuth codes.
+  // Never log the raw error/request: even server-side logs must not contain tokens.
+  console.error('Unhandled API error (details redacted)');
   const internal = errors.internal();
   res.status(internal.status).json({ error: { code: internal.code, message: internal.message } });
 }

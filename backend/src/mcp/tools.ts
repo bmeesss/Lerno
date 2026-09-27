@@ -53,6 +53,13 @@ export interface McpContext {
   db: Database;
 }
 
+/** MCP deliberately exposes only the caller's sets, including on read tools.
+ * REST/discover still permits reading public sets for backward compatibility. */
+async function requireOwnSet(ctx: McpContext, setId: string): Promise<void> {
+  const set = await ctx.db.sets.get(setId);
+  if (!set || set.ownerId !== ctx.userId) throw errors.notFound('Study set not found');
+}
+
 type EmptyInput = Record<string, never>;
 
 /** Hints from the installed SDK's ToolAnnotations (no invented fields). */
@@ -129,11 +136,12 @@ export const mcpTools = {
     name: 'lerno_get_set',
     description:
       'Get one study set’s metadata (title, subject, description, level, visibility, tags, card count, ownership, timestamps). ' +
-      'The set must be owned by the caller or public; anything else returns NOT_FOUND. ' +
+      'Only the caller’s own set is available; anything else returns NOT_FOUND. ' +
       'Does not return the set’s cards — use lerno_get_cards for those — and cannot modify anything.',
     annotations: readAnnotations,
     inputSchema: setIdInputSchema,
     async run(ctx: McpContext, args: SetIdInput): Promise<Record<string, unknown>> {
+      await requireOwnSet(ctx, args.setId);
       const set = await setService.getDetail(ctx.db, ctx.userId, args.setId);
       return {
         set: {
@@ -156,12 +164,13 @@ export const mcpTools = {
   getCards: {
     name: 'lerno_get_cards',
     description:
-      'Get the flashcards (question, answer, position) of one study set the caller may view. ' +
+      'Get the flashcards (question, answer, position) of one owned study set. ' +
       'Use it to quiz the student conversationally or to explain their material. ' +
-      'The set must be owned by the caller or public; anything else returns NOT_FOUND. Read-only.',
+      'Only the caller’s own set is available; anything else returns NOT_FOUND. Read-only.',
     annotations: readAnnotations,
     inputSchema: setIdInputSchema,
     async run(ctx: McpContext, args: SetIdInput): Promise<Record<string, unknown>> {
+      await requireOwnSet(ctx, args.setId);
       const cards = await setService.listCards(ctx.db, ctx.userId, args.setId);
       return {
         setId: args.setId,
@@ -262,11 +271,12 @@ export const mcpTools = {
     description:
       'Get the generated quiz (prompts, question types, options) for one study set the caller may view. ' +
       'Same questions as the website quiz; correct answers are intentionally not included. ' +
-      'The set must be owned by the caller or public; anything else returns NOT_FOUND. ' +
+      'Only the caller’s own set is available; anything else returns NOT_FOUND. ' +
       'Cannot submit answers or modify anything.',
     annotations: readAnnotations,
     inputSchema: setIdInputSchema,
     async run(ctx: McpContext, args: SetIdInput): Promise<Record<string, unknown>> {
+      await requireOwnSet(ctx, args.setId);
       const quiz = await quizService.loadForSet(ctx.db, ctx.userId, args.setId);
       return { quiz };
     },
@@ -430,10 +440,11 @@ export const mcpTools = {
       'same order as the website’s Practice mode) with questions and answers. ' +
       'Ask the questions one by one and check the student’s answers against the answers provided. ' +
       'Read-only: answering here does not record progress — the student reviews on the website. ' +
-      'The set must be owned by the caller or public; anything else returns NOT_FOUND.',
+      'Only the caller’s own set is available; anything else returns NOT_FOUND.',
     annotations: readAnnotations,
     inputSchema: startPracticeInputSchema,
     async run(ctx: McpContext, args: StartPracticeInput): Promise<Record<string, unknown>> {
+      await requireOwnSet(ctx, args.setId);
       const queue = await studyService.practiceQueue(ctx.db, ctx.userId, args.setId);
       const cards = args.limit ? queue.cards.slice(0, args.limit) : queue.cards;
       return {
@@ -458,10 +469,11 @@ export const mcpTools = {
       'Start a quiz on one set: the same generated quiz as the website (multiple choice, ' +
       'true/false, short answer — without correct answers). Ask the questions one by one; ' +
       'the student submits answers on the website, where scoring and attempts live. ' +
-      'The set must be owned by the caller or public; anything else returns NOT_FOUND. Read-only.',
+      'Only the caller’s own set is available; anything else returns NOT_FOUND. Read-only.',
     annotations: readAnnotations,
     inputSchema: setIdInputSchema,
     async run(ctx: McpContext, args: SetIdInput): Promise<Record<string, unknown>> {
+      await requireOwnSet(ctx, args.setId);
       const quiz = await quizService.loadForSet(ctx.db, ctx.userId, args.setId);
       return { questionCount: quiz.questions.length, quiz };
     },
@@ -477,6 +489,7 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: wrongCardsInputSchema,
     async run(ctx: McpContext, args: WrongCardsInput): Promise<Record<string, unknown>> {
+      if (args.setId) await requireOwnSet(ctx, args.setId);
       const wrong = await studyService.wrongCards(ctx.db, ctx.userId, {
         setId: args.setId,
         limit: args.limit,
@@ -524,6 +537,7 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: studyPlanInputSchema,
     async run(ctx: McpContext, args: StudyPlanInput): Promise<Record<string, unknown>> {
+      for (const setId of args.setIds ?? []) await requireOwnSet(ctx, setId);
       const plan = await retentionService.studyPlan(ctx.db, ctx.userId, {
         days: args.days,
         setIds: args.setIds,

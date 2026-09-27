@@ -10,6 +10,11 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
 2. Apply the migrations **in order** (SQL editor or `psql`):
    - `database/migrations/0001_init.sql` — schema, indexes, profile trigger
    - `database/migrations/0002_rls.sql` — row-level security policies
+   - `database/migrations/0003_quiz_questions_delete.sql`, `0004_profile_timezone.sql`,
+     `0005_rls_guest_quiz_reports.sql` — subsequent application fixes
+   - `database/migrations/0006_profiles_role_privileges.sql` — **required before
+     enabling MCP OAuth**: prevents bearer holders from changing `profiles.role`
+     directly through Supabase. Apply even to existing databases.
 3. Collect the credentials from _Project Settings → API_:
    - `Project URL` → `SUPABASE_URL`
    - `anon public` key → `SUPABASE_ANON_KEY` (safe for the browser; never used
@@ -47,7 +52,9 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
   | `HEALTH_CHECK_DB`           | `true` (optional cheap `SELECT 1` probe)            |
 
   In production the backend **refuses to start** without Supabase credentials —
-  development data mode is never used in production.
+  development data mode is never used in production. `PUBLIC_BACKEND_URL` is
+  also mandatory and must be a bare HTTPS origin. See [MCP OAuth setup](mcp.md#authentication)
+  for Supabase dashboard consent, PKCE client and redirect registration steps.
 
 ## 3. Frontend (Render Static Site)
 
@@ -93,7 +100,10 @@ any other origin. Local development defaults to `http://localhost:5173`.
 
 ## 7. Release checklist
 
-- [ ] Migrations applied, RLS enabled (`select relrowsecurity from pg_class` shows `t`)
+- [ ] Migrations through 0006 applied, RLS enabled (`select relrowsecurity from pg_class` shows `t`)
+- [ ] With disposable non-admin Supabase user, direct `profiles.role = 'admin'` insert/update is denied, ordinary own display-name updates work, and a service-role admin can still change roles
+- [ ] In isolated staging, Supabase OAuth accepts RFC 8707 `resource` for the canonical MCP URL, binds the code/refresh and signs an access JWT whose `aud` is precisely that URL and includes `client_id`; a different-resource token fails `/api/mcp`. If unsupported, do not enable MCP OAuth.
+- [ ] With a disposable admin account, Supabase OAuth JWT includes `client_id`; OAuth token cannot use `/api/admin` or direct admin RLS, while the admin's normal website session still can
 - [ ] Backend health returns `{"status":"ok"}` with `HEALTH_CHECK_DB=true`
 - [ ] Signup/login works against production Supabase
 - [ ] Password reset email arrives and links back to the frontend

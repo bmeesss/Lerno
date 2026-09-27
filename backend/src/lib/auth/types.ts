@@ -3,6 +3,10 @@
 export interface AuthIdentity {
   id: string;
   email: string;
+  /** Present on Supabase OAuth-client JWTs, never on normal website sessions. */
+  oauthClient?: boolean;
+  /** JWT audience, read only after Supabase Auth has validated this very token. */
+  audience?: string | string[];
 }
 
 export interface AuthTokens {

@@ -221,7 +221,7 @@ describe('mcp learn: lerno_start_practice', () => {
     expect(missing.text).toMatch(/\[NOT_FOUND\]/);
   });
 
-  it('lets anyone practice public sets', async () => {
+  it('does not expose another user’s public set over MCP', async () => {
     const owner = await signup('McpLearnPracticePublic');
     const stranger = await signup('McpLearnPracticeGuest');
     const { setId } = await restCreateSet(
@@ -231,8 +231,8 @@ describe('mcp learn: lerno_start_practice', () => {
       { visibility: 'public' },
     );
     const res = await callTool(stranger.token, 'lerno_start_practice', { setId });
-    expect(res.isError).toBe(false);
-    expect(res.structured!.returned).toBe(1);
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/^\[NOT_FOUND\]/);
   });
 });
 
@@ -326,7 +326,7 @@ describe('mcp learn: lerno_get_wrong_cards', () => {
     const limited = await callTool(first.token, 'lerno_get_wrong_cards', { limit: 1 });
     expect(limited.isError).toBe(false);
     expect(limited.structured!.total).toBe(3);
-    expect((limited.structured!.cards as unknown[])).toHaveLength(1);
+    expect(limited.structured!.cards as unknown[]).toHaveLength(1);
 
     // The second user only ever sees their own mistakes.
     const isolated = await callTool(second.token, 'lerno_get_wrong_cards', {});
