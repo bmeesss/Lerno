@@ -120,6 +120,7 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl ?? existing?.avatarUrl ?? null,
           role: profile.role ?? existing?.role ?? 'user',
+          timezone: profile.timezone ?? existing?.timezone ?? 'UTC',
           createdAt: existing?.createdAt ?? timestamp,
           updatedAt: timestamp,
         };
@@ -133,6 +134,7 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           ...existing,
           displayName: patch.displayName ?? existing.displayName,
           avatarUrl: patch.avatarUrl === undefined ? existing.avatarUrl : patch.avatarUrl,
+          timezone: patch.timezone ?? existing.timezone,
           updatedAt: now(),
         };
         state.profiles.set(id, record);

@@ -3,19 +3,25 @@
  * (spec §6 Dashboard, §22 north star).
  */
 import type { Database } from '../lib/db/repository.js';
+import { DEFAULT_TIMEZONE } from '../lib/timezone.js';
 import { progressService } from './progress-service.js';
 import { retentionService } from './retention-service.js';
 import { studyService } from './study-service.js';
 import { buildSetSummaries } from './set-view.js';
 
 export const dashboardService = {
-  async get(db: Database, userId: string, displayName: string) {
+  async get(
+    db: Database,
+    userId: string,
+    displayName: string,
+    timeZone: string = DEFAULT_TIMEZONE,
+  ) {
     const [dueGroups, stats, ownSets, favorites, today] = await Promise.all([
       studyService.dueGroups(db, userId),
-      progressService.stats(db, userId),
+      progressService.stats(db, userId, new Date(), timeZone),
       db.sets.listByOwner(userId),
       db.favorites.listByUser(userId),
-      retentionService.today(db, userId),
+      retentionService.today(db, userId, new Date(), timeZone),
     ]);
 
     const favoriteSets = await db.sets.listByIds(favorites.map((favorite) => favorite.setId));

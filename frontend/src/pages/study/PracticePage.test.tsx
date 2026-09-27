@@ -84,7 +84,7 @@ describe('PracticePage', () => {
     await answer(user, 'Correct');
 
     expect(await screen.findByText('Practice complete ⚡')).toBeInTheDocument();
-    expect(screen.getByText('100% accuracy')).toBeInTheDocument();
+    expect(screen.getByText('100% flashcard accuracy')).toBeInTheDocument();
     expect(screen.getByText(/2 answers — 2 correct, 0 incorrect/)).toBeInTheDocument();
     // No mistakes: no retry button, but a useful next action.
     expect(screen.queryByRole('button', { name: /practice mistakes/i })).not.toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('PracticePage', () => {
     await answer(user, 'Correct');
 
     expect(await screen.findByText('Practice complete ⚡')).toBeInTheDocument();
-    expect(screen.getByText('67% accuracy')).toBeInTheDocument();
+    expect(screen.getByText('67% flashcard accuracy')).toBeInTheDocument();
     const retry = screen.getByRole('button', { name: /practice mistakes again \(1\)/i });
     await user.click(retry);
 

@@ -11,6 +11,7 @@ export interface Profile {
   displayName: string;
   avatarUrl: string | null;
   role: Role;
+  timezone: string;
   createdAt: string;
 }
 

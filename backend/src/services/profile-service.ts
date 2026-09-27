@@ -7,18 +7,18 @@ export const profileService = {
   async getOwn(db: Database, userId: string) {
     const profile = await db.profiles.get(userId);
     if (!profile) throw errors.notFound('Profile not found');
-    return dto.profile(profile);
+    return dto.ownProfile(profile);
   },
 
   async update(
     db: Database,
     userId: string,
-    patch: { displayName?: string; avatarUrl?: string | null },
+    patch: { displayName?: string; avatarUrl?: string | null; timezone?: string },
   ) {
     const existing = await db.profiles.get(userId);
     if (!existing) throw errors.notFound('Profile not found');
     const updated = await db.profiles.update(userId, patch);
-    return dto.profile(updated);
+    return dto.ownProfile(updated);
   },
 
   /** Public profile: display name, avatar, public sets and basic stats. */

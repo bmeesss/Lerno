@@ -10,11 +10,8 @@
  */
 import type { Database } from '../lib/db/repository.js';
 import { errors } from '../lib/errors.js';
-import type {
-  CardProgressRecord,
-  QuizAttemptRecord,
-  StudySessionRecord,
-} from '../lib/db/types.js';
+import { DEFAULT_TIMEZONE, dayKeyInZone, todayInZone } from '../lib/timezone.js';
+import type { CardProgressRecord, QuizAttemptRecord, StudySessionRecord } from '../lib/db/types.js';
 import { canViewSet } from './set-service.js';
 import { studyService } from './study-service.js';
 
@@ -102,23 +99,35 @@ export interface UpcomingReviews {
   next7Days: number;
 }
 
-/** Buckets scheduled review times into due-now/upcoming windows (pure). */
-export function bucketUpcoming(nextReviewAts: (string | null)[], now: Date): UpcomingReviews {
+/**
+ * Buckets scheduled review times into due-now/upcoming windows (pure).
+ * "Due now" compares instants (zone-independent); the upcoming windows
+ * compare calendar days in the user's timezone, which is DST-safe and
+ * identical to the old UTC math when the zone is UTC.
+ */
+export function bucketUpcoming(
+  nextReviewAts: (string | null)[],
+  now: Date,
+  timeZone: string = DEFAULT_TIMEZONE,
+): UpcomingReviews {
   const nowMs = now.getTime();
-  const todayDay = dayKey(now.toISOString());
-  const startOfTomorrow = dayKeyToMs(todayDay) + 86_400_000;
-  const startOfDayAfter = startOfTomorrow + 86_400_000;
-  const endOfWindow = dayKeyToMs(todayDay) + 8 * 86_400_000; // today + 7 days
+  const todayDay = todayInZone(timeZone, now);
+  const tomorrowDay = msToDayKey(dayKeyToMs(todayDay) + 86_400_000);
+  const windowEndDay = msToDayKey(dayKeyToMs(todayDay) + 7 * 86_400_000);
 
   const buckets: UpcomingReviews = { dueNow: 0, laterToday: 0, tomorrow: 0, next7Days: 0 };
   for (const next of nextReviewAts) {
     if (!next) continue;
     const ms = Date.parse(next);
     if (!Number.isFinite(ms)) continue;
-    if (ms <= nowMs) buckets.dueNow += 1;
-    else if (ms < startOfTomorrow) buckets.laterToday += 1;
-    else if (ms < startOfDayAfter) buckets.tomorrow += 1;
-    else if (ms < endOfWindow) buckets.next7Days += 1;
+    if (ms <= nowMs) {
+      buckets.dueNow += 1;
+      continue;
+    }
+    const day = dayKeyInZone(next, timeZone);
+    if (day === todayDay) buckets.laterToday += 1;
+    else if (day === tomorrowDay) buckets.tomorrow += 1;
+    else if (day <= windowEndDay) buckets.next7Days += 1;
   }
   return buckets;
 }
@@ -132,20 +141,30 @@ export interface ActivityInput {
 /**
  * Days with meaningful study activity: at least one card review, one quiz
  * attempt, or one completed (ended, cards seen) study session. Merely opening
- * the app or starting a session without studying counts for nothing.
+ * the app or starting a session without studying counts for nothing. Days are
+ * grouped in the user's timezone (default UTC, the historical behavior).
  */
-export function collectActivityDays(input: ActivityInput): Set<string> {
+export function collectActivityDays(
+  input: ActivityInput,
+  timeZone: string = DEFAULT_TIMEZONE,
+): Set<string> {
   const days = new Set<string>();
   for (const row of input.progress) {
-    if (row.lastReviewedAt) days.add(dayKey(row.lastReviewedAt));
+    if (row.lastReviewedAt) days.add(dayKeyInZone(row.lastReviewedAt, timeZone));
   }
   for (const attempt of input.attempts) {
-    days.add(dayKey(attempt.createdAt));
+    days.add(dayKeyInZone(attempt.createdAt, timeZone));
   }
   for (const session of input.sessions) {
-    if (session.endedAt && session.cardsSeen > 0) days.add(dayKey(session.endedAt));
+    if (session.endedAt && session.cardsSeen > 0) days.add(dayKeyInZone(session.endedAt, timeZone));
   }
   return days;
+}
+
+/** The caller's profile timezone for local calendar days (UTC when unset). */
+export async function resolveTimeZone(db: Database, userId: string): Promise<string> {
+  const profile = await db.profiles.get(userId);
+  return profile?.timezone ?? DEFAULT_TIMEZONE;
 }
 
 export type ContinueAction =
@@ -229,8 +248,13 @@ export const retentionService = {
    * "What should I do now?" — daily goal, streak, due/upcoming reviews,
    * comeback state and the single most relevant next action.
    */
-  async today(db: Database, userId: string, now: Date = new Date()): Promise<TodaySummary> {
-    const todayDay = dayKey(now.toISOString());
+  async today(
+    db: Database,
+    userId: string,
+    now: Date = new Date(),
+    timeZone: string = DEFAULT_TIMEZONE,
+  ): Promise<TodaySummary> {
+    const todayDay = todayInZone(timeZone, now);
     const [progressList, attempts, sessions, dueGroups] = await Promise.all([
       db.progress.listByUser(userId),
       db.attempts.listByUser(userId),
@@ -239,26 +263,23 @@ export const retentionService = {
     ]);
 
     const streak = computeStreaks(
-      [...collectActivityDays({ progress: progressList, attempts, sessions })],
+      [...collectActivityDays({ progress: progressList, attempts, sessions }, timeZone)],
       todayDay,
     );
 
     const completedCards = progressList.filter(
-      (row) => row.lastReviewedAt && dayKey(row.lastReviewedAt) === todayDay,
+      (row) => row.lastReviewedAt && dayKeyInZone(row.lastReviewedAt, timeZone) === todayDay,
     ).length;
     const goalReached = completedCards >= DAILY_GOAL_TARGET;
 
-    const upcoming = await upcomingForUser(db, userId, progressList, now);
+    const upcoming = await upcomingForUser(db, userId, progressList, now, timeZone);
     const cardsDue = dueGroups.reduce((sum, group) => sum + group.dueCount, 0);
 
     return {
       date: todayDay,
       target: DAILY_GOAL_TARGET,
       completedCards,
-      completionPercentage: Math.min(
-        100,
-        Math.round((completedCards / DAILY_GOAL_TARGET) * 100),
-      ),
+      completionPercentage: Math.min(100, Math.round((completedCards / DAILY_GOAL_TARGET) * 100)),
       goalReached,
       cardsDue,
       upcoming,
@@ -276,8 +297,13 @@ export const retentionService = {
   },
 
   /** Simple weekly summary for comparing against yourself (Mon–Sun, UTC). */
-  async week(db: Database, userId: string, now: Date = new Date()): Promise<WeekSummary> {
-    const todayDay = dayKey(now.toISOString());
+  async week(
+    db: Database,
+    userId: string,
+    now: Date = new Date(),
+    timeZone: string = DEFAULT_TIMEZONE,
+  ): Promise<WeekSummary> {
+    const todayDay = todayInZone(timeZone, now);
     const weekStart = mondayOf(todayDay);
     const weekDays = Array.from({ length: 7 }, (_, i) =>
       msToDayKey(dayKeyToMs(weekStart) + i * 86_400_000),
@@ -305,7 +331,7 @@ export const retentionService = {
 
     for (const row of progressList) {
       if (!row.lastReviewedAt) continue;
-      const entry = byDay.get(dayKey(row.lastReviewedAt));
+      const entry = byDay.get(dayKeyInZone(row.lastReviewedAt, timeZone));
       if (entry) {
         entry.cardsTouched += 1;
         entry.active = true;
@@ -316,7 +342,7 @@ export const retentionService = {
     let quizTotal = 0;
     let quizzesCompleted = 0;
     for (const attempt of attempts) {
-      const entry = byDay.get(dayKey(attempt.createdAt));
+      const entry = byDay.get(dayKeyInZone(attempt.createdAt, timeZone));
       if (!entry) continue;
       entry.quizzes += 1;
       entry.active = true;
@@ -327,7 +353,7 @@ export const retentionService = {
 
     let studyTimeMinutes = 0;
     for (const session of sessions) {
-      const entry = byDay.get(dayKey(session.startedAt));
+      const entry = byDay.get(dayKeyInZone(session.startedAt, timeZone));
       if (!entry || !session.endedAt) continue;
       const minutes = Math.max(
         0,
@@ -354,19 +380,17 @@ export const retentionService = {
    * Simple study plan: due reviews first, then wrong cards, then new cards,
    * spread over the requested days in daily-goal-sized suggestions.
    * Purely derived from existing data (no new engine); deterministic for a
-   * given `now`. Days are UTC calendar days, like the rest of retention.
+   * given `now`. Day labels use the user's timezone (default UTC).
    */
   async studyPlan(
     db: Database,
     userId: string,
-    opts: { days?: number; setIds?: string[] } = {},
+    opts: { days?: number; setIds?: string[]; timeZone?: string } = {},
     now: Date = new Date(),
   ): Promise<StudyPlan> {
-    const days = Math.min(
-      Math.max(opts.days ?? 7, STUDY_PLAN_DAYS_MIN),
-      STUDY_PLAN_DAYS_MAX,
-    );
-    const startDay = dayKey(now.toISOString());
+    const days = Math.min(Math.max(opts.days ?? 7, STUDY_PLAN_DAYS_MIN), STUDY_PLAN_DAYS_MAX);
+    const timeZone = opts.timeZone ?? DEFAULT_TIMEZONE;
+    const startDay = todayInZone(timeZone, now);
 
     const scope = await planScopeSets(db, userId, opts.setIds);
     const nowIso = now.toISOString();
@@ -374,8 +398,13 @@ export const retentionService = {
     // Per-set buckets, most urgent first (stable, deterministic order).
     // Buckets are exclusive — each card is planned exactly once, due first
     // (same due rule as the study queues).
-    const buckets: { setId: string; setTitle: string; due: number; wrong: number; fresh: number }[] =
-      [];
+    const buckets: {
+      setId: string;
+      setTitle: string;
+      due: number;
+      wrong: number;
+      fresh: number;
+    }[] = [];
     for (const set of scope.sets) {
       const [cards, progressList] = await Promise.all([
         db.cards.listBySet(set.id),
@@ -399,7 +428,11 @@ export const retentionService = {
       buckets.push({ setId: set.id, setTitle: set.title, due, wrong, fresh });
     }
     buckets.sort(
-      (a, b) => b.due - a.due || b.wrong - a.wrong || b.fresh - a.fresh || a.setTitle.localeCompare(b.setTitle),
+      (a, b) =>
+        b.due - a.due ||
+        b.wrong - a.wrong ||
+        b.fresh - a.fresh ||
+        a.setTitle.localeCompare(b.setTitle),
     );
 
     const totals = {
@@ -435,8 +468,10 @@ export const retentionService = {
       plan.push({ day: msToDayKey(dayKeyToMs(startDay) + offset * 86_400_000), focus });
     }
 
-    const leftover =
-      remaining.reduce((sum, bucket) => sum + bucket.due + bucket.wrong + bucket.fresh, 0);
+    const leftover = remaining.reduce(
+      (sum, bucket) => sum + bucket.due + bucket.wrong + bucket.fresh,
+      0,
+    );
     return {
       days,
       startDay,
@@ -497,6 +532,7 @@ async function upcomingForUser(
   userId: string,
   progressList: CardProgressRecord[],
   now: Date,
+  timeZone: string,
 ): Promise<UpcomingReviews> {
   const scheduled = progressList.filter((row) => row.nextReviewAt !== null);
   if (scheduled.length === 0) return { dueNow: 0, laterToday: 0, tomorrow: 0, next7Days: 0 };
@@ -504,9 +540,7 @@ async function upcomingForUser(
   const cards = await Promise.all(scheduled.map((row) => db.cards.get(row.cardId)));
   const setIds = [...new Set(cards.filter(Boolean).map((card) => card!.setId))];
   const sets = await db.sets.listByIds(setIds);
-  const viewable = new Set(
-    sets.filter((set) => canViewSet(set, userId)).map((set) => set.id),
-  );
+  const viewable = new Set(sets.filter((set) => canViewSet(set, userId)).map((set) => set.id));
   const cardSet = new Map(cards.filter(Boolean).map((card) => [card!.id, card!.setId]));
 
   const times = scheduled
@@ -515,15 +549,11 @@ async function upcomingForUser(
       return setId !== undefined && viewable.has(setId);
     })
     .map((row) => row.nextReviewAt);
-  return bucketUpcoming(times, now);
+  return bucketUpcoming(times, now, timeZone);
 }
 
 /** Warm, shame-free message for users returning after days away. */
-function comebackFor(
-  todayDay: string,
-  streak: StreakInfo,
-  cardsDue: number,
-): ComebackInfo | null {
+function comebackFor(todayDay: string, streak: StreakInfo, cardsDue: number): ComebackInfo | null {
   if (!streak.lastActiveDay) return null;
   const awayDays = diffDays(streak.lastActiveDay, todayDay);
   if (awayDays < COMEBACK_GAP_DAYS) return null;
@@ -557,7 +587,12 @@ async function continueActionFor(
 ): Promise<ContinueAction> {
   if (input.dueGroups.length > 0) {
     const group = input.dueGroups[0]!;
-    return { type: 'review', setId: group.setId, setTitle: group.setTitle, dueCount: group.dueCount };
+    return {
+      type: 'review',
+      setId: group.setId,
+      setTitle: group.setTitle,
+      dueCount: group.dueCount,
+    };
   }
 
   const activeSession = input.sessions
@@ -593,13 +628,23 @@ async function continueActionFor(
     if (cards.length === 0) continue;
     const learned = cards.filter((card) => progressByCard.has(card.id)).length;
     if (learned < cards.length) {
-      return { type: 'study-set', setId: set.id, setTitle: set.title, remaining: cards.length - learned };
+      return {
+        type: 'study-set',
+        setId: set.id,
+        setTitle: set.title,
+        remaining: cards.length - learned,
+      };
     }
   }
 
   if (!input.goalReached && candidates.length > 0) {
     const set = candidates[0]!;
-    return { type: 'daily-goal', setId: set.id, setTitle: set.title, remaining: input.goalRemaining };
+    return {
+      type: 'daily-goal',
+      setId: set.id,
+      setTitle: set.title,
+      remaining: input.goalRemaining,
+    };
   }
 
   if (candidates.length === 0) return { type: 'create-set' };

@@ -8,16 +8,50 @@ import { useTheme } from '../hooks/useTheme';
 import { useToast } from '../components/ui/Toast';
 import { guestProgress } from '../services/guestProgress';
 
+const TIME_ZONES = [
+  'UTC',
+  'Europe/Amsterdam',
+  'Europe/Berlin',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Sao_Paulo',
+  'Africa/Cairo',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'Pacific/Auckland',
+];
+
 export function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const toast = useToast();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [savingZone, setSavingZone] = useState(false);
 
   async function onLogout() {
     await logout();
     navigate('/');
+  }
+
+  async function onZoneChange(timezone: string) {
+    if (timezone === user?.profile.timezone) return;
+    setSavingZone(true);
+    try {
+      await updateProfile({ timezone });
+      toast.show('Time zone saved', 'success');
+    } catch {
+      toast.show('Could not save your time zone — try again.', 'error');
+    } finally {
+      setSavingZone(false);
+    }
   }
 
   return (
@@ -69,6 +103,35 @@ export function SettingsPage() {
               </div>
             </div>
             <ThemeToggle />
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="stat-label">Time zone</div>
+          <p style={{ margin: '8px 0 14px', fontSize: '0.925rem' }}>
+            Lerno groups your streaks, reviews and “today” progress by calendar day in this time
+            zone.
+          </p>
+          <div className="field">
+            <label htmlFor="settings-timezone">Time zone</label>
+            <select
+              id="settings-timezone"
+              className="select input"
+              value={user?.profile.timezone ?? 'UTC'}
+              disabled={savingZone}
+              onChange={(e) => void onZoneChange(e.target.value)}
+            >
+              {TIME_ZONES.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone.replaceAll('_', ' ')}
+                </option>
+              ))}
+            </select>
+            {savingZone ? (
+              <div className="muted" style={{ fontSize: '0.875rem' }}>
+                Saving…
+              </div>
+            ) : null}
           </div>
         </section>
 

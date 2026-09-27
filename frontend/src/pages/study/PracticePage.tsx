@@ -129,7 +129,7 @@ export function PracticePage() {
           {total} answers — {summary.correct} correct, {summary.incorrect} incorrect.
         </p>
         <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: '4px 0 0' }}>
-          {accuracy}% accuracy
+          {accuracy}% flashcard accuracy
         </p>
         {!user ? (
           <div className="guest-banner" style={{ textAlign: 'left' }}>

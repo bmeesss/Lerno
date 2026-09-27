@@ -15,7 +15,7 @@ import { errors } from '../lib/errors.js';
 import { profileService } from '../services/profile-service.js';
 import { progressService } from '../services/progress-service.js';
 import { quizService } from '../services/quiz-service.js';
-import { retentionService } from '../services/retention-service.js';
+import { resolveTimeZone, retentionService } from '../services/retention-service.js';
 import { setService } from '../services/set-service.js';
 import { studyService } from '../services/study-service.js';
 import type { SetSummaryDto } from '../services/set-view.js';
@@ -185,7 +185,8 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: emptyInputSchema,
     async run(ctx: McpContext, _args: EmptyInput): Promise<Record<string, unknown>> {
-      return progressService.stats(ctx.db, ctx.userId);
+      const timeZone = await resolveTimeZone(ctx.db, ctx.userId);
+      return progressService.stats(ctx.db, ctx.userId, new Date(), timeZone);
     },
   },
 
@@ -200,7 +201,12 @@ export const mcpTools = {
     async run(ctx: McpContext, _args: EmptyInput): Promise<Record<string, unknown>> {
       // Explicit field list: same values as the website's Today panel, and a
       // stable MCP contract if the service type ever grows new fields.
-      const today = await retentionService.today(ctx.db, ctx.userId);
+      const today = await retentionService.today(
+        ctx.db,
+        ctx.userId,
+        new Date(),
+        await resolveTimeZone(ctx.db, ctx.userId),
+      );
       return {
         date: today.date,
         target: today.target,
@@ -241,7 +247,12 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: emptyInputSchema,
     async run(ctx: McpContext, _args: EmptyInput): Promise<Record<string, unknown>> {
-      const today = await retentionService.today(ctx.db, ctx.userId);
+      const today = await retentionService.today(
+        ctx.db,
+        ctx.userId,
+        new Date(),
+        await resolveTimeZone(ctx.db, ctx.userId),
+      );
       return { action: today.continueAction };
     },
   },
@@ -482,7 +493,12 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: emptyInputSchema,
     async run(ctx: McpContext, _args: EmptyInput): Promise<Record<string, unknown>> {
-      const today = await retentionService.today(ctx.db, ctx.userId);
+      const today = await retentionService.today(
+        ctx.db,
+        ctx.userId,
+        new Date(),
+        await resolveTimeZone(ctx.db, ctx.userId),
+      );
       return {
         action: today.continueAction,
         context: {
@@ -507,10 +523,15 @@ export const mcpTools = {
     annotations: readAnnotations,
     inputSchema: studyPlanInputSchema,
     async run(ctx: McpContext, args: StudyPlanInput): Promise<Record<string, unknown>> {
-      const plan = await retentionService.studyPlan(ctx.db, ctx.userId, {
-        days: args.days,
-        setIds: args.setIds,
-      });
+      const plan = await retentionService.studyPlan(
+        ctx.db,
+        ctx.userId,
+        {
+          days: args.days,
+          setIds: args.setIds,
+          timeZone: await resolveTimeZone(ctx.db, ctx.userId),
+        },
+      );
       return {
         days: plan.days,
         startDay: plan.startDay,

@@ -40,10 +40,11 @@ export interface Database {
       displayName: string;
       avatarUrl?: string | null;
       role?: Role;
+      timezone?: string;
     }): Promise<ProfileRecord>;
     update(
       id: string,
-      patch: { displayName?: string; avatarUrl?: string | null },
+      patch: { displayName?: string; avatarUrl?: string | null; timezone?: string },
     ): Promise<ProfileRecord>;
     count(): Promise<number>;
   };

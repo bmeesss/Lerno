@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../lib/timezone.js';
 
 const email = z.string().trim().toLowerCase().email('A valid email is required').max(254);
 const password = z.string().min(8, 'Password must be at least 8 characters').max(128);
@@ -17,10 +18,21 @@ export const updateProfileSchema = z
   .object({
     displayName: displayName.optional(),
     avatarUrl: z.string().url('avatarUrl must be a valid URL').max(500).nullable().optional(),
+    timezone: z
+      .string()
+      .max(60)
+      .refine((value) => isValidTimeZone(value), {
+        message: 'timezone must be a valid IANA timezone (e.g. Europe/Amsterdam)',
+      })
+      .optional(),
   })
-  .refine((value) => value.displayName !== undefined || value.avatarUrl !== undefined, {
-    message: 'Nothing to update',
-  });
+  .refine(
+    (value) =>
+      value.displayName !== undefined ||
+      value.avatarUrl !== undefined ||
+      value.timezone !== undefined,
+    { message: 'Nothing to update' },
+  );
 
 export type SignupBody = z.infer<typeof signupSchema>;
 export type LoginBody = z.infer<typeof loginSchema>;

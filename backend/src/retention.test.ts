@@ -521,3 +521,139 @@ describe('retention HTTP API', () => {
     expect(res.body.data.today.streak.current).toBe(0);
   });
 });
+
+describe('user-local calendar days (timezones)', () => {
+  async function seedSet(
+    db: Database,
+    ownerId: string,
+    cardCount: number,
+  ): Promise<{ cardIds: string[] }> {
+    const set = await db.sets.create({
+      ownerId,
+      subjectId: null,
+      subjectName: null,
+      title: 'Timezone set',
+      slug: `tz-${Math.random().toString(36).slice(2)}`,
+      description: '',
+      level: '',
+      visibility: 'private',
+      tags: [],
+    });
+    const cards = await db.cards.createMany(
+      set.id,
+      Array.from({ length: cardCount }, (_, i) => ({
+        question: `q${i}?`,
+        answer: `a${i}`,
+        position: i,
+      })),
+    );
+    return { cardIds: cards.map((card) => card.id) };
+  }
+
+  it('groups activity days in the profile timezone', () => {
+    // 23:30 UTC on March 4 is March 5 in Amsterdam.
+    const days = collectActivityDays(
+      {
+        progress: [{ lastReviewedAt: '2026-03-04T23:30:00.000Z' }] as never,
+        attempts: [],
+        sessions: [],
+      },
+      'Europe/Amsterdam',
+    );
+    expect([...days]).toEqual(['2026-03-05']);
+    const utc = collectActivityDays(
+      {
+        progress: [{ lastReviewedAt: '2026-03-04T23:30:00.000Z' }] as never,
+        attempts: [],
+        sessions: [],
+      },
+      'UTC',
+    );
+    expect([...utc]).toEqual(['2026-03-04']);
+  });
+
+  it('buckets upcoming reviews in local days', () => {
+    const evening = new Date('2026-03-05T23:30:00.000Z');
+    // 00:15 UTC is "tomorrow" in UTC but "later today" in Amsterdam.
+    expect(bucketUpcoming(['2026-03-06T00:15:00.000Z'], evening, 'UTC')).toEqual({
+      dueNow: 0,
+      laterToday: 0,
+      tomorrow: 1,
+      next7Days: 0,
+    });
+    expect(bucketUpcoming(['2026-03-06T00:15:00.000Z'], evening, 'Europe/Amsterdam')).toEqual({
+      dueNow: 0,
+      laterToday: 1,
+      tomorrow: 0,
+      next7Days: 0,
+    });
+  });
+
+  it('counts today’s cards in the profile timezone', async () => {
+    const db = createMemoryDatabase(createMemoryState());
+    const { cardIds } = await seedSet(db, 'user-tz', 2);
+    await db.progress.upsert({
+      userId: 'user-tz',
+      cardId: cardIds[0]!,
+      repetitionCount: 1,
+      ease: 2.0,
+      lastReviewedAt: '2026-03-04T23:30:00.000Z',
+      nextReviewAt: '2026-03-05T23:30:00.000Z',
+      correctCount: 1,
+      incorrectCount: 0,
+    });
+    const evening = new Date('2026-03-05T12:00:00.000Z');
+
+    const utc = await retentionService.today(db, 'user-tz', evening, 'UTC');
+    expect(utc.date).toBe('2026-03-05');
+    expect(utc.completedCards).toBe(0);
+
+    const amsterdam = await retentionService.today(db, 'user-tz', evening, 'Europe/Amsterdam');
+    expect(amsterdam.date).toBe('2026-03-05');
+    expect(amsterdam.completedCards).toBe(1);
+  });
+
+  it('starts weeks on the local Monday', async () => {
+    const db = createMemoryDatabase(createMemoryState());
+    // Sunday 22:00 UTC is Monday in Auckland: a different week.
+    const sunday = new Date('2026-03-08T22:00:00.000Z');
+    const utc = await retentionService.week(db, 'user-week', sunday, 'UTC');
+    expect(utc.weekStart).toBe('2026-03-02');
+    const auckland = await retentionService.week(db, 'user-week', sunday, 'Pacific/Auckland');
+    expect(auckland.weekStart).toBe('2026-03-09');
+  });
+
+  it('labels study plans with local days', async () => {
+    const db = createMemoryDatabase(createMemoryState());
+    const sunday = new Date('2026-03-08T22:00:00.000Z');
+    const utc = await retentionService.studyPlan(db, 'user-plan', { days: 2 }, sunday);
+    expect(utc.startDay).toBe('2026-03-08');
+    const auckland = await retentionService.studyPlan(
+      db,
+      'user-plan',
+      { days: 2, timeZone: 'Pacific/Auckland' },
+      sunday,
+    );
+    expect(auckland.startDay).toBe('2026-03-09');
+  });
+
+  it('serves today in the stored profile timezone over HTTP', async () => {
+    const { token } = await signup('RetentionTzHttp');
+    const update = await request(app)
+      .patch('/api/profile')
+      .set(auth(token))
+      .send({ timezone: 'Pacific/Auckland' });
+    expect(update.status).toBe(200);
+    expect(update.body.data.timezone).toBe('Pacific/Auckland');
+
+    const today = await request(app).get('/api/progress/today').set(auth(token));
+    expect(today.status).toBe(200);
+    const expected = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Pacific/Auckland',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    expect(today.body.data.date).toBe(expected);
+  });
+});

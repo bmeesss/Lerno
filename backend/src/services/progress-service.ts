@@ -3,7 +3,8 @@
  * Honest numbers only: cards studied, accuracy, study time, streaks.
  */
 import type { Database } from '../lib/db/repository.js';
-import { collectActivityDays, computeStreaks, dayKey } from './retention-service.js';
+import { DEFAULT_TIMEZONE, todayInZone } from '../lib/timezone.js';
+import { collectActivityDays, computeStreaks } from './retention-service.js';
 
 export interface SubjectProgressRow {
   subjectId: string | null;
@@ -20,7 +21,12 @@ export interface SetProgressRow extends SubjectProgressRow {
 }
 
 export const progressService = {
-  async stats(db: Database, userId: string, now: Date = new Date()) {
+  async stats(
+    db: Database,
+    userId: string,
+    now: Date = new Date(),
+    timeZone: string = DEFAULT_TIMEZONE,
+  ) {
     const [progressList, attempts, sessions, sets] = await Promise.all([
       db.progress.listByUser(userId),
       db.attempts.listByUser(userId),
@@ -47,8 +53,8 @@ export const progressService = {
     }, 0);
 
     const streak = computeStreaks(
-      [...collectActivityDays({ progress: progressList, attempts, sessions })],
-      dayKey(nowIso),
+      [...collectActivityDays({ progress: progressList, attempts, sessions }, timeZone)],
+      todayInZone(timeZone, now),
     );
 
     // Per-set + per-subject rollups from the user's sets + progress

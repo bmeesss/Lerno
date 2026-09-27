@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { asyncHandler, sendOk } from '../lib/http.js';
 import { errors } from '../lib/errors.js';
 import { progressService } from '../services/progress-service.js';
-import { retentionService } from '../services/retention-service.js';
+import { resolveTimeZone, retentionService } from '../services/retention-service.js';
 import { studyService } from '../services/study-service.js';
 import type {
   EndSessionBody,
@@ -47,16 +47,19 @@ export const studyController = {
 
   progress: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
-    sendOk(res, await progressService.stats(req.db, req.auth.id));
+    const timeZone = await resolveTimeZone(req.db, req.auth.id);
+    sendOk(res, await progressService.stats(req.db, req.auth.id, new Date(), timeZone));
   }),
 
   today: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
-    sendOk(res, await retentionService.today(req.db, req.auth.id));
+    const timeZone = await resolveTimeZone(req.db, req.auth.id);
+    sendOk(res, await retentionService.today(req.db, req.auth.id, new Date(), timeZone));
   }),
 
   week: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
-    sendOk(res, await retentionService.week(req.db, req.auth.id));
+    const timeZone = await resolveTimeZone(req.db, req.auth.id);
+    sendOk(res, await retentionService.week(req.db, req.auth.id, new Date(), timeZone));
   }),
 };

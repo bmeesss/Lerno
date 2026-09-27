@@ -46,6 +46,8 @@ function profileRow(row: Row): ProfileRecord {
     displayName: field<string>(row, 'display_name') ?? '',
     avatarUrl: field<string | null>(row, 'avatar_url') ?? null,
     role: (field<string>(row, 'role') ?? 'user') === 'admin' ? 'admin' : 'user',
+    // Tolerant of pre-0004 databases where the column does not exist yet.
+    timezone: field<string>(row, 'timezone') ?? 'UTC',
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -241,6 +243,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (patch.displayName !== undefined) payload['display_name'] = patch.displayName;
         if (patch.avatarUrl !== undefined) payload['avatar_url'] = patch.avatarUrl;
+        if (patch.timezone !== undefined) payload['timezone'] = patch.timezone;
         const { data, error } = await client
           .from('profiles')
           .update(payload)

@@ -1,13 +1,15 @@
 import { ButtonLink } from '../components/ui/Button';
 import { EmptyState, LoadingRow, ProgressBar } from '../components/ui/Primitives';
+import { TodayPanel } from '../components/dashboard/TodayPanel';
 import { useAsync } from '../hooks/useAsync';
 import { progressService } from '../services/progressService';
-import type { ProgressStats, WeekSummary } from '../types';
+import type { ProgressStats, TodaySummary, WeekSummary } from '../types';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function ProgressPage() {
   const { data, loading, error } = useAsync<ProgressStats>(() => progressService.get(), []);
+  const { data: today } = useAsync<TodaySummary>(() => progressService.today(), []);
   const { data: week } = useAsync<WeekSummary>(() => progressService.week(), []);
 
   if (loading) return <LoadingRow large />;
@@ -25,6 +27,8 @@ export function ProgressPage() {
         <ButtonLink to="/review">Go to review</ButtonLink>
       </div>
 
+      {today ? <TodayPanel today={today} /> : null}
+
       <div className="dash-grid" style={{ marginBottom: 24 }}>
         <div className="card stat-card">
           <div className="stat-label">Cards studied</div>
@@ -37,7 +41,7 @@ export function ProgressPage() {
           <div className="stat-sub">All time</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-label">Accuracy</div>
+          <div className="stat-label">Flashcard accuracy</div>
           <div className="stat-value">
             {data.accuracy === null ? '—' : `${Math.round(data.accuracy * 100)}%`}
           </div>
@@ -59,7 +63,9 @@ export function ProgressPage() {
           <div className="stat-label">Streak</div>
           <div className="stat-value">{data.streakDays} 🔥</div>
           <div className="stat-sub">
-            {data.longestStreak > 0 ? `Best ${data.longestStreak} days` : 'Study today to start one'}
+            {data.longestStreak > 0
+              ? `Best ${data.longestStreak} days`
+              : 'Study today to start one'}
           </div>
         </div>
       </div>
@@ -79,7 +85,7 @@ export function ProgressPage() {
                   <span className="muted" style={{ fontSize: '0.825rem' }}>
                     {subject.learnedCards} / {subject.totalCards} learned
                     {subject.accuracy !== null
-                      ? ` · ${Math.round(subject.accuracy * 100)}% accuracy`
+                      ? ` · ${Math.round(subject.accuracy * 100)}% card accuracy`
                       : ''}
                   </span>
                 </div>
@@ -170,7 +176,9 @@ function WeekPanel({ week }: { week: WeekSummary }) {
         <div className="muted" style={{ fontSize: '0.875rem' }}>
           {week.cardsStudied} cards · {week.quizzesCompleted} quiz
           {week.quizzesCompleted === 1 ? '' : 'zes'}
-          {week.quizAccuracy !== null ? ` · ${Math.round(week.quizAccuracy * 100)}% quiz accuracy` : ''}
+          {week.quizAccuracy !== null
+            ? ` · ${Math.round(week.quizAccuracy * 100)}% quiz accuracy`
+            : ''}
           {` · ${week.studyTimeMinutes} min studying`}
         </div>
       </div>
