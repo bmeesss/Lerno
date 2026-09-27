@@ -17,7 +17,7 @@ export function computeStreakDays(activityIsoDates: string[]): number {
   if (days.size === 0) return 0;
 
   const today = new Date();
-  let cursor = new Date(today.getTime());
+  const cursor = new Date(today.getTime());
   if (!days.has(dayKey(cursor.toISOString()))) {
     // Streak survives until the end of the next day: accept yesterday's activity.
     cursor.setUTCDate(cursor.getUTCDate() - 1);

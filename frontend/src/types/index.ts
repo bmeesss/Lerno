@@ -151,6 +151,8 @@ export interface QuizAttemptResult {
   incorrect: number;
   questions: QuizQuestionResult[];
   topicsNeedingPractice: string[];
+  /** False for guest submissions (not saved to a profile). */
+  persisted: boolean;
 }
 
 export interface DashboardData {

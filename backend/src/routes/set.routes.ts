@@ -3,6 +3,7 @@ import { setController } from '../controllers/set.controller.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { publicRateLimit, writeRateLimit } from '../middleware/rate-limit.js';
 import { validate } from '../middleware/validate.js';
+import { quizRoutes } from './quiz.routes.js';
 import {
   bulkCardsSchema,
   cardParamsSchema,
@@ -79,6 +80,7 @@ export function setRoutes(): Router {
   );
 
   // Quiz (generation/loading/scoring — spec §6)
+  router.use('/:setId/quiz', quizRoutes());
 
   return router;
 }

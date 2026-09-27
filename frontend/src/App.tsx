@@ -9,6 +9,7 @@ import { SignupPage } from './pages/auth/SignupPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProgressPage } from './pages/ProgressPage';
+import { QuizPage } from './pages/quiz/QuizPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { MySetsPage } from './pages/sets/MySetsPage';
 import { SetDetailPage } from './pages/sets/SetDetailPage';
@@ -33,7 +34,7 @@ export function App() {
         <Route path="/sets/:setId" element={<SetDetailPage />} />
         <Route path="/sets/:setId/study" element={<StudyPage />} />
         <Route path="/sets/:setId/practice" element={<PracticePage />} />
-        <Route path="/sets/:setId/quiz" element={<PlaceholderPage title="Quiz" description="Quiz mode." />} />
+        <Route path="/sets/:setId/quiz" element={<QuizPage />} />
 
         {/* Authenticated */}
         <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
