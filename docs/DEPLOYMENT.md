@@ -43,6 +43,7 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
   | `SUPABASE_ANON_KEY`         | from Supabase                                       |
   | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase (server-side only)                    |
   | `FRONTEND_URL`              | the frontend origin(s), comma-separated             |
+  | `PUBLIC_BACKEND_URL`        | public backend origin (for MCP OAuth metadata)      |
   | `HEALTH_CHECK_DB`           | `true` (optional cheap `SELECT 1` probe)            |
 
   In production the backend **refuses to start** without Supabase credentials —

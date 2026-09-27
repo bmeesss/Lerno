@@ -6,9 +6,9 @@ MCP clients) answer questions like “what should I learn now?” or “how am I
 doing today?” — and create or delete study content on request — using the
 same data and rules as the Lerno website.
 
-The server exposes nine read tools (Phase 7), four write tools (Phase 8A)
-and two delete tools (Phase 8B). There are deliberately no score, streak,
-history-edit or settings tools.
+The server exposes fourteen read tools (nine data tools plus five learning
+actions), four write tools and two confirmation-gated delete tools. There
+are deliberately no score, streak, history-edit or settings tools.
 
 ## Architecture
 
@@ -329,8 +329,7 @@ Rules:
   never a silent deletion of something else.
 - **Tool hints**: both tools advertise `readOnlyHint: false`,
   `destructiveHint: true`, `idempotentHint: false`.
-
-Clients MUST treat these tools as confirmation-worthy actions: only call
+ls as confirmation-worthy actions: only call
 them when the student explicitly asked to delete something, and surface the
 permanent nature (title in the response) before confirming. There is no
 bulk delete, no “delete all cards”, and no account deletion.
@@ -406,4 +405,6 @@ first?”, “Plan my week: photosynthesis exam on Friday”.
 - Change settings or anything admin/moderation related.
 
 The remaining destructive actions are reserved for a later phase with extra
+safety checks.
+se with extra
 safety checks.

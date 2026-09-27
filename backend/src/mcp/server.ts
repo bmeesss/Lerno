@@ -41,7 +41,7 @@ async function execute(
   }
 }
 
-/** Creates an MCP server exposing the v1 read-only tools for one user. */
+/** Creates an MCP server exposing all Lerno tools for one user. */
 export function createMcpServer(ctx: McpContext): McpServer {
   const server = new McpServer({ name: 'lerno', version: '0.1.0' });
 
