@@ -8,6 +8,8 @@ import { attachDatabase } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { healthRoutes } from './routes/health.routes.js';
 import { profileRoutes } from './routes/profile.routes.js';
+import { setRoutes } from './routes/set.routes.js';
+import { subjectRoutes } from './routes/subject.routes.js';
 
 export interface AppDeps {
   /** Lightweight optional database probe for /api/health. */
@@ -46,6 +48,8 @@ export function createApp(deps: AppDeps = {}): Express {
   api.use('/health', healthRoutes(deps.dbPing));
   api.use('/auth', authRoutes());
   api.use('/profile', profileRoutes());
+  api.use('/subjects', subjectRoutes());
+  api.use('/sets', setRoutes());
   // Feature route groups are mounted here as their phases land.
 
   app.use('/api', api);

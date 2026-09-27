@@ -8,6 +8,11 @@ import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { MySetsPage } from './pages/sets/MySetsPage';
+import { SetDetailPage } from './pages/sets/SetDetailPage';
+import { SetEditorPage } from './pages/sets/SetEditorPage';
+import { SubjectDetailPage } from './pages/subjects/SubjectDetailPage';
+import { SubjectsPage } from './pages/subjects/SubjectsPage';
 
 export function App() {
   return (
@@ -21,18 +26,18 @@ export function App() {
       {/* App shell (guest-friendly routes included) */}
       <Route element={<AppShell />}>
         <Route path="/discover" element={<PlaceholderPage title="Discover" description="Search public study sets." />} />
-        <Route path="/sets/:setId" element={<PlaceholderPage title="Study set" description="Set overview." />} />
+        <Route path="/sets/:setId" element={<SetDetailPage />} />
         <Route path="/sets/:setId/study" element={<PlaceholderPage title="Flashcards" description="Study flow." />} />
         <Route path="/sets/:setId/practice" element={<PlaceholderPage title="Practice" description="Practice mode." />} />
         <Route path="/sets/:setId/quiz" element={<PlaceholderPage title="Quiz" description="Quiz mode." />} />
 
         {/* Authenticated */}
         <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
-        <Route path="/subjects" element={<RequireAuth><PlaceholderPage title="My subjects" description="Organize your sets." /></RequireAuth>} />
-        <Route path="/subjects/:subjectId" element={<RequireAuth><PlaceholderPage title="Subject" description="Subject detail." /></RequireAuth>} />
-        <Route path="/sets" element={<RequireAuth><PlaceholderPage title="My sets" description="Your study sets." /></RequireAuth>} />
-        <Route path="/sets/new" element={<RequireAuth><PlaceholderPage title="Create set" description="Set editor." /></RequireAuth>} />
-        <Route path="/sets/:setId/edit" element={<RequireAuth><PlaceholderPage title="Edit set" description="Set editor." /></RequireAuth>} />
+        <Route path="/subjects" element={<RequireAuth><SubjectsPage /></RequireAuth>} />
+        <Route path="/subjects/:subjectId" element={<RequireAuth><SubjectDetailPage /></RequireAuth>} />
+        <Route path="/sets" element={<RequireAuth><MySetsPage /></RequireAuth>} />
+        <Route path="/sets/new" element={<RequireAuth><SetEditorPage /></RequireAuth>} />
+        <Route path="/sets/:setId/edit" element={<RequireAuth><SetEditorPage /></RequireAuth>} />
         <Route path="/review" element={<RequireAuth><PlaceholderPage title="Review" description="Cards due today." /></RequireAuth>} />
         <Route path="/favorites" element={<RequireAuth><PlaceholderPage title="Favorites" description="Saved sets." /></RequireAuth>} />
         <Route path="/progress" element={<RequireAuth><PlaceholderPage title="Progress" description="Your study statistics." /></RequireAuth>} />
