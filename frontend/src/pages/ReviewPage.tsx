@@ -25,7 +25,7 @@ export function ReviewPage() {
       <div className="page-header">
         <div>
           <h1>Review</h1>
-          <p>Everything due right now, grouped by set. Clear it and keep your streak alive.</p>
+          <p>Everything due right now, grouped by set. Study at your own pace.</p>
         </div>
         {totalDue > 0 ? (
           <ButtonLink to={`/sets/${data![0]!.setId}/study`}>
