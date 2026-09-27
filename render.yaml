@@ -1,44 +1,81 @@
-# Render Blueprint for Lerno (optional — see docs/DEPLOYMENT.md).
-# Secrets are attached from the Render dashboard / environment groups;
-# never put real values in this file.
+# Render Blueprint for Lerno
+#
+# Architecture:
+# - Frontend: Render Static Site
+# - Backend: Render Web Service
+# - Database/Auth: Supabase
+#
+# Secrets must NEVER be committed to this file.
+# Values marked with sync: false are requested by Render during
+# the initial Blueprint creation.
+
 services:
+  # ============================================================
+  # BACKEND
+  # ============================================================
   - type: web
     name: lerno-backend
     runtime: node
+    plan: free
+    region: frankfurt
+
     rootDir: backend
-    buildCommand: npm install && npm run build
+
+    buildCommand: npm ci && npm run build
     startCommand: npm start
+
     healthCheckPath: /api/health
+
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: SUPABASE_URL
         sync: false
+
       - key: SUPABASE_ANON_KEY
         sync: false
+
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+
       - key: FRONTEND_URL
         sync: false
+
       - key: PUBLIC_BACKEND_URL
         sync: false
-      - key: HEALTH_CHECK_DB
-        value: 'true'
 
+      - key: HEALTH_CHECK_DB
+        value: "true"
+
+  # ============================================================
+  # FRONTEND
+  # ============================================================
   - type: web
     name: lerno-frontend
     runtime: static
+
     rootDir: frontend
-    buildCommand: npm install && npm run build
+
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
+
     routes:
+      # React/Vite SPA fallback.
+      # Without this, direct navigation to routes such as
+      # /dashboard or /sets can return 404.
       - type: rewrite
         source: /*
         destination: /index.html
+
     envVars:
+      # Example:
+      # https://lerno-backend.onrender.com/api
       - key: VITE_API_BASE_URL
         sync: false
+
       - key: VITE_SUPABASE_URL
         sync: false
+
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
