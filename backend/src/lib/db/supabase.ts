@@ -229,6 +229,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           display_name: profile.displayName,
           avatar_url: profile.avatarUrl ?? null,
           ...(profile.role ? { role: profile.role } : {}),
+          ...(profile.timezone ? { timezone: profile.timezone } : {}),
           updated_at: new Date().toISOString(),
         };
         const { data, error } = await client

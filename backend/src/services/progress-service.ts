@@ -81,8 +81,10 @@ export const progressService = {
       }
     >();
 
-    for (const set of setRecords) {
-      const cards = await db.cards.listBySet(set.id);
+    const cardsBySet = await Promise.all(setRecords.map((set) => db.cards.listBySet(set.id)));
+    for (let index = 0; index < setRecords.length; index += 1) {
+      const set = setRecords[index]!;
+      const cards = cardsBySet[index]!;
       let learned = 0;
       let due = 0;
       let correct = 0;

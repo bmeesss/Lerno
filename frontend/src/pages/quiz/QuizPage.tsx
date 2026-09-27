@@ -329,7 +329,7 @@ function QuizResults({
         </p>
       ) : null}
 
-      <div className="dash-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+      <div className="quiz-result-grid">
         <div className="card stat-card">
           <div className="stat-label">Correct</div>
           <div className="stat-value" style={{ color: 'var(--accent-text)' }}>

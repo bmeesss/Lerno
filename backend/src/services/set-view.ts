@@ -16,10 +16,10 @@ export async function buildSetSummaries(
   const counts = await db.cards.countBySets(setIds);
 
   const ownerIds = [...new Set(records.map((record) => record.ownerId))];
+  const owners = await Promise.all(ownerIds.map((ownerId) => db.profiles.get(ownerId)));
   const ownerNames = new Map<string, string>();
-  for (const ownerId of ownerIds) {
-    const profile = await db.profiles.get(ownerId);
-    ownerNames.set(ownerId, profile?.displayName ?? 'Lerno student');
+  for (let index = 0; index < ownerIds.length; index += 1) {
+    ownerNames.set(ownerIds[index]!, owners[index]?.displayName ?? 'Lerno student');
   }
 
   return records.map((record) =>

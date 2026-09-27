@@ -26,6 +26,10 @@ export interface AppDeps {
 export function createApp(deps: AppDeps = {}): Express {
   const app = express();
 
+  // One trusted proxy hop (Render TLS termination) so req.ip — and therefore
+  // rate limiting — sees the real client IP instead of the proxy's.
+  app.set('trust proxy', 1);
+
   // Security headers
   app.use(helmet());
 
