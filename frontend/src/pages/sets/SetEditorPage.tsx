@@ -1,12 +1,17 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Button, ButtonLink } from '../../components/ui/Button';
+import { Button } from '../../components/ui/Button';
 import { EmptyState, LoadingRow } from '../../components/ui/Primitives';
 import { Modal } from '../../components/ui/Modal';
 import { IconPlus, IconTrash } from '../../components/ui/Icons';
 import { useToast } from '../../components/ui/Toast';
 import { ApiError } from '../../lib/api';
-import { parseCardCsv, parseCardLines, type ParsedCard } from '../../lib/parseCards';
+import {
+  parseCardCsvDetailed,
+  parseCardLinesDetailed,
+  type ParsedCard,
+  type ParsedImport,
+} from '../../lib/parseCards';
 import { studySetService } from '../../services/studySetService';
 import { subjectService } from '../../services/subjectService';
 import type { Card, Subject, Visibility } from '../../types';
@@ -42,7 +47,14 @@ export function SetEditorPage() {
   const [initialRows, setInitialRows] = useState<CardRow[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ name: string; parsed: ParsedImport } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+
+  /** Live preview of the pasted list: valid cards plus skipped lines. */
+  const pastePreview = useMemo(() => parseCardLinesDetailed(importText), [importText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +90,17 @@ export function SetEditorPage() {
         }));
         setRows(loaded.length > 0 ? loaded : [{ question: '', answer: '' }]);
         setInitialRows(loaded);
+        setSavedSnapshot(
+          JSON.stringify({
+            title: detail.title,
+            subjectId: detail.subjectId ?? '',
+            level: detail.level,
+            description: detail.description,
+            visibility: detail.visibility,
+            tagsInput: detail.tags.join(', '),
+            rows: loaded,
+          }),
+        );
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -90,6 +113,53 @@ export function SetEditorPage() {
       cancelled = true;
     };
   }, [setId]);
+
+  // Pristine snapshot for create mode (edit mode snapshots on load above).
+  useEffect(() => {
+    if (!isEdit && savedSnapshot === null) {
+      setSavedSnapshot(
+        JSON.stringify({
+          title: '',
+          subjectId: searchParams.get('subjectId') ?? '',
+          level: '',
+          description: '',
+          visibility: 'private',
+          tagsInput: '',
+          rows: [{ question: '', answer: '' }],
+        }),
+      );
+    }
+  }, [isEdit, savedSnapshot, searchParams]);
+
+  const snapshot = JSON.stringify({
+    title,
+    subjectId,
+    level,
+    description,
+    visibility,
+    tagsInput,
+    rows,
+  });
+  const dirty = savedSnapshot !== null && savedSnapshot !== snapshot && !saving;
+
+  // Warn on reload/tab close with unsaved changes (in-app Cancel is guarded
+  // by the discard dialog below).
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [dirty]);
+
+  function onCancel() {
+    if (dirty) {
+      setDiscardOpen(true);
+      return;
+    }
+    navigate(isEdit ? `/sets/${setId}` : '/sets');
+  }
 
   function addRow() {
     setRows((current) => [...current, { question: '', answer: '' }]);
@@ -110,25 +180,28 @@ export function SetEditorPage() {
   }
 
   function applyImported(cards: ParsedCard[]) {
-    if (cards.length === 0) {
-      setFormError('No valid rows found. Use "question | answer" lines or CSV.');
-      return;
-    }
+    if (cards.length === 0) return;
     setRows((current) => {
+      // Drop only pristine placeholder rows; pending removals must survive
+      // an import or the deletion is silently lost.
       const kept = current.filter(
-        (row) => !row.removed && (row.id || row.question.trim() || row.answer.trim()),
+        (row) => row.removed || row.id || row.question.trim() || row.answer.trim(),
       );
       return [...kept, ...cards.map((card) => ({ ...card }))];
     });
-    setImportOpen(false);
-    setImportText('');
+    closeImport();
     setFormError(null);
     toast.show(`Imported ${cards.length} cards`, 'success');
   }
 
   function onImportSubmit(e: FormEvent) {
     e.preventDefault();
-    applyImported(parseCardLines(importText));
+    if (pastePreview.cards.length === 0) {
+      setImportError('No valid rows found. Use “question | answer” lines (tab or :: also work).');
+      return;
+    }
+    applyImported(pastePreview.cards);
+    setImportText('');
   }
 
   function onCsvFile(e: ChangeEvent<HTMLInputElement>) {
@@ -136,10 +209,25 @@ export function SetEditorPage() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      applyImported(parseCardCsv(String(reader.result ?? '')));
+      setCsvPreview({ name: file.name, parsed: parseCardCsvDetailed(String(reader.result ?? '')) });
+      setImportError(null);
     };
     reader.readAsText(file);
     e.target.value = '';
+  }
+
+  function onCsvConfirm() {
+    if (csvPreview && csvPreview.parsed.cards.length > 0) {
+      applyImported(csvPreview.parsed.cards);
+    }
+    setCsvPreview(null);
+  }
+
+  function closeImport() {
+    setImportOpen(false);
+    setImportText('');
+    setCsvPreview(null);
+    setImportError(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -157,6 +245,18 @@ export function SetEditorPage() {
 
     if (validRows.length === 0) {
       setFormError('Add at least one card with a question and answer.');
+      return;
+    }
+
+    // Client-side 500-cap precheck (the backend stays authoritative).
+    const removedCount = rows.filter((row) => row.removed && row.id).length;
+    const keptExisting = isEdit ? initialRows.length - removedCount : 0;
+    const brandNew = validRows.filter((row) => !row.id).length;
+    if (keptExisting + brandNew > 500) {
+      setFormError(
+        `A set can hold at most 500 cards — this would make ${keptExisting + brandNew}. ` +
+          'Remove some cards or split the set.',
+      );
       return;
     }
 
@@ -194,17 +294,20 @@ export function SetEditorPage() {
       for (const row of rows.filter((r) => r.removed && r.id)) {
         await studySetService.removeCard(setId!, row.id!);
       }
-      for (const row of validRows) {
-        const original = row.id ? initialById.get(row.id) : undefined;
-        if (!row.id) {
-          await studySetService.addCards(setId!, [
-            { question: row.question.trim(), answer: row.answer.trim() },
-          ]);
-        } else if (
+      // New cards go in one bulk call, no matter how many were pasted.
+      const newCards = validRows
+        .filter((row) => !row.id)
+        .map((row) => ({ question: row.question.trim(), answer: row.answer.trim() }));
+      if (newCards.length > 0) {
+        await studySetService.addCards(setId!, newCards);
+      }
+      for (const row of validRows.filter((r) => r.id)) {
+        const original = initialById.get(row.id!);
+        if (
           original &&
           (original.question !== row.question || original.answer !== row.answer)
         ) {
-          await studySetService.updateCard(setId!, row.id, {
+          await studySetService.updateCard(setId!, row.id!, {
             question: row.question.trim(),
             answer: row.answer.trim(),
           });
@@ -254,7 +357,7 @@ export function SetEditorPage() {
               placeholder="e.g. Biology chapter 3 — cell structure"
             />
           </div>
-          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
+          <div className="editor-meta-grid">
             <div className="field">
               <label htmlFor="set-subject">Subject</label>
               <select
@@ -294,7 +397,7 @@ export function SetEditorPage() {
               placeholder="What does this set cover?"
             />
           </div>
-          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr', marginTop: 14 }}>
+          <div className="editor-meta-grid" style={{ marginTop: 14 }}>
             <div className="field">
               <label htmlFor="set-visibility">Visibility</label>
               <select
@@ -383,9 +486,9 @@ export function SetEditorPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <ButtonLink to={isEdit ? `/sets/${setId}` : '/sets'} variant="ghost">
+          <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
-          </ButtonLink>
+          </Button>
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create set'}
           </Button>
@@ -393,14 +496,29 @@ export function SetEditorPage() {
       </form>
 
       <Modal
-        open={importOpen}
-        title="Paste cards or import CSV"
-        onClose={() => setImportOpen(false)}
+        open={discardOpen}
+        title="Discard unsaved changes?"
+        onClose={() => setDiscardOpen(false)}
       >
+        <p style={{ marginBottom: 16 }}>
+          You have unsaved changes in this editor. Leaving now will lose them.
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <Button variant="secondary" onClick={() => setDiscardOpen(false)}>
+            Keep editing
+          </Button>
+          <Button variant="danger" onClick={() => navigate(isEdit ? `/sets/${setId}` : '/sets')}>
+            Discard changes
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={importOpen} title="Paste cards or import CSV" onClose={closeImport}>
         <p style={{ marginBottom: 12 }}>
           Paste lines as <strong>question | answer</strong> (tab and :: also work), or choose a CSV
           file with question and answer columns.
         </p>
+        {importError ? <div className="form-error">{importError}</div> : null}
         <form onSubmit={onImportSubmit}>
           <div className="field">
             <label htmlFor="import-text">Paste list</label>
@@ -408,12 +526,26 @@ export function SetEditorPage() {
               id="import-text"
               className="textarea"
               value={importText}
-              onChange={(e) => setImportText(e.target.value)}
+              onChange={(e) => {
+                setImportText(e.target.value);
+                setImportError(null);
+              }}
               placeholder={'What is ATP? | The cell energy currency\nCapital of France? | Paris'}
             />
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center' }}>
-            <Button type="submit">Add pasted cards</Button>
+          {importText.trim() ? <ImportPreview parsed={pastePreview} /> : null}
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              marginTop: 14,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Button type="submit" disabled={pastePreview.cards.length === 0}>
+              Add {pastePreview.cards.length} card{pastePreview.cards.length === 1 ? '' : 's'}
+            </Button>
             <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
               Choose CSV file
               <input
@@ -425,7 +557,61 @@ export function SetEditorPage() {
             </label>
           </div>
         </form>
+        {csvPreview ? (
+          <div style={{ marginTop: 16 }}>
+            <p style={{ fontWeight: 600, marginBottom: 8 }}>
+              {csvPreview.name}: {csvPreview.parsed.cards.length} card
+              {csvPreview.parsed.cards.length === 1 ? '' : 's'} found
+            </p>
+            <ImportPreview parsed={csvPreview.parsed} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+              <Button
+                size="sm"
+                disabled={csvPreview.parsed.cards.length === 0}
+                onClick={onCsvConfirm}
+              >
+                Add these cards
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setCsvPreview(null)}>
+                Discard
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </>
+  );
+}
+
+function ImportPreview({ parsed }: { parsed: ParsedImport }) {
+  return (
+    <div className="muted" style={{ fontSize: '0.875rem', marginTop: 10 }}>
+      <p style={{ margin: '0 0 6px' }}>
+        {parsed.cards.length} card{parsed.cards.length === 1 ? '' : 's'} ready
+        {parsed.skipped.length > 0
+          ? ` · ${parsed.skipped.length} line${parsed.skipped.length === 1 ? '' : 's'} skipped`
+          : ''}
+      </p>
+      {parsed.cards.length > 0 ? (
+        <ul style={{ margin: '0 0 6px', paddingLeft: 18 }}>
+          {parsed.cards.slice(0, 3).map((card, index) => (
+            <li key={index}>
+              {card.question} → {card.answer}
+            </li>
+          ))}
+          {parsed.cards.length > 3 ? <li>…and {parsed.cards.length - 3} more</li> : null}
+        </ul>
+      ) : null}
+      {parsed.skipped.length > 0 ? (
+        <ul style={{ margin: 0, paddingLeft: 18 }}>
+          {parsed.skipped.slice(0, 5).map((line) => (
+            <li key={line.line}>
+              line {line.line}: “{line.text}”
+            </li>
+          ))}
+          {parsed.skipped.length > 5 ? <li>…and {parsed.skipped.length - 5} more</li> : null}
+        </ul>
+      ) : null}
+    </div>
   );
 }

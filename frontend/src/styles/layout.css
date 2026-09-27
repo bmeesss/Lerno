@@ -807,8 +807,18 @@
   align-items: start;
 }
 
+.editor-meta-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
 @media (max-width: 720px) {
   .card-editor-row {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-meta-grid {
     grid-template-columns: 1fr;
   }
 }

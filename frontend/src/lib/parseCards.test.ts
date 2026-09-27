@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseCardCsv, parseCardLines } from './parseCards';
+import {
+  parseCardCsv,
+  parseCardCsvDetailed,
+  parseCardLines,
+  parseCardLinesDetailed,
+} from './parseCards';
 
 describe('parseCardLines', () => {
   it('parses pipe-separated lines', () => {
@@ -36,5 +41,22 @@ describe('parseCardCsv', () => {
 
   it('parses headerless CSV', () => {
     expect(parseCardCsv('Q,A')).toEqual([{ question: 'Q', answer: 'A' }]);
+  });
+});
+
+describe('detailed parsers (import preview)', () => {
+  it('reports cards plus skipped lines with 1-based numbers', () => {
+    const parsed = parseCardLinesDetailed('Q1 | A1\nno separator\n\n | \nQ2\tA2');
+    expect(parsed.cards).toHaveLength(2);
+    expect(parsed.skipped).toEqual([
+      { line: 2, text: 'no separator' },
+      { line: 4, text: '|' },
+    ]);
+  });
+
+  it('reports CSV rows plus skipped rows, ignoring the header', () => {
+    const parsed = parseCardCsvDetailed('question,answer\nQ1,A1\nonly-one-column\nQ2,A2');
+    expect(parsed.cards).toHaveLength(2);
+    expect(parsed.skipped).toEqual([{ line: 3, text: 'only-one-column' }]);
   });
 });
