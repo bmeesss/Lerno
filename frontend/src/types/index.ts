@@ -26,6 +26,14 @@ export interface AuthResult {
   user: AuthUser;
 }
 
+export interface SignupResult {
+  accessToken: string | null;
+  refreshToken: string | null;
+  user: AuthUser;
+  /** True when the backend requires email confirmation before the first session. */
+  needsEmailConfirmation: boolean;
+}
+
 export interface Subject {
   id: string;
   name: string;

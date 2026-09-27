@@ -9,6 +9,17 @@ describe('GET /api/health', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
   });
+
+  it('does not run a database probe by default', async () => {
+    let probed = false;
+    const app = createApp({
+      dbPing: async () => {
+        probed = true;
+      },
+    });
+    await request(app).get('/api/health');
+    expect(probed).toBe(false);
+  });
 });
 
 describe('unknown routes', () => {
@@ -19,5 +30,11 @@ describe('unknown routes', () => {
     expect(res.body).toEqual({
       error: { code: 'NOT_FOUND', message: 'Route not found' },
     });
+  });
+
+  it('never leaks stack traces', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/nope');
+    expect(JSON.stringify(res.body)).not.toMatch(/at .*\.ts:\d+/);
   });
 });

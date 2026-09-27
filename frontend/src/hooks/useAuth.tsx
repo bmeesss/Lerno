@@ -14,13 +14,13 @@ import {
   type ReactNode,
 } from 'react';
 import { api, clearTokens, getAccessToken, setTokens } from '../lib/api';
-import type { AuthResult, AuthUser, Profile } from '../types';
+import type { AuthResult, AuthUser, Profile, SignupResult } from '../types';
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string) => Promise<SignupResult>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   updateProfile: (updates: { displayName?: string; avatarUrl?: string | null }) => Promise<Profile>;
@@ -66,9 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signup = useCallback(async (email: string, password: string, displayName: string) => {
-    const result = await api.post<AuthResult>('/auth/signup', { email, password, displayName });
-    setTokens(result.accessToken, result.refreshToken);
-    setUser(result.user);
+    const result = await api.post<SignupResult>('/auth/signup', { email, password, displayName });
+    if (result.accessToken) {
+      setTokens(result.accessToken, result.refreshToken);
+      setUser(result.user);
+    }
+    return result;
   }, []);
 
   const logout = useCallback(async () => {

@@ -1,31 +1,104 @@
-/** Query-string / route-param helpers shared by list endpoints. */
+/** Record → API DTO mappers (camelCase JSON shapes shared with the frontend). */
 
-import { ValidationError } from './errors.js';
+import type {
+  CardProgressRecord,
+  CardRecord,
+  ProfileRecord,
+  QuizAttemptRecord,
+  QuizQuestionRecord,
+  ReportRecord,
+  StudySessionRecord,
+  StudySetRecord,
+  SubjectRecord,
+} from './db/types.js';
 
-function parsePositiveInt(raw: unknown, field: string, fallback: number): number {
-  if (raw === undefined || raw === '') return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw new ValidationError(`Query parameter "${field}" must be a positive integer`);
-  }
-  return value;
-}
+export const dto = {
+  profile: (record: ProfileRecord) => ({
+    id: record.id,
+    displayName: record.displayName,
+    avatarUrl: record.avatarUrl,
+    role: record.role,
+    createdAt: record.createdAt,
+  }),
 
-export interface ListQuery {
-  page: number;
-  pageSize: number;
-}
+  subject: (record: SubjectRecord, setCount: number) => ({
+    id: record.id,
+    name: record.name,
+    setCount,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
 
-export function parseListQuery(query: Record<string, unknown>, maxPageSize = 100): ListQuery {
-  return {
-    page: parsePositiveInt(query.page, 'page', 1),
-    pageSize:
-      parsePositiveInt(query.pageSize, 'pageSize', 20) > maxPageSize
-        ? maxPageSize
-        : parsePositiveInt(query.pageSize, 'pageSize', 20),
-  };
-}
+  setSummary: (record: StudySetRecord, extras: { cardCount: number; authorName: string }) => ({
+    id: record.id,
+    ownerId: record.ownerId,
+    subjectId: record.subjectId,
+    subjectName: record.subjectName,
+    title: record.title,
+    slug: record.slug,
+    description: record.description,
+    level: record.level,
+    visibility: record.visibility,
+    tags: record.tags,
+    cardCount: extras.cardCount,
+    authorName: extras.authorName,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
 
-export function parseIntParam(raw: string | undefined, field: string): number {
-  return parsePositiveInt(raw, field, NaN);
-}
+  card: (record: CardRecord) => ({
+    id: record.id,
+    question: record.question,
+    answer: record.answer,
+    position: record.position,
+  }),
+
+  progress: (record: CardProgressRecord) => ({
+    cardId: record.cardId,
+    repetitionCount: record.repetitionCount,
+    ease: record.ease,
+    lastReviewedAt: record.lastReviewedAt,
+    nextReviewAt: record.nextReviewAt,
+    correctCount: record.correctCount,
+    incorrectCount: record.incorrectCount,
+  }),
+
+  quizQuestion: (record: QuizQuestionRecord, includeAnswer = false) => ({
+    id: record.id,
+    prompt: record.prompt,
+    questionType: record.questionType,
+    options: record.options,
+    position: record.position,
+    ...(includeAnswer ? { correctAnswer: record.correctAnswer } : {}),
+  }),
+
+  attempt: (record: QuizAttemptRecord) => ({
+    id: record.id,
+    quizId: record.quizId,
+    setId: record.setId,
+    score: record.score,
+    total: record.total,
+    createdAt: record.createdAt,
+  }),
+
+  session: (record: StudySessionRecord) => ({
+    id: record.id,
+    setId: record.setId,
+    startedAt: record.startedAt,
+    endedAt: record.endedAt,
+    cardsSeen: record.cardsSeen,
+  }),
+
+  report: (record: ReportRecord) => ({
+    id: record.id,
+    reporterId: record.reporterId,
+    targetType: record.targetType,
+    targetId: record.targetId,
+    reason: record.reason,
+    details: record.details,
+    status: record.status,
+    createdAt: record.createdAt,
+    resolvedAt: record.resolvedAt,
+    resolvedBy: record.resolvedBy,
+  }),
+};
