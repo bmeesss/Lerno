@@ -1,0 +1,38 @@
+# Render Blueprint for Lerno (optional — see docs/DEPLOYMENT.md).
+# Secrets are attached from the Render dashboard / environment groups;
+# never put real values in this file.
+services:
+  - type: web
+    name: lerno-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: HEALTH_CHECK_DB
+        value: 'true'
+
+  - type: web
+    name: lerno-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
