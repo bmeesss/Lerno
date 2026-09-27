@@ -6,8 +6,11 @@
 # - Database/Auth: Supabase
 #
 # This repository is an npm-workspaces monorepo.
-# The root package.json and package-lock.json are therefore intentionally
-# used by both services.
+# The root package.json and package-lock.json are intentionally used
+# by both services.
+#
+# Secrets are never stored in this file.
+# Values marked with sync: false are entered in Render.
 
 services:
   # ============================================================
@@ -19,7 +22,9 @@ services:
     plan: free
     region: frankfurt
 
-    buildCommand: npm ci && npm run build --workspace=backend
+    # Root is intentionally the repository root because the project
+    # uses npm workspaces and has one shared package-lock.json.
+    buildCommand: npm ci --include=dev && npm run build --workspace=backend
     startCommand: npm start --workspace=backend
 
     healthCheckPath: /api/health
@@ -62,11 +67,15 @@ services:
     name: lerno-frontend
     runtime: static
 
-    buildCommand: npm ci && npm run build --workspace=frontend
+    # The repository root is used because the frontend is an npm
+    # workspace managed by the root package-lock.json.
+    buildCommand: npm ci --include=dev && npm run build --workspace=frontend
     staticPublishPath: frontend/dist
 
     routes:
       # React Router / Vite SPA fallback.
+      # Required so direct navigation to /dashboard, /sets, etc.
+      # does not return a 404.
       - type: rewrite
         source: /*
         destination: /index.html
