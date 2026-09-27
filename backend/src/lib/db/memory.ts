@@ -120,6 +120,7 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl ?? existing?.avatarUrl ?? null,
           role: profile.role ?? existing?.role ?? 'user',
+          timezone: profile.timezone ?? existing?.timezone ?? 'UTC',
           createdAt: existing?.createdAt ?? timestamp,
           updatedAt: timestamp,
         };
@@ -133,6 +134,7 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           ...existing,
           displayName: patch.displayName ?? existing.displayName,
           avatarUrl: patch.avatarUrl === undefined ? existing.avatarUrl : patch.avatarUrl,
+          timezone: patch.timezone ?? existing.timezone,
           updatedAt: now(),
         };
         state.profiles.set(id, record);
@@ -434,6 +436,26 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
             state.quizQuestions.delete(key);
           }
         }
+      },
+      async deleteQuestionsBySet(setId) {
+        for (const [key, quiz] of [...state.quizzes.entries()]) {
+          if (quiz.setId === setId) {
+            state.quizQuestions.set(key, []);
+          }
+        }
+      },
+      async replaceQuestions(quizId, questions: NewQuizQuestion[]) {
+        const records: QuizQuestionRecord[] = questions.map((question) => ({
+          id: randomUUID(),
+          quizId,
+          prompt: question.prompt,
+          questionType: question.questionType,
+          correctAnswer: question.correctAnswer,
+          options: question.options,
+          position: question.position,
+        }));
+        state.quizQuestions.set(quizId, records);
+        return records;
       },
     },
 

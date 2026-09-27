@@ -1,11 +1,16 @@
 import { ButtonLink } from '../components/ui/Button';
 import { EmptyState, LoadingRow, ProgressBar } from '../components/ui/Primitives';
+import { TodayPanel } from '../components/dashboard/TodayPanel';
 import { useAsync } from '../hooks/useAsync';
 import { progressService } from '../services/progressService';
-import type { ProgressStats } from '../types';
+import type { ProgressStats, TodaySummary, WeekSummary } from '../types';
+
+const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function ProgressPage() {
   const { data, loading, error } = useAsync<ProgressStats>(() => progressService.get(), []);
+  const { data: today } = useAsync<TodaySummary>(() => progressService.today(), []);
+  const { data: week } = useAsync<WeekSummary>(() => progressService.week(), []);
 
   if (loading) return <LoadingRow large />;
   if (error || !data) {
@@ -22,6 +27,8 @@ export function ProgressPage() {
         <ButtonLink to="/review">Go to review</ButtonLink>
       </div>
 
+      {today ? <TodayPanel today={today} /> : null}
+
       <div className="dash-grid" style={{ marginBottom: 24 }}>
         <div className="card stat-card">
           <div className="stat-label">Cards studied</div>
@@ -34,11 +41,25 @@ export function ProgressPage() {
           <div className="stat-sub">All time</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-label">Accuracy</div>
+          <div className="stat-label">Flashcard accuracy</div>
           <div className="stat-value">
             {data.accuracy === null ? '—' : `${Math.round(data.accuracy * 100)}%`}
           </div>
-          <div className="stat-sub">Across flashcard answers</div>
+          <div className="stat-sub">
+            {data.correctAnswers} correct · {data.incorrectAnswers} incorrect
+          </div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">Quiz accuracy</div>
+          <div className="stat-value">
+            {data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}
+          </div>
+          <div className="stat-sub">{data.quizAttempts} attempts</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">Due now</div>
+          <div className="stat-value">{data.dueCards}</div>
+          <div className="stat-sub">Cards waiting for review</div>
         </div>
         <div className="card stat-card">
           <div className="stat-label">Study time</div>
@@ -48,9 +69,15 @@ export function ProgressPage() {
         <div className="card stat-card">
           <div className="stat-label">Streak</div>
           <div className="stat-value">{data.streakDays} 🔥</div>
-          <div className="stat-sub">Consecutive study days</div>
+          <div className="stat-sub">
+            {data.longestStreak > 0
+              ? `Best ${data.longestStreak} days`
+              : 'Study today to start one'}
+          </div>
         </div>
       </div>
+
+      {week ? <WeekPanel week={week} /> : null}
 
       {data.subjectProgress.length > 0 ? (
         <>
@@ -65,7 +92,7 @@ export function ProgressPage() {
                   <span className="muted" style={{ fontSize: '0.825rem' }}>
                     {subject.learnedCards} / {subject.totalCards} learned
                     {subject.accuracy !== null
-                      ? ` · ${Math.round(subject.accuracy * 100)}% accuracy`
+                      ? ` · ${Math.round(subject.accuracy * 100)}% card accuracy`
                       : ''}
                   </span>
                 </div>
@@ -102,6 +129,66 @@ export function ProgressPage() {
           action={<ButtonLink to="/discover">Find a study set</ButtonLink>}
         />
       )}
+    </>
+  );
+}
+
+/** This week at a glance: compare against yourself, not others. */
+function WeekPanel({ week }: { week: WeekSummary }) {
+  return (
+    <>
+      <div className="section-title">
+        <h2>This week</h2>
+        <span className="muted" style={{ fontSize: '0.875rem' }}>
+          {week.studyDays} of 7 days active
+        </span>
+      </div>
+      <div className="card" style={{ marginBottom: 28 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
+          {week.days.map((entry, index) => (
+            <div
+              key={entry.day}
+              style={{ textAlign: 'center' }}
+              title={`${entry.day}: ${entry.cardsTouched} cards, ${entry.quizzes} quizzes`}
+            >
+              <div className="muted" style={{ fontSize: '0.75rem', marginBottom: 4 }}>
+                {WEEKDAY_LETTERS[index]}
+              </div>
+              <div
+                style={{
+                  height: 34,
+                  borderRadius: 8,
+                  background: entry.active ? 'var(--accent)' : 'var(--surface-raised)',
+                  opacity: entry.active ? 0.9 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: entry.active ? '#0c1512' : 'var(--text-muted)',
+                }}
+              >
+                {entry.cardsTouched > 0 ? entry.cardsTouched : ''}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="muted" style={{ fontSize: '0.875rem' }}>
+          {week.cardsStudied} cards · {week.quizzesCompleted} quiz
+          {week.quizzesCompleted === 1 ? '' : 'zes'}
+          {week.quizAccuracy !== null
+            ? ` · ${Math.round(week.quizAccuracy * 100)}% quiz accuracy`
+            : ''}
+          {` · ${week.studyTimeMinutes} min studying`}
+        </div>
+      </div>
     </>
   );
 }

@@ -11,6 +11,7 @@ export interface ProfileRecord {
   displayName: string;
   avatarUrl: string | null;
   role: Role;
+  timezone: string;
   createdAt: string;
   updatedAt: string;
 }

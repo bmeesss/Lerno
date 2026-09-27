@@ -9,17 +9,20 @@ import type { Quiz, QuizAttemptResult, QuizQuestion } from '../../types';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
-type Phase = 'answering' | 'submitting' | 'done' | 'error';
+type Phase = 'ready' | 'answering' | 'submitting' | 'done' | 'error';
 
 export function QuizPage() {
   const { setId } = useParams<{ setId: string }>();
   const { user } = useAuth();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [phase, setPhase] = useState<Phase>('answering');
+  const [phase, setPhase] = useState<Phase>('ready');
   const [error, setError] = useState<string | null>(null);
+  const [emptySet, setEmptySet] = useState(false);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<QuizAttemptResult | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!setId) return;
@@ -32,6 +35,9 @@ export function QuizPage() {
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : 'Could not load quiz');
+          setEmptySet(
+            err instanceof ApiError && err.status === 400 && err.code === 'VALIDATION_ERROR',
+          );
           setPhase('error');
         }
       });
@@ -48,6 +54,11 @@ export function QuizPage() {
     [questions, answers],
   );
 
+  const start = useCallback(() => {
+    setStartedAt(Date.now());
+    setPhase('answering');
+  }, []);
+
   const submit = useCallback(async () => {
     if (!setId || !quiz) return;
     setPhase('submitting');
@@ -58,21 +69,41 @@ export function QuizPage() {
       }));
       const attempt = await quizService.submit(setId, payload);
       setResult(attempt);
+      setElapsedMs(startedAt === null ? null : Date.now() - startedAt);
       setPhase('done');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not submit quiz');
       setPhase('answering');
     }
-  }, [setId, quiz, answers]);
+  }, [setId, quiz, answers, startedAt]);
 
   function restart() {
     setAnswers({});
     setIndex(0);
     setResult(null);
+    setStartedAt(Date.now());
+    setElapsedMs(null);
     setPhase('answering');
   }
 
   if (phase === 'error' || (!quiz && error)) {
+    if (emptySet) {
+      return (
+        <EmptyState
+          title="No quiz yet"
+          description={
+            user
+              ? 'This set has no cards yet. Add at least one card and the quiz will be ready.'
+              : 'This set has no cards yet, so there is nothing to quiz on.'
+          }
+          action={
+            <ButtonLink to={setId ? `/sets/${setId}` : '/discover'}>
+              {user ? 'Add cards to this set' : 'Back to set'}
+            </ButtonLink>
+          }
+        />
+      );
+    }
     return (
       <EmptyState
         title="Could not load quiz"
@@ -91,9 +122,14 @@ export function QuizPage() {
         title={quiz.title}
         setId={setId ?? ''}
         isGuest={!user}
+        elapsedMs={elapsedMs}
         onRestart={restart}
       />
     );
+  }
+
+  if (phase === 'ready') {
+    return <QuizStartScreen quiz={quiz} setId={setId ?? ''} onStart={start} />;
   }
 
   return (
@@ -207,17 +243,75 @@ export function QuizPage() {
   );
 }
 
+function QuizStartScreen({
+  quiz,
+  setId,
+  onStart,
+}: {
+  quiz: Quiz;
+  setId: string;
+  onStart: () => void;
+}) {
+  const counts = quiz.questions.reduce(
+    (acc, question) => {
+      acc[question.questionType] += 1;
+      return acc;
+    },
+    { multiple_choice: 0, true_false: 0, short_answer: 0 } as Record<
+      QuizQuestion['questionType'],
+      number
+    >,
+  );
+  const mix = (
+    [
+      ['multiple choice', counts.multiple_choice],
+      ['true / false', counts.true_false],
+      ['short answer', counts.short_answer],
+    ] as const
+  )
+    .filter(([, count]) => count > 0)
+    .map(([label, count]) => `${count} ${label}`)
+    .join(' · ');
+
+  return (
+    <div className="study-stage">
+      <h2 style={{ textAlign: 'center', fontSize: '1.35rem' }}>{quiz.title}</h2>
+      <div className="card" style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 32px)' }}>
+        <div className="stat-value" style={{ fontSize: '2rem' }}>
+          {quiz.questions.length}
+        </div>
+        <div className="stat-label">
+          question{quiz.questions.length === 1 ? '' : 's'}
+          {mix ? ` — ${mix}` : ''}
+        </div>
+        <p className="muted" style={{ marginTop: 12 }}>
+          No timer, no pressure — answer at your own pace. Unanswered questions simply count as
+          incorrect, and you can retry as often as you like.
+        </p>
+      </div>
+      <div className="study-controls">
+        <ButtonLink to={`/sets/${setId}`} variant="secondary">
+          Back to set
+        </ButtonLink>
+        <Button onClick={onStart}>Start quiz</Button>
+      </div>
+    </div>
+  );
+}
+
 function QuizResults({
   result,
   title,
   setId,
   isGuest,
+  elapsedMs,
   onRestart,
 }: {
   result: QuizAttemptResult;
   title: string;
   setId: string;
   isGuest: boolean;
+  elapsedMs: number | null;
   onRestart: () => void;
 }) {
   const pct = Math.round(result.accuracy * 100);
@@ -229,8 +323,13 @@ function QuizResults({
         <span className="score-value">{pct}%</span>
         <span className="score-label">score</span>
       </div>
+      {elapsedMs !== null ? (
+        <p className="muted" style={{ textAlign: 'center', marginTop: 0 }}>
+          Finished in {formatDuration(elapsedMs)}
+        </p>
+      ) : null}
 
-      <div className="dash-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+      <div className="quiz-result-grid">
         <div className="card stat-card">
           <div className="stat-label">Correct</div>
           <div className="stat-value" style={{ color: 'var(--accent-text)' }}>
@@ -329,6 +428,14 @@ function QuizResults({
       </p>
     </div>
   );
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(1, Math.round(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds} sec`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0 ? `${minutes} min` : `${minutes} min ${seconds} sec`;
 }
 
 function typeLabel(type: QuizQuestion['questionType']): string {

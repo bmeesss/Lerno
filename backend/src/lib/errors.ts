@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
+  | 'METHOD_NOT_ALLOWED'
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
@@ -14,6 +15,7 @@ const statusByCode: Record<ErrorCode, number> = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  METHOD_NOT_ALLOWED: 405,
   CONFLICT: 409,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
@@ -37,6 +39,8 @@ export const errors = {
   forbidden: (message = 'You do not have access to this resource') =>
     new ApiError('FORBIDDEN', message),
   notFound: (message = 'Resource not found') => new ApiError('NOT_FOUND', message),
+  methodNotAllowed: (message = 'Method not allowed') =>
+    new ApiError('METHOD_NOT_ALLOWED', message),
   conflict: (message = 'Resource already exists') => new ApiError('CONFLICT', message),
   rateLimited: (message = 'Too many requests, please slow down') =>
     new ApiError('RATE_LIMITED', message),

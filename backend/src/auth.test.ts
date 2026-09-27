@@ -130,4 +130,38 @@ describe('auth flow', () => {
     expect(publicProfile.body.data.profile.displayName).toBe('After');
     expect(publicProfile.body.data.stats.publicSetCount).toBe(0);
   });
+
+  it('stores a validated timezone on the private profile only', async () => {
+    const email = `tz${Math.floor(Math.random() * 1e6)}@example.com`;
+    const signup = await request(app)
+      .post('/api/auth/signup')
+      .send({ email, password: 'password123', displayName: 'Tz' });
+    const token = (signup.body as AuthBody).data.accessToken;
+    const userId = signup.body.data.user.id as string;
+
+    const own = await request(app).get('/api/profile').set('Authorization', `Bearer ${token}`);
+    expect(own.status).toBe(200);
+    expect(own.body.data.timezone).toBe('UTC');
+
+    const bad = await request(app)
+      .patch('/api/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ timezone: 'Mars/Olympus' });
+    expect(bad.status).toBe(400);
+
+    const good = await request(app)
+      .patch('/api/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ timezone: 'Europe/Amsterdam' });
+    expect(good.status).toBe(200);
+    expect(good.body.data.timezone).toBe('Europe/Amsterdam');
+
+    const again = await request(app).get('/api/profile').set('Authorization', `Bearer ${token}`);
+    expect(again.body.data.timezone).toBe('Europe/Amsterdam');
+
+    // Timezone stays private: the public profile never exposes it.
+    const pub = await request(app).get(`/api/profile/${userId}`);
+    expect(pub.status).toBe(200);
+    expect(pub.body.data.profile.timezone).toBeUndefined();
+  });
 });

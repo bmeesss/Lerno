@@ -21,6 +21,19 @@ export const dto = {
     createdAt: record.createdAt,
   }),
 
+  /**
+   * Own profile: the public-safe fields plus the timezone the user chose
+   * for local calendar days. Timezone stays private to the owner.
+   */
+  ownProfile: (record: ProfileRecord) => ({
+    id: record.id,
+    displayName: record.displayName,
+    avatarUrl: record.avatarUrl,
+    role: record.role,
+    timezone: record.timezone,
+    createdAt: record.createdAt,
+  }),
+
   subject: (record: SubjectRecord, setCount: number) => ({
     id: record.id,
     name: record.name,

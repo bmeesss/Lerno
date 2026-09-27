@@ -1,0 +1,19 @@
+-- Quiz cache invalidation (Phase 6).
+--
+-- Generated quiz questions are cached per study set. When the owner adds,
+-- edits or removes cards, the backend deletes the cached questions so the
+-- next quiz load regenerates them from the current cards. The quiz row and
+-- its attempts are kept, so score history is preserved.
+--
+-- quiz_questions previously had SELECT + INSERT policies only; question
+-- cleanup needs an owner-scoped DELETE policy.
+
+create policy "quiz_questions_delete_set_owner" on public.quiz_questions
+  for delete using (
+    exists (
+      select 1 from public.quizzes q
+      join public.study_sets s on s.id = q.set_id
+      where q.id = quiz_questions.quiz_id
+        and s.owner_id = auth.uid()
+    )
+  );

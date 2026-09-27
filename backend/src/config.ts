@@ -8,6 +8,11 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional().or(z.literal('')),
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   AUTH_JWT_SECRET: z.string().optional().or(z.literal('')),
+  /**
+   * Canonical public origin of this backend (e.g. https://lerno-backend.onrender.com).
+   * Used for OAuth protected-resource metadata; falls back to the request host.
+   */
+  PUBLIC_BACKEND_URL: z.string().url().optional().or(z.literal('')),
   HEALTH_CHECK_DB: z
     .enum(['true', 'false'])
     .default('false')
@@ -48,6 +53,7 @@ export const config = {
   frontendUrls: parsed.FRONTEND_URL.split(',')
     .map((url) => url.trim())
     .filter(Boolean),
+  publicBackendUrl: parsed.PUBLIC_BACKEND_URL || null,
   authJwtSecret: parsed.AUTH_JWT_SECRET,
   healthCheckDb: parsed.HEALTH_CHECK_DB,
 } as const;

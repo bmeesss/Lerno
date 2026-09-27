@@ -19,6 +19,14 @@ export function errorHandler(
     return;
   }
 
+  // Malformed JSON bodies (thrown by the JSON parser with status 400).
+  if (err instanceof SyntaxError && (err as { status?: unknown }).status === 400) {
+    res
+      .status(400)
+      .json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' } });
+    return;
+  }
+
   // Unknown error: log server-side, never leak internals to the client.
   console.error('Unhandled error:', err);
   const internal = errors.internal();

@@ -5,6 +5,8 @@ import { config } from './config.js';
 import type { DbPing } from './controllers/health.controller.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { attachDatabase } from './middleware/auth.js';
+import { wellKnownRoutes } from './mcp/metadata.js';
+import { mcpRoutes } from './mcp/router.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { healthRoutes } from './routes/health.routes.js';
 import { profileRoutes } from './routes/profile.routes.js';
@@ -23,6 +25,10 @@ export interface AppDeps {
 /** Express app factory — kept separate from server startup so tests can mount it. */
 export function createApp(deps: AppDeps = {}): Express {
   const app = express();
+
+  // One trusted proxy hop (Render TLS termination) so req.ip — and therefore
+  // rate limiting — sees the real client IP instead of the proxy's.
+  app.set('trust proxy', 1);
 
   // Security headers
   app.use(helmet());
@@ -47,6 +53,9 @@ export function createApp(deps: AppDeps = {}): Express {
   // Data context: every request gets a database bound to its bearer token.
   app.use(attachDatabase);
 
+  // OAuth discovery (RFC 9728) lives at the origin root, outside /api.
+  app.use('/.well-known', wellKnownRoutes());
+
   // API routes
   const api = express.Router();
   api.use('/health', healthRoutes(deps.dbPing));
@@ -62,6 +71,7 @@ export function createApp(deps: AppDeps = {}): Express {
   api.use('/favorites', favoriteRoutes());
   api.use('/reports', reportRoutes());
   api.use('/admin', adminRoutes());
+  api.use('/mcp', mcpRoutes());
   // Feature route groups are mounted here as their phases land.
 
   app.use('/api', api);

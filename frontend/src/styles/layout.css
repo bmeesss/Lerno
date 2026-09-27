@@ -557,6 +557,19 @@
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
 }
 
+/* Quiz result: stacked on phones, 3-across on wider screens. */
+.quiz-result-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .quiz-result-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .stat-card .stat-label {
   font-size: 0.82rem;
   font-weight: 650;
@@ -807,8 +820,18 @@
   align-items: start;
 }
 
+.editor-meta-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
 @media (max-width: 720px) {
   .card-editor-row {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-meta-grid {
     grid-template-columns: 1fr;
   }
 }

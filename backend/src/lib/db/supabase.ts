@@ -46,6 +46,8 @@ function profileRow(row: Row): ProfileRecord {
     displayName: field<string>(row, 'display_name') ?? '',
     avatarUrl: field<string | null>(row, 'avatar_url') ?? null,
     role: (field<string>(row, 'role') ?? 'user') === 'admin' ? 'admin' : 'user',
+    // Tolerant of pre-0004 databases where the column does not exist yet.
+    timezone: field<string>(row, 'timezone') ?? 'UTC',
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -126,6 +128,17 @@ function quizQuestionRow(row: Row): QuizQuestionRecord {
     options: field<string[] | null>(row, 'options') ?? null,
     position: field<number>(row, 'position') ?? 0,
   };
+}
+
+function questionPayload(quizId: string, questions: NewQuizQuestion[]) {
+  return questions.map((question) => ({
+    quiz_id: quizId,
+    prompt: question.prompt,
+    question_type: question.questionType,
+    correct_answer: question.correctAnswer,
+    options: question.options,
+    position: question.position,
+  }));
 }
 
 function attemptRow(row: Row): QuizAttemptRecord {
@@ -216,6 +229,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           display_name: profile.displayName,
           avatar_url: profile.avatarUrl ?? null,
           ...(profile.role ? { role: profile.role } : {}),
+          ...(profile.timezone ? { timezone: profile.timezone } : {}),
           updated_at: new Date().toISOString(),
         };
         const { data, error } = await client
@@ -230,6 +244,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (patch.displayName !== undefined) payload['display_name'] = patch.displayName;
         if (patch.avatarUrl !== undefined) payload['avatar_url'] = patch.avatarUrl;
+        if (patch.timezone !== undefined) payload['timezone'] = patch.timezone;
         const { data, error } = await client
           .from('profiles')
           .update(payload)
@@ -652,14 +667,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .single();
         throwIfError(quizError);
         const quiz = quizRow(quizData as Row);
-        const payload = questions.map((question) => ({
-          quiz_id: quiz.id,
-          prompt: question.prompt,
-          question_type: question.questionType,
-          correct_answer: question.correctAnswer,
-          options: question.options,
-          position: question.position,
-        }));
+        const payload = questionPayload(quiz.id, questions);
         const { data: questionRows, error: questionError } = await client
           .from('quiz_questions')
           .insert(payload)
@@ -685,6 +693,30 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
       async deleteBySet(setId) {
         const { error } = await client.from('quizzes').delete().eq('set_id', setId);
         throwIfError(error);
+      },
+      async deleteQuestionsBySet(setId) {
+        const { data: quizzes, error: quizError } = await client
+          .from('quizzes')
+          .select('id')
+          .eq('set_id', setId);
+        throwIfError(quizError);
+        const quizIds = ((quizzes ?? []) as Row[]).map((row) => field<string>(row, 'id'));
+        if (quizIds.length === 0) return;
+        const { error } = await client.from('quiz_questions').delete().in('quiz_id', quizIds);
+        throwIfError(error);
+      },
+      async replaceQuestions(quizId, questions: NewQuizQuestion[]) {
+        const { error: deleteError } = await client
+          .from('quiz_questions')
+          .delete()
+          .eq('quiz_id', quizId);
+        throwIfError(deleteError);
+        const { data, error } = await client
+          .from('quiz_questions')
+          .insert(questionPayload(quizId, questions))
+          .select();
+        throwIfError(error);
+        return ((data ?? []) as Row[]).map(quizQuestionRow);
       },
     },
 

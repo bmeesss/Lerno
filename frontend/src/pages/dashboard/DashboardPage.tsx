@@ -1,15 +1,15 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
-import { Badge, EmptyState, LoadingRow, ProgressBar } from '../../components/ui/Primitives';
-import { IconBook, IconFlame, IconQuiz } from '../../components/ui/Icons';
+import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
+import { IconBook } from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
+import { TodayPanel } from '../../components/dashboard/TodayPanel';
 import { dashboardService } from '../../services/dashboardService';
-import type { DashboardData } from '../../types';
+import type { DashboardData, StudySetSummary } from '../../types';
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { data, loading, error } = useAsync<DashboardData>(() => dashboardService.get(), []);
 
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
@@ -18,24 +18,7 @@ export function DashboardPage() {
     <>
       <div className="greeting" style={{ marginBottom: 24 }}>
         <h1>Hi {firstName} 👋</h1>
-        <p>Here is where you left off. One session is all it takes to keep the streak going.</p>
-      </div>
-
-      <div className="quick-start" style={{ marginBottom: 24 }}>
-        <div>
-          <h2>Ready for a quick session?</h2>
-          <p className="muted">
-            {data && data.cardsDue > 0
-              ? `${data.cardsDue} card${data.cardsDue === 1 ? '' : 's'} due for review.`
-              : 'Start a practice session and make progress.'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Button onClick={() => navigate('/review')}>Start today&apos;s review</Button>
-          <ButtonLink to="/discover" variant="secondary">
-            Find a study set
-          </ButtonLink>
-        </div>
+        <p>Here is what to study today. One short session keeps the habit going.</p>
       </div>
 
       {loading ? (
@@ -57,62 +40,20 @@ export function DashboardPage() {
   );
 }
 
+/**
+ * Spec order: Today (with next action) → due → continue → recent → discover.
+ * All-time stats live on the Progress page; the dashboard stays action-first.
+ */
 function DashboardContent({ data }: { data: DashboardData }) {
   return (
     <>
-      <div className="dash-grid" style={{ marginBottom: 8 }}>
-        <div className="card stat-card">
-          <div className="stat-label">Cards due</div>
-          <div className="stat-value">{data.cardsDue}</div>
-          <div className="stat-sub">Waiting for review</div>
+      {data.today.comeback ? (
+        <div className="guest-banner" style={{ marginBottom: 20 }}>
+          <p>{data.today.comeback.message}</p>
         </div>
-        <div className="card stat-card">
-          <div className="stat-label">Streak</div>
-          <div className="stat-value">
-            {data.streakDays} <IconFlame size={22} />
-          </div>
-          <div className="stat-sub">Days in a row</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Cards studied</div>
-          <div className="stat-value">{data.cardsStudied}</div>
-          <div className="stat-sub">All time</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Quiz accuracy</div>
-          <div className="stat-value">
-            {data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}
-          </div>
-          <div className="stat-sub">
-            <IconQuiz size={14} /> Across all attempts
-          </div>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="section-title">
-        <h2>Continue learning</h2>
-      </div>
-      {data.continueSet ? (
-        <Link to={`/sets/${data.continueSet.id}`} className="card card-interactive">
-          <div
-            style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}
-          >
-            <div>
-              <div className="set-card-title">{data.continueSet.title}</div>
-              <div className="muted" style={{ fontSize: '0.875rem' }}>
-                {data.continueSet.subjectName ?? 'No subject'} · {data.continueSet.cardCount} cards
-              </div>
-            </div>
-            <span className="btn btn-primary btn-sm">Continue</span>
-          </div>
-        </Link>
-      ) : (
-        <EmptyState
-          title="No recent sets yet"
-          description="Create your first study set or discover a public one to get started."
-          action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}
-        />
-      )}
+      <TodayPanel today={data.today} />
 
       {data.dueGroups.length > 0 ? (
         <>
@@ -139,6 +80,31 @@ function DashboardContent({ data }: { data: DashboardData }) {
         </>
       ) : null}
 
+      <div className="section-title">
+        <h2>Continue learning</h2>
+      </div>
+      {data.continueSet ? (
+        <Link to={`/sets/${data.continueSet.id}`} className="card card-interactive">
+          <div
+            style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}
+          >
+            <div>
+              <div className="set-card-title">{data.continueSet.title}</div>
+              <div className="muted" style={{ fontSize: '0.875rem' }}>
+                {data.continueSet.subjectName ?? 'No subject'} · {data.continueSet.cardCount} cards
+              </div>
+            </div>
+            <span className="btn btn-primary btn-sm">Continue</span>
+          </div>
+        </Link>
+      ) : (
+        <EmptyState
+          title="No recent sets yet"
+          description="Create your first study set or discover a public one to get started."
+          action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}
+        />
+      )}
+
       {data.recentSets.length > 0 ? (
         <>
           <div className="section-title">
@@ -149,42 +115,46 @@ function DashboardContent({ data }: { data: DashboardData }) {
           </div>
           <div className="set-grid">
             {data.recentSets.slice(0, 6).map((set) => (
-              <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive">
-                <div className="set-card-title">{set.title}</div>
-                <div className="set-card-desc">{set.description || 'No description'}</div>
-                <div className="set-card-footer">
-                  <span>{set.subjectName ?? 'No subject'}</span>
-                  <span>{set.cardCount} cards</span>
-                </div>
-              </Link>
+              <SetCard key={set.id} set={set} />
             ))}
           </div>
         </>
       ) : null}
 
-      {data.subjectProgress.length > 0 ? (
+      {data.suggestions.length > 0 ? (
         <>
           <div className="section-title">
-            <h2>Subject progress</h2>
-            <Link to="/progress" className="muted" style={{ fontSize: '0.875rem' }}>
+            <h2>Discover</h2>
+            <Link to="/discover" className="muted" style={{ fontSize: '0.875rem' }}>
               See all
             </Link>
           </div>
-          <div className="stack" style={{ gap: 14 }}>
-            {data.subjectProgress.slice(0, 4).map((subject) => (
-              <div key={subject.subjectId ?? subject.subjectName} className="subject-row">
-                <div className="subject-row-top">
-                  <span style={{ fontWeight: 600 }}>{subject.subjectName}</span>
-                  <span className="muted" style={{ fontSize: '0.825rem' }}>
-                    {subject.learnedCards} / {subject.totalCards} learned
-                  </span>
-                </div>
-                <ProgressBar value={subject.learnedCards} max={Math.max(subject.totalCards, 1)} />
-              </div>
+          <div className="set-grid">
+            {data.suggestions.map((set) => (
+              <SetCard key={set.id} set={set} />
             ))}
           </div>
         </>
       ) : null}
+
+      <div style={{ textAlign: 'center', marginTop: 28 }}>
+        <Link to="/progress" className="muted" style={{ fontSize: '0.875rem' }}>
+          See all your stats →
+        </Link>
+      </div>
     </>
+  );
+}
+
+function SetCard({ set }: { set: StudySetSummary }) {
+  return (
+    <Link to={`/sets/${set.id}`} className="card card-interactive">
+      <div className="set-card-title">{set.title}</div>
+      <div className="set-card-desc">{set.description || 'No description'}</div>
+      <div className="set-card-footer">
+        <span>{set.subjectName ?? 'No subject'}</span>
+        <span>{set.cardCount} cards</span>
+      </div>
+    </Link>
   );
 }

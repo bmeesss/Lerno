@@ -35,6 +35,11 @@ lerno/
 └── tests/        # Cross-cutting smoke tests
 ```
 
+AI clients (ChatGPT, Claude, …) can talk to Lerno over the official MCP
+server: `POST /api/mcp` on the backend — fourteen read tools (including five
+learning actions), four write tools and two confirmation-gated delete tools,
+same auth and services as the REST API. See [`docs/mcp.md`](docs/mcp.md).
+
 Key rules the codebase follows:
 
 - Strict TypeScript, no `any`, validated API input (Zod) and authorization on every protected route.

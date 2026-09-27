@@ -95,6 +95,7 @@ describe('flashcard review + spaced repetition', () => {
     const reasons = (queue.body.data.cards as { reason: string }[]).map((card) => card.reason);
     expect(reasons).toContain('new');
     expect(reasons).toContain('incorrect'); // failed card is flagged
+    expect(reasons).toContain('reviewed'); // studied-not-due card is labeled honestly
     expect(queue.body.data.title).toBe('Biology basics');
   });
 
@@ -187,5 +188,56 @@ describe('sessions, reviews page, progress and dashboard', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(progress.body.data.streakDays).toBe(0);
     expect(progress.body.data.cardsStudied).toBe(0);
+  });
+});
+
+describe('practice completion edge cases', () => {
+  it('returns empty queues for sets without cards', async () => {
+    const email = `empty${Math.floor(Math.random() * 1e6)}@example.com`;
+    const signup = await request(app)
+      .post('/api/auth/signup')
+      .send({ email, password: 'password123', displayName: 'Empty' });
+    const token = signup.body.data.accessToken as string;
+    const set = await request(app)
+      .post('/api/sets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Empty set' });
+    expect(set.status).toBe(201);
+    const setId = set.body.data.id as string;
+
+    const practice = await request(app)
+      .get(`/api/study/practice/${setId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(practice.status).toBe(200);
+    expect(practice.body.data.cards).toEqual([]);
+
+    const queue = await request(app)
+      .get(`/api/study/queue/${setId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body.data.cards).toEqual([]);
+  });
+
+  it('keeps incorrectly answered fresh cards in the learning queue', async () => {
+    const { token, setId, cardIds } = await setupStudent();
+    const before = Date.now();
+    const res = await request(app)
+      .post('/api/study/review')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ setId, cardId: cardIds[0], result: 'incorrect' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.requeued).toBe(true);
+    // Interval step 0: the next review is due immediately, not days away.
+    const nextMs = Date.parse(res.body.data.progress.nextReviewAt as string);
+    expect(nextMs).toBeGreaterThanOrEqual(before - 1000);
+    expect(nextMs).toBeLessThanOrEqual(Date.now() + 60_000);
+  });
+
+  it('rejects guest reviews: server progress stays signed-in only', async () => {
+    const { setId, cardIds } = await setupStudent();
+    const guestReview = await request(app)
+      .post('/api/study/review')
+      .send({ setId, cardId: cardIds[0], result: 'correct' });
+    expect(guestReview.status).toBe(401);
   });
 });

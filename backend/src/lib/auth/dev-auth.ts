@@ -73,6 +73,7 @@ export function createDevAuthProvider(state: MemoryState): AuthProvider {
           displayName,
           avatarUrl: null,
           role: 'user',
+          timezone: 'UTC',
           createdAt,
           updatedAt: createdAt,
         },

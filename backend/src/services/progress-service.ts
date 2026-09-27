@@ -3,34 +3,8 @@
  * Honest numbers only: cards studied, accuracy, study time, streaks.
  */
 import type { Database } from '../lib/db/repository.js';
-
-function dayKey(iso: string): string {
-  return iso.slice(0, 10); // UTC day
-}
-
-/**
- * Consecutive days with study activity ending today (or yesterday).
- * Activity = a card review or a study session that day.
- */
-export function computeStreakDays(activityIsoDates: string[]): number {
-  const days = new Set(activityIsoDates.map(dayKey));
-  if (days.size === 0) return 0;
-
-  const today = new Date();
-  const cursor = new Date(today.getTime());
-  if (!days.has(dayKey(cursor.toISOString()))) {
-    // Streak survives until the end of the next day: accept yesterday's activity.
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-    if (!days.has(dayKey(cursor.toISOString()))) return 0;
-  }
-
-  let streak = 0;
-  while (days.has(dayKey(cursor.toISOString()))) {
-    streak += 1;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  return streak;
-}
+import { DEFAULT_TIMEZONE, todayInZone } from '../lib/timezone.js';
+import { collectActivityDays, computeStreaks } from './retention-service.js';
 
 export interface SubjectProgressRow {
   subjectId: string | null;
@@ -47,7 +21,12 @@ export interface SetProgressRow extends SubjectProgressRow {
 }
 
 export const progressService = {
-  async stats(db: Database, userId: string) {
+  async stats(
+    db: Database,
+    userId: string,
+    now: Date = new Date(),
+    timeZone: string = DEFAULT_TIMEZONE,
+  ) {
     const [progressList, attempts, sessions, sets] = await Promise.all([
       db.progress.listByUser(userId),
       db.attempts.listByUser(userId),
@@ -55,13 +34,14 @@ export const progressService = {
       db.sets.listByOwner(userId),
     ]);
 
-    const nowIso = new Date().toISOString();
+    const nowIso = now.toISOString();
     const cardsStudied = progressList.length;
     const totalCorrect = progressList.reduce((sum, p) => sum + p.correctCount, 0);
-    const totalAnswers = progressList.reduce(
-      (sum, p) => sum + p.correctCount + p.incorrectCount,
-      0,
-    );
+    const totalIncorrect = progressList.reduce((sum, p) => sum + p.incorrectCount, 0);
+    const totalAnswers = totalCorrect + totalIncorrect;
+    const dueCards = progressList.filter(
+      (p) => p.nextReviewAt !== null && p.nextReviewAt <= nowIso,
+    ).length;
     const quizTotal = attempts.reduce((sum, a) => sum + a.total, 0);
     const quizScore = attempts.reduce((sum, a) => sum + a.score, 0);
 
@@ -72,13 +52,10 @@ export const progressService = {
       return sum + Math.max(0, end - start);
     }, 0);
 
-    const activity = [
-      ...progressList
-        .map((p) => p.lastReviewedAt)
-        .filter((value): value is string => Boolean(value)),
-      ...sessions.map((s) => s.startedAt),
-    ];
-    const streakDays = computeStreakDays(activity);
+    const streak = computeStreaks(
+      [...collectActivityDays({ progress: progressList, attempts, sessions }, timeZone)],
+      todayInZone(timeZone, now),
+    );
 
     // Per-set + per-subject rollups from the user's sets + progress
     const allSetIds = new Set(sets.map((set) => set.id));
@@ -104,8 +81,10 @@ export const progressService = {
       }
     >();
 
-    for (const set of setRecords) {
-      const cards = await db.cards.listBySet(set.id);
+    const cardsBySet = await Promise.all(setRecords.map((set) => db.cards.listBySet(set.id)));
+    for (let index = 0; index < setRecords.length; index += 1) {
+      const set = setRecords[index]!;
+      const cards = cardsBySet[index]!;
       let learned = 0;
       let due = 0;
       let correct = 0;
@@ -159,11 +138,16 @@ export const progressService = {
 
     return {
       cardsStudied,
+      correctAnswers: totalCorrect,
+      incorrectAnswers: totalIncorrect,
+      dueCards,
       quizAttempts: attempts.length,
       accuracy: totalAnswers > 0 ? totalCorrect / totalAnswers : null,
       quizAccuracy: quizTotal > 0 ? quizScore / quizTotal : null,
       studyTimeMinutes: Math.round(studyTimeMs / 60_000),
-      streakDays,
+      streakDays: streak.current,
+      longestStreak: streak.longest,
+      lastActiveDay: streak.lastActiveDay,
       subjectProgress,
       setProgress: setRows,
     };

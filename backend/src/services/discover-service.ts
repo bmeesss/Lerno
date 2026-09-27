@@ -31,6 +31,24 @@ export const discoverService = {
     };
   },
 
+  /**
+   * Dashboard suggestions: recent public sets the user doesn't own and hasn't
+   * favorited yet. Only public sets are ever candidates.
+   */
+  async suggestions(db: Database, userId: string, limit = 3) {
+    const [candidates, favorites] = await Promise.all([
+      // Over-fetch: owned and favorited sets are filtered out below.
+      db.sets.listPublic({ limit: limit + 50, offset: 0 }),
+      db.favorites.listByUser(userId),
+    ]);
+    const favorited = new Set(favorites.map((favorite) => favorite.setId));
+    const fresh = candidates
+      .filter((set) => set.ownerId !== userId && !favorited.has(set.id))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit);
+    return buildSetSummaries(db, fresh);
+  },
+
   /** Filter facets derived from public sets (for the discover filter UI). */
   async facets(db: Database) {
     const sets = await db.sets.listPublic({ limit: 1000, offset: 0 });

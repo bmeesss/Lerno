@@ -1,6 +1,8 @@
+import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { RequireAuth } from './components/layout/RequireAuth';
+import { LoadingRow } from './components/ui/Primitives';
 import { DiscoverPage } from './pages/DiscoverPage';
 import { FavoritesPage } from './pages/FavoritesPage';
 import { AdminPage } from './pages/AdminPage';
@@ -27,6 +29,11 @@ function authed(element: React.ReactNode) {
   return <RequireAuth>{element}</RequireAuth>;
 }
 
+// Lazy: keeps @supabase/supabase-js (OAuth consent only) out of the main bundle.
+const OAuthConsentPage = lazy(() =>
+  import('./pages/oauth/OAuthConsentPage').then((module) => ({ default: module.OAuthConsentPage })),
+);
+
 export function App() {
   return (
     <Routes>
@@ -35,6 +42,14 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route
+        path="/oauth/consent"
+        element={authed(
+          <Suspense fallback={<LoadingRow large />}>
+            <OAuthConsentPage />
+          </Suspense>,
+        )}
+      />
 
       {/* App shell (guest-friendly routes included — spec §8) */}
       <Route element={<AppShell />}>

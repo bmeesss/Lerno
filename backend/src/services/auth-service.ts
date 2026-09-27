@@ -71,6 +71,7 @@ export const authService = {
               displayName: input.displayName,
               avatarUrl: null,
               role: 'user' as const,
+              timezone: 'UTC',
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             }),

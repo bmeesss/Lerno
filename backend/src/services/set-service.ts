@@ -147,6 +147,9 @@ export const setService = {
       throw errors.validation(`A set can hold at most ${MAX_CARDS_PER_SET} cards`);
     }
 
+    // Invalidate the cached quiz before mutating so a cleanup failure
+    // leaves the cards untouched (questions regenerate on next quiz load).
+    await db.quizzes.deleteQuestionsBySet(setId);
     const created = await db.cards.createMany(
       setId,
       cards.map((card, index) => ({ ...card, position: existing.length + index })),
@@ -166,6 +169,7 @@ export const setService = {
     if (!set || set.ownerId !== userId) throw errors.notFound('Study set not found');
     const card = await db.cards.get(cardId);
     if (!card || card.setId !== setId) throw errors.notFound('Card not found');
+    await db.quizzes.deleteQuestionsBySet(setId);
     return dto.card(await db.cards.update(cardId, patch));
   },
 
@@ -174,6 +178,7 @@ export const setService = {
     if (!set || set.ownerId !== userId) throw errors.notFound('Study set not found');
     const card = await db.cards.get(cardId);
     if (!card || card.setId !== setId) throw errors.notFound('Card not found');
+    await db.quizzes.deleteQuestionsBySet(setId);
     await db.cards.delete(cardId);
   },
 };

@@ -12,7 +12,7 @@ export interface SessionCard {
   id: string;
   question: string;
   answer: string;
-  reason?: 'due' | 'incorrect' | 'difficult' | 'new';
+  reason?: 'due' | 'incorrect' | 'difficult' | 'new' | 'reviewed';
 }
 
 export interface SessionSummary {
@@ -35,6 +35,7 @@ const REASON_LABEL: Record<NonNullable<SessionCard['reason']>, string> = {
   incorrect: 'Previously incorrect',
   difficult: 'Difficult card',
   new: 'New card',
+  reviewed: 'Studied before',
 };
 
 export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Props) {
@@ -79,7 +80,7 @@ export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Pro
     }
   }, [queue.length, seen, correct, incorrect, onDone]);
 
-  // Keyboard controls (desktop): Space = flip, 1 = incorrect, 2 = correct.
+  // Keyboard controls (desktop): Space = flip, ←/1 = incorrect, →/2 = correct.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -87,9 +88,9 @@ export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Pro
       if (event.key === ' ' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault();
         setRevealed((value) => !value);
-      } else if (event.key === '1') {
-        void mark('incorrect');
-      } else if (event.key === '2' || event.key === 'Enter') {
+      } else if (event.key === '1' || event.key === 'ArrowLeft') {
+        if (revealed) void mark('incorrect');
+      } else if (event.key === '2' || event.key === 'Enter' || event.key === 'ArrowRight') {
         if (revealed) void mark('correct');
       }
     };
@@ -155,7 +156,8 @@ export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Pro
       )}
 
       <p className="kbd-hint">
-        <kbd>Space</kbd> flip · <kbd>1</kbd> incorrect · <kbd>2</kbd> correct
+        <kbd>Space</kbd> flip · <kbd>←</kbd>/<kbd>1</kbd> incorrect · <kbd>→</kbd>/<kbd>2</kbd>{' '}
+        correct
       </p>
 
       {onQuit ? (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ButtonLink } from '../../components/ui/Button';
+import { Button, ButtonLink } from '../../components/ui/Button';
 import { EmptyState, LoadingRow } from '../../components/ui/Primitives';
 import {
   FlashcardSession,
@@ -19,7 +19,11 @@ export function PracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
+  const [mistakeIds, setMistakeIds] = useState<string[]>([]);
+  const [retryIds, setRetryIds] = useState<string[] | null>(null);
+  const [round, setRound] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
+  const wrongIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     if (!setId) return;
@@ -60,6 +64,9 @@ export function PracticePage() {
 
   const onReview = useCallback(
     async (cardId: string, result: 'correct' | 'incorrect') => {
+      if (result === 'incorrect' && !wrongIdsRef.current.includes(cardId)) {
+        wrongIdsRef.current.push(cardId);
+      }
       if (user && setId) await studyService.review(setId, cardId, result);
       else if (setId) guestProgress.record(setId, cardId, result);
     },
@@ -68,6 +75,7 @@ export function PracticePage() {
 
   const onDone = useCallback(
     async (result: SessionSummary) => {
+      setMistakeIds([...wrongIdsRef.current]);
       setSummary(result);
       const sessionId = sessionIdRef.current;
       if (user && sessionId) {
@@ -80,6 +88,16 @@ export function PracticePage() {
     [user],
   );
 
+  // Restart the session with only the cards answered incorrectly. Works for
+  // signed-in users and guests; each retry round tracks its own mistakes.
+  function retryMistakes() {
+    setRetryIds(mistakeIds);
+    wrongIdsRef.current = [];
+    setMistakeIds([]);
+    setSummary(null);
+    setRound((value) => value + 1);
+  }
+
   if (loading) return <LoadingRow large />;
   if (error || !queue) {
     return (
@@ -91,7 +109,10 @@ export function PracticePage() {
     );
   }
 
-  const cards: SessionCard[] = queue.cards.map((entry) => ({
+  const entries = retryIds
+    ? queue.cards.filter((entry) => retryIds.includes(entry.card.id))
+    : queue.cards;
+  const cards: SessionCard[] = entries.map((entry) => ({
     id: entry.card.id,
     question: entry.card.question,
     answer: entry.card.answer,
@@ -99,12 +120,16 @@ export function PracticePage() {
   }));
 
   if (summary) {
+    const total = summary.correct + summary.incorrect;
+    const accuracy = total > 0 ? Math.round((summary.correct / total) * 100) : 0;
     return (
       <div className="study-stage" style={{ textAlign: 'center' }}>
         <h1 style={{ fontSize: '1.75rem' }}>Practice complete ⚡</h1>
         <p>
-          {summary.correct + summary.incorrect} answers — {summary.correct} correct,{' '}
-          {summary.incorrect} incorrect.
+          {total} answers — {summary.correct} correct, {summary.incorrect} incorrect.
+        </p>
+        <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: '4px 0 0' }}>
+          {accuracy}% flashcard accuracy
         </p>
         {!user ? (
           <div className="guest-banner" style={{ textAlign: 'left' }}>
@@ -115,6 +140,11 @@ export function PracticePage() {
           </div>
         ) : null}
         <div className="study-controls">
+          {mistakeIds.length > 0 ? (
+            <Button onClick={retryMistakes}>
+              Practice mistakes again ({mistakeIds.length})
+            </Button>
+          ) : null}
           <ButtonLink to={`/sets/${queue.setId}/quiz`} variant="secondary">
             Take a quiz
           </ButtonLink>
@@ -147,8 +177,13 @@ export function PracticePage() {
           </ButtonLink>
         </div>
       ) : null}
+      {retryIds ? (
+        <p className="muted" style={{ textAlign: 'center', fontSize: '0.875rem' }}>
+          Retry round — practicing your {retryIds.length} mistake{retryIds.length === 1 ? '' : 's'}.
+        </p>
+      ) : null}
       <FlashcardSession
-        key={queue.setId}
+        key={`${queue.setId}:${round}`}
         title={`Practice · ${queue.title}`}
         cards={cards}
         onReview={onReview}
