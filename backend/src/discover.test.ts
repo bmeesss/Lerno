@@ -80,6 +80,80 @@ describe('discovery', () => {
     expect(res.body.data.items[0].authorName).toBe('AuthorName');
     expect(res.body.data.items[0].cardCount).toBe(1);
   });
+
+  it('never leaks private content via search, counts, facets or detail', async () => {
+    const owner = await signup('LeakOwner');
+    const stranger = await signup('LeakStranger');
+    const secret = `Zebraxis${Math.floor(Math.random() * 1e6)}`;
+    const privateId = await createSet(owner.token, `${secret} private`, {
+      visibility: 'private',
+      level: `${secret}-level`,
+      tags: [`${secret}-tag`],
+    });
+    const publicId = await createSet(owner.token, `${secret} public`, {
+      visibility: 'public',
+    });
+
+    // Exact-title search finds only the public twin (no count side-channel).
+    const search = await request(app)
+      .get(`/api/discover?q=${secret}`)
+      .set('Authorization', `Bearer ${stranger.token}`);
+    expect(search.status).toBe(200);
+    expect(search.body.data.total).toBe(1);
+    expect(search.body.data.items[0].id).toBe(publicId);
+
+    const tagSearch = await request(app).get(`/api/discover?tag=${secret}-tag`);
+    expect(tagSearch.body.data.total).toBe(0);
+    expect(tagSearch.body.data.items).toEqual([]);
+
+    // Facets derive from public sets only.
+    const facets = await request(app).get('/api/discover/facets');
+    expect(facets.body.data.levels).not.toContain(`${secret}-level`);
+    expect(facets.body.data.tags).not.toContain(`${secret}-tag`);
+
+    // Detail stays 404 for strangers; the owner is unaffected.
+    const foreign = await request(app)
+      .get(`/api/sets/${privateId}`)
+      .set('Authorization', `Bearer ${stranger.token}`);
+    expect(foreign.status).toBe(404);
+    const own = await request(app)
+      .get(`/api/sets/${privateId}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(own.status).toBe(200);
+  });
+
+  it('validates search input and reports empty results cleanly', async () => {
+    const badPage = await request(app).get('/api/discover?page=0');
+    expect(badPage.status).toBe(400);
+    const badSize = await request(app).get('/api/discover?pageSize=999');
+    expect(badSize.status).toBe(400);
+    const badQuery = await request(app).get(`/api/discover?q=${'x'.repeat(121)}`);
+    expect(badQuery.status).toBe(400);
+
+    const empty = await request(app).get('/api/discover?q=NoSuchTopicAnywhere12345');
+    expect(empty.status).toBe(200);
+    expect(empty.body.data.total).toBe(0);
+    expect(empty.body.data.items).toEqual([]);
+  });
+
+  it('lets guests search and start learning public sets', async () => {
+    const { token } = await signup('GuestHost');
+    const publicId = await createSet(token, 'Guest photosynthesis', { visibility: 'public' });
+    const privateId = await createSet(token, 'Guest private notes', { visibility: 'private' });
+
+    const search = await request(app).get('/api/discover?q=Guest photosynthesis');
+    expect(search.status).toBe(200);
+    expect(search.body.data.total).toBe(1);
+
+    // Guest can open the public set and its learning queues…
+    expect((await request(app).get(`/api/sets/${publicId}`)).status).toBe(200);
+    expect((await request(app).get(`/api/study/practice/${publicId}`)).status).toBe(200);
+    expect((await request(app).get(`/api/study/queue/${publicId}`)).status).toBe(200);
+    expect((await request(app).get(`/api/sets/${publicId}/quiz`)).status).toBe(200);
+    // …but never private content.
+    expect((await request(app).get(`/api/sets/${privateId}`)).status).toBe(404);
+    expect((await request(app).get(`/api/study/practice/${privateId}`)).status).toBe(404);
+  });
 });
 
 describe('favorites', () => {
