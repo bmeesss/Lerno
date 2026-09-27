@@ -48,35 +48,47 @@ export function generateQuestions(cards: CardRecord[]): NewQuizQuestion[] {
 
     if (mode === 0 && cards.length >= 2) {
       // Multiple choice: correct answer + up to 3 distractors from other cards.
+      // Distractors are deduplicated by normalized answer so no two options
+      // can both score as correct.
       const distractors: string[] = [];
+      const seen = new Set([normalizeAnswer(card.answer)]);
       for (let offset = 1; distractors.length < 3 && offset < cards.length; offset += 1) {
         const other = cards[(index + offset) % cards.length]!;
-        if (other.answer !== card.answer && !distractors.includes(other.answer)) {
+        const normalized = normalizeAnswer(other.answer);
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
           distractors.push(other.answer);
         }
       }
-      const options = [card.answer, ...distractors];
-      // Rotate so the correct answer is not always first (deterministic).
-      const rotation = index % options.length;
-      const rotated = [...options.slice(rotation), ...options.slice(0, rotation)];
-      return {
-        prompt: card.question,
-        questionType: 'multiple_choice' as const,
-        correctAnswer: card.answer,
-        options: rotated,
-        position: index,
-      };
+      if (distractors.length > 0) {
+        const options = [card.answer, ...distractors];
+        // Rotate so the correct answer is not always first (deterministic).
+        const rotation = index % options.length;
+        const rotated = [...options.slice(rotation), ...options.slice(0, rotation)];
+        return {
+          prompt: card.question,
+          questionType: 'multiple_choice' as const,
+          correctAnswer: card.answer,
+          options: rotated,
+          position: index,
+        };
+      }
+      // No usable distractors (e.g. every card shares one answer): fall
+      // through to short answer instead of a one-option question. Content is
+      // never invented.
     }
 
     if (mode === 1 && cards.length >= 2) {
-      // True/false: half true statements, half with a swapped answer.
-      const isTrue = index % 2 === 0;
+      // True/false: half true statements, half with a swapped answer. The
+      // verdict is derived from the shown content so duplicate answers can
+      // never produce a wrong "False" for a true pairing.
       const other = cards[(index + 1) % cards.length]!;
-      const shownAnswer = isTrue ? card.answer : other.answer;
+      const shownAnswer = index % 2 === 0 ? card.answer : other.answer;
+      const holds = normalizeAnswer(shownAnswer) === normalizeAnswer(card.answer);
       return {
         prompt: `${card.question} — "${shownAnswer}"`,
         questionType: 'true_false' as const,
-        correctAnswer: isTrue ? 'True' : 'False',
+        correctAnswer: holds ? 'True' : 'False',
         options: ['True', 'False'],
         position: index,
       };
@@ -121,9 +133,19 @@ export const quizService = {
       if (generated.length === 0) {
         throw errors.validation('This set needs at least one card before a quiz can be made');
       }
-      const created = await db.quizzes.createWithQuestions(setId, `${set.title} — quiz`, generated);
-      quiz = created.quiz;
-      questions = created.questions;
+      if (!quiz) {
+        const created = await db.quizzes.createWithQuestions(
+          setId,
+          `${set.title} — quiz`,
+          generated,
+        );
+        quiz = created.quiz;
+        questions = created.questions;
+      } else {
+        // Regeneration after card changes: replace questions on the existing
+        // quiz so attempts stay linked to the same quiz row.
+        questions = await db.quizzes.replaceQuestions(quiz.id, generated);
+      }
     }
 
     return {

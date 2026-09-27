@@ -134,6 +134,20 @@ export interface Database {
     ): Promise<{ quiz: QuizRecord; questions: QuizQuestionRecord[] }>;
     listQuestions(quizId: string): Promise<QuizQuestionRecord[]>;
     deleteBySet(setId: string): Promise<void>;
+    /**
+     * Deletes only the questions of a set's quiz (the quiz row and its
+     * attempts are kept). Used to invalidate cached quizzes when cards
+     * change; questions regenerate on the next quiz load.
+     */
+    deleteQuestionsBySet(setId: string): Promise<void>;
+    /**
+     * Replaces all questions of an existing quiz (keeps the quiz row, so
+     * attempts stay linked). Used when regenerating after invalidation.
+     */
+    replaceQuestions(
+      quizId: string,
+      questions: NewQuizQuestion[],
+    ): Promise<QuizQuestionRecord[]>;
   };
 
   attempts: {

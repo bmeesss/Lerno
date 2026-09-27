@@ -84,6 +84,50 @@ describe('scheduleReview', () => {
     expect(result.ease).toBeCloseTo(1.0); // clamped at MIN_EASE
   });
 
+  it('treats a brand-new card answered incorrectly as still unlearned', () => {
+    const result = scheduleReview(
+      { repetitionCount: 0, ease: null, correctCount: 0, incorrectCount: 0 },
+      'incorrect',
+      NOW,
+    );
+    expect(result.repetitionCount).toBe(0);
+    expect(result.nextReviewAt).toBe(NOW.toISOString()); // immediate learning queue
+    expect(result.requeued).toBe(true);
+    expect(result.incorrectCount).toBe(1);
+  });
+
+  it('caps the streak so long histories stay at the 30-day interval', () => {
+    const result = scheduleReview(
+      { repetitionCount: 40, ease: 2.5, correctCount: 40, incorrectCount: 0 },
+      'correct',
+      NOW,
+    );
+    expect(result.repetitionCount).toBe(5);
+    expect(result.nextReviewAt).toBe('2026-01-31T12:00:00.000Z');
+  });
+
+  it('normalizes malformed progress state instead of producing NaN', () => {
+    const badStates = [
+      { repetitionCount: -3, ease: Number.NaN, correctCount: -1, incorrectCount: -2 },
+      { repetitionCount: Number.POSITIVE_INFINITY, ease: 99, correctCount: 2, incorrectCount: 1 },
+      { repetitionCount: 2.7, ease: -4, correctCount: 1.9, incorrectCount: 0 },
+    ];
+    for (const state of badStates) {
+      for (const outcome of ['correct', 'incorrect'] as const) {
+        const result = scheduleReview(state, outcome, NOW);
+        expect(Number.isFinite(result.repetitionCount)).toBe(true);
+        expect(result.repetitionCount).toBeGreaterThanOrEqual(0);
+        expect(Number.isFinite(result.ease)).toBe(true);
+        expect(result.correctCount).toBeGreaterThanOrEqual(0);
+        expect(result.incorrectCount).toBeGreaterThanOrEqual(0);
+        expect(Number.isNaN(Date.parse(result.nextReviewAt))).toBe(false);
+        expect(Number.isNaN(Date.parse(result.lastReviewedAt))).toBe(false);
+        // Still deterministic for the same bad input.
+        expect(scheduleReview(state, outcome, NOW)).toEqual(result);
+      }
+    }
+  });
+
   it('is deterministic for the same inputs', () => {
     const state = { repetitionCount: 2, ease: 1.8, correctCount: 2, incorrectCount: 1 };
     expect(scheduleReview(state, 'correct', NOW)).toEqual(scheduleReview(state, 'correct', NOW));

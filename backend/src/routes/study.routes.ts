@@ -34,6 +34,15 @@ export function studyRoutes(): Router {
     studyController.practiceQueue,
   );
 
+  // Flashcard study queue in strict scheduling priority (Phase 5 §5)
+  router.get(
+    '/queue/:setId',
+    publicRateLimit,
+    optionalAuth,
+    validate({ params: setParams }),
+    studyController.studyQueue,
+  );
+
   // Study sessions (server-timed for study-time stats)
   router.post(
     '/sessions',
@@ -62,5 +71,7 @@ export function reviewRoutes(): Router {
 export function progressRoutes(): Router {
   const router = Router();
   router.get('/', requireAuth, studyController.progress);
+  router.get('/today', requireAuth, studyController.today);
+  router.get('/week', requireAuth, studyController.week);
   return router;
 }

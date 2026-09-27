@@ -47,6 +47,26 @@ describe('FlashcardSession', () => {
     expect(screen.getByText('What is 2+2?')).toBeInTheDocument();
   });
 
+  it('supports keyboard controls: space reveals, arrows answer', async () => {
+    const user = userEvent.setup();
+    const { onReview } = renderSession();
+
+    // Answers are ignored before reveal.
+    await user.keyboard('2');
+    expect(onReview).not.toHaveBeenCalled();
+
+    await user.keyboard(' ');
+    expect(screen.getByText('4')).toBeInTheDocument();
+
+    await user.keyboard('{ArrowRight}');
+    expect(onReview).toHaveBeenCalledWith('c1', 'correct');
+    expect(screen.getByText('Capital of France?')).toBeInTheDocument();
+
+    await user.keyboard(' ');
+    await user.keyboard('{ArrowLeft}');
+    expect(onReview).toHaveBeenCalledWith('c2', 'incorrect');
+  });
+
   it('finishes with a summary when every card is correct', async () => {
     const { onDone } = renderSession();
     for (const _ of cards) {

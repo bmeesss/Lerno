@@ -165,6 +165,66 @@ export interface DashboardData {
   dueGroups: DueGroup[];
   subjectProgress: SubjectProgress[];
   continueSet: StudySetSummary | null;
+  today: TodaySummary;
+}
+
+export interface StreakInfo {
+  current: number;
+  longest: number;
+  lastActiveDay: string | null;
+}
+
+export type ContinueAction =
+  | { type: 'review'; setId: string; setTitle: string; dueCount: number }
+  | { type: 'continue-session'; sessionId: string; setId: string; setTitle: string }
+  | { type: 'study-set'; setId: string; setTitle: string; remaining: number }
+  | { type: 'daily-goal'; setId: string; setTitle: string; remaining: number }
+  | { type: 'create-set' }
+  | { type: 'discover' };
+
+export interface UpcomingReviews {
+  dueNow: number;
+  laterToday: number;
+  tomorrow: number;
+  next7Days: number;
+}
+
+export interface ComebackInfo {
+  awayDays: number;
+  dueCount: number;
+  message: string;
+}
+
+export interface TodaySummary {
+  date: string;
+  target: number;
+  completedCards: number;
+  completionPercentage: number;
+  goalReached: boolean;
+  cardsDue: number;
+  upcoming: UpcomingReviews;
+  streak: StreakInfo;
+  comeback: ComebackInfo | null;
+  continueAction: ContinueAction;
+}
+
+export interface WeekDaySummary {
+  day: string;
+  active: boolean;
+  cardsTouched: number;
+  quizzes: number;
+  studyMinutes: number;
+}
+
+export interface WeekSummary {
+  weekStart: string;
+  studyDays: number;
+  cardsStudied: number;
+  quizzesCompleted: number;
+  quizAccuracy: number | null;
+  studyTimeMinutes: number;
+  currentStreak: number;
+  days: WeekDaySummary[];
 }
 
 export interface SubjectProgress {
@@ -180,10 +240,15 @@ export interface SubjectProgress {
 
 export interface ProgressStats {
   cardsStudied: number;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  dueCards: number;
   quizAttempts: number;
   accuracy: number | null;
   studyTimeMinutes: number;
   streakDays: number;
+  longestStreak: number;
+  lastActiveDay: string | null;
   subjectProgress: SubjectProgress[];
   setProgress: SubjectProgress[];
 }

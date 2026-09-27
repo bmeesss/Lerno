@@ -128,6 +128,17 @@ function quizQuestionRow(row: Row): QuizQuestionRecord {
   };
 }
 
+function questionPayload(quizId: string, questions: NewQuizQuestion[]) {
+  return questions.map((question) => ({
+    quiz_id: quizId,
+    prompt: question.prompt,
+    question_type: question.questionType,
+    correct_answer: question.correctAnswer,
+    options: question.options,
+    position: question.position,
+  }));
+}
+
 function attemptRow(row: Row): QuizAttemptRecord {
   const joined = row['quizzes'] as { set_id?: string | null } | { set_id?: string | null }[] | null;
   const quiz = Array.isArray(joined) ? joined[0] : joined;
@@ -652,14 +663,7 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .single();
         throwIfError(quizError);
         const quiz = quizRow(quizData as Row);
-        const payload = questions.map((question) => ({
-          quiz_id: quiz.id,
-          prompt: question.prompt,
-          question_type: question.questionType,
-          correct_answer: question.correctAnswer,
-          options: question.options,
-          position: question.position,
-        }));
+        const payload = questionPayload(quiz.id, questions);
         const { data: questionRows, error: questionError } = await client
           .from('quiz_questions')
           .insert(payload)
@@ -685,6 +689,30 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
       async deleteBySet(setId) {
         const { error } = await client.from('quizzes').delete().eq('set_id', setId);
         throwIfError(error);
+      },
+      async deleteQuestionsBySet(setId) {
+        const { data: quizzes, error: quizError } = await client
+          .from('quizzes')
+          .select('id')
+          .eq('set_id', setId);
+        throwIfError(quizError);
+        const quizIds = ((quizzes ?? []) as Row[]).map((row) => field<string>(row, 'id'));
+        if (quizIds.length === 0) return;
+        const { error } = await client.from('quiz_questions').delete().in('quiz_id', quizIds);
+        throwIfError(error);
+      },
+      async replaceQuestions(quizId, questions: NewQuizQuestion[]) {
+        const { error: deleteError } = await client
+          .from('quiz_questions')
+          .delete()
+          .eq('quiz_id', quizId);
+        throwIfError(deleteError);
+        const { data, error } = await client
+          .from('quiz_questions')
+          .insert(questionPayload(quizId, questions))
+          .select();
+        throwIfError(error);
+        return ((data ?? []) as Row[]).map(quizQuestionRow);
       },
     },
 

@@ -21,6 +21,7 @@ export const studyService = {
   review: (setId: string, cardId: string, result: ReviewResult) =>
     api.post<ReviewResponse>('/study/review', { setId, cardId, result }),
   practiceQueue: (setId: string) => api.get<PracticeQueue>(`/study/practice/${setId}`),
+  studyQueue: (setId: string) => api.get<PracticeQueue>(`/study/queue/${setId}`),
   startSession: (setId: string) => api.post<StudySession>('/study/sessions', { setId }),
   endSession: (sessionId: string, cardsSeen: number) =>
     api.patch<StudySession>(`/study/sessions/${sessionId}`, { cardsSeen }),

@@ -16,6 +16,11 @@ export function SubjectsPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState<Subject | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -32,14 +37,34 @@ export function SubjectsPage() {
     }
   }
 
-  async function onRename(subject: Subject) {
-    const next = window.prompt('Rename subject', subject.name);
-    if (!next || next.trim() === subject.name) return;
+  function openRename(subject: Subject) {
+    setEditing(subject);
+    setEditName(subject.name);
+    setEditError(null);
+  }
+
+  async function onRename(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const next = editName.trim();
+    if (!next) {
+      setEditError('Subject name is required');
+      return;
+    }
+    if (next === editing.name) {
+      setEditing(null);
+      return;
+    }
+    setEditError(null);
+    setEditBusy(true);
     try {
-      await subjectService.rename(subject.id, next.trim());
+      await subjectService.rename(editing.id, next);
+      setEditing(null);
       reload();
     } catch (err) {
-      window.alert(err instanceof ApiError ? err.message : 'Could not rename subject');
+      setEditError(err instanceof ApiError ? err.message : 'Could not rename subject');
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -86,7 +111,7 @@ export function SubjectsPage() {
                 variant="ghost"
                 size="sm"
                 aria-label={`Rename ${subject.name}`}
-                onClick={() => void onRename(subject)}
+                onClick={() => openRename(subject)}
               >
                 <IconEdit size={16} />
               </Button>
@@ -140,6 +165,41 @@ export function SubjectsPage() {
           </div>
           <button type="submit" className="visually-hidden">
             Create
+          </button>
+        </form>
+      </Modal>
+
+      <Modal
+        open={editing !== null}
+        title="Rename subject"
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button onClick={(e) => void onRename(e as unknown as FormEvent)} disabled={editBusy}>
+              {editBusy ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={(e) => void onRename(e)}>
+          {editError ? <div className="form-error">{editError}</div> : null}
+          <div className="field">
+            <label htmlFor="subject-rename">Subject name</label>
+            <input
+              id="subject-rename"
+              className="input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="e.g. Biology"
+              maxLength={80}
+              required
+            />
+          </div>
+          <button type="submit" className="visually-hidden">
+            Save
           </button>
         </form>
       </Modal>

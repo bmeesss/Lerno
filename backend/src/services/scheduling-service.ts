@@ -54,35 +54,42 @@ export function scheduleReview(
   outcome: ReviewOutcome,
   now: Date = new Date(),
 ): SchedulingResult {
-  const currentEase = state.ease ?? DEFAULT_EASE;
+  // Defensive normalization: stored progress should always be sane, but a
+  // malformed row must never produce NaN/negative values or throw. Clamp to
+  // the nearest valid state so scheduling stays deterministic.
+  const repetitionCount = normalizeCount(state.repetitionCount);
+  const easeBase = normalizeEase(state.ease);
+  const correctCount = normalizeCount(state.correctCount);
+  const incorrectCount = normalizeCount(state.incorrectCount);
+
   const lastReviewedAt = now.toISOString();
 
   if (outcome === 'correct') {
-    const repetitionCount = Math.min(state.repetitionCount + 1, REVIEW_INTERVALS_DAYS.length);
-    const ease = Math.min(MAX_EASE, round2(currentEase + 0.05));
-    const nextReviewAt = addDays(now, intervalDaysFor(repetitionCount));
+    const nextRepetition = Math.min(repetitionCount + 1, REVIEW_INTERVALS_DAYS.length);
+    const ease = Math.min(MAX_EASE, round2(easeBase + 0.05));
+    const nextReviewAt = addDays(now, intervalDaysFor(nextRepetition));
     return {
-      repetitionCount,
+      repetitionCount: nextRepetition,
       ease,
       lastReviewedAt,
       nextReviewAt,
-      correctCount: state.correctCount + 1,
-      incorrectCount: state.incorrectCount,
+      correctCount: correctCount + 1,
+      incorrectCount,
       requeued: false,
     };
   }
 
   // Incorrect: reduce the interval by one step and rejoin the session queue.
-  const repetitionCount = Math.max(0, state.repetitionCount - 1);
-  const ease = Math.max(MIN_EASE, round2(currentEase - 0.2));
-  const nextReviewAt = addDays(now, intervalDaysFor(repetitionCount));
+  const nextRepetition = Math.max(0, repetitionCount - 1);
+  const ease = Math.max(MIN_EASE, round2(easeBase - 0.2));
+  const nextReviewAt = addDays(now, intervalDaysFor(nextRepetition));
   return {
-    repetitionCount,
+    repetitionCount: nextRepetition,
     ease,
     lastReviewedAt,
     nextReviewAt,
-    correctCount: state.correctCount,
-    incorrectCount: state.incorrectCount + 1,
+    correctCount,
+    incorrectCount: incorrectCount + 1,
     requeued: true,
   };
 }
@@ -91,6 +98,18 @@ export function scheduleReview(
 export function isDifficult(ease: number | null, incorrectCount: number): boolean {
   if (incorrectCount >= 3) return true;
   return (ease ?? DEFAULT_EASE) < 1.5;
+}
+
+/** Non-negative integer counter; anything else becomes 0. */
+function normalizeCount(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+/** Finite ease within bounds; null/NaN/out-of-range falls back safely. */
+function normalizeEase(value: number | null): number {
+  if (value === null || !Number.isFinite(value)) return DEFAULT_EASE;
+  return Math.min(MAX_EASE, Math.max(MIN_EASE, value));
 }
 
 function addDays(date: Date, days: number): string {

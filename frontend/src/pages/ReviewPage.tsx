@@ -11,6 +11,15 @@ export function ReviewPage() {
 
   const totalDue = (data ?? []).reduce((sum, group) => sum + group.dueCount, 0);
 
+  // Group due sets under subject headings, preserving due-date order.
+  const bySubject = new Map<string, { name: string; groups: NonNullable<typeof data> }>();
+  for (const group of data ?? []) {
+    const name = group.subjectName ?? 'No subject';
+    const entry = bySubject.get(name) ?? { name, groups: [] };
+    entry.groups.push(group);
+    bySubject.set(name, entry);
+  }
+
   return (
     <>
       <div className="page-header">
@@ -45,24 +54,35 @@ export function ReviewPage() {
             </ButtonLink>
           </div>
 
-          <div className="stack" style={{ gap: 12 }}>
-            {data.map((group) => (
-              <div key={group.setId} className="list-row">
-                <IconBook size={20} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{group.setTitle}</div>
-                  <div className="muted" style={{ fontSize: '0.825rem' }}>
-                    {group.subjectName ?? 'No subject'} ·{' '}
-                    {group.nextReviewAt
-                      ? `oldest due ${new Date(group.nextReviewAt).toLocaleDateString()}`
-                      : ''}
-                  </div>
+          <div className="stack" style={{ gap: 20 }}>
+            {[...bySubject.values()].map((subject) => (
+              <section key={subject.name}>
+                <div className="section-title" style={{ marginTop: 0 }}>
+                  <h2>{subject.name}</h2>
+                  <span className="muted" style={{ fontSize: '0.825rem' }}>
+                    {subject.groups.reduce((sum, group) => sum + group.dueCount, 0)} due
+                  </span>
                 </div>
-                <Badge variant="accent">{group.dueCount} due</Badge>
-                <Link to={`/sets/${group.setId}/study`} className="btn btn-primary btn-sm">
-                  Study
-                </Link>
-              </div>
+                <div className="stack" style={{ gap: 12 }}>
+                  {subject.groups.map((group) => (
+                    <div key={group.setId} className="list-row">
+                      <IconBook size={20} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>{group.setTitle}</div>
+                        <div className="muted" style={{ fontSize: '0.825rem' }}>
+                          {group.nextReviewAt
+                            ? `Oldest due ${new Date(group.nextReviewAt).toLocaleDateString()}`
+                            : 'Due now'}
+                        </div>
+                      </div>
+                      <Badge variant="accent">{group.dueCount} due</Badge>
+                      <Link to={`/sets/${group.setId}/study`} className="btn btn-primary btn-sm">
+                        Study
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         </>

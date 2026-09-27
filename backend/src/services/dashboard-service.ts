@@ -4,16 +4,18 @@
  */
 import type { Database } from '../lib/db/repository.js';
 import { progressService } from './progress-service.js';
+import { retentionService } from './retention-service.js';
 import { studyService } from './study-service.js';
 import { buildSetSummaries } from './set-view.js';
 
 export const dashboardService = {
   async get(db: Database, userId: string, displayName: string) {
-    const [dueGroups, stats, ownSets, favorites] = await Promise.all([
+    const [dueGroups, stats, ownSets, favorites, today] = await Promise.all([
       studyService.dueGroups(db, userId),
       progressService.stats(db, userId),
       db.sets.listByOwner(userId),
       db.favorites.listByUser(userId),
+      retentionService.today(db, userId),
     ]);
 
     const favoriteSets = await db.sets.listByIds(favorites.map((favorite) => favorite.setId));
@@ -38,6 +40,7 @@ export const dashboardService = {
       dueGroups: dueGroups.slice(0, 6),
       subjectProgress: stats.subjectProgress.slice(0, 5),
       continueSet,
+      today,
     };
   },
 };
