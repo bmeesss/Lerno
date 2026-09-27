@@ -36,7 +36,8 @@ async function execute(
   } catch (err) {
     if (err instanceof ApiError) return toolFail(err.code, err.message);
     if (err instanceof ZodError) return toolFail('VALIDATION_ERROR', 'Invalid tool input');
-    console.error('MCP tool error:', err);
+    // Database/SDK errors can contain request headers or token-bearing URLs.
+    console.error('MCP tool error (details redacted)');
     return toolFail('INTERNAL_ERROR', 'Something went wrong');
   }
 }

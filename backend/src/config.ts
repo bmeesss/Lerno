@@ -10,7 +10,7 @@ const envSchema = z.object({
   AUTH_JWT_SECRET: z.string().optional().or(z.literal('')),
   /**
    * Canonical public origin of this backend (e.g. https://lerno-backend.onrender.com).
-   * Used for OAuth protected-resource metadata; falls back to the request host.
+   * Used for OAuth protected-resource metadata. Never fall back to request headers.
    */
   PUBLIC_BACKEND_URL: z.string().url().optional().or(z.literal('')),
   HEALTH_CHECK_DB: z
@@ -39,6 +39,41 @@ if (parsed.NODE_ENV === 'production' && !isSupabaseConfigured) {
   throw new Error(
     'SUPABASE_URL and SUPABASE_ANON_KEY are required in production. ' +
       'Development data mode must never be used in production.',
+  );
+}
+if (isSupabaseConfigured) {
+  const issuerOrigin = new URL(supabaseUrl);
+  if (
+    ![issuerOrigin.origin, `${issuerOrigin.origin}/`].includes(supabaseUrl) ||
+    issuerOrigin.username ||
+    issuerOrigin.password ||
+    (parsed.NODE_ENV === 'production' && issuerOrigin.protocol !== 'https:')
+  ) {
+    throw new Error('SUPABASE_URL must be a bare HTTPS origin in production');
+  }
+}
+
+// Discovery URLs are security-sensitive. Never construct them from an
+// untrusted Host header in production (authorization-server mix-up).
+if (parsed.PUBLIC_BACKEND_URL) {
+  const url = new URL(parsed.PUBLIC_BACKEND_URL);
+  if (
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash ||
+    url.username ||
+    url.password ||
+    ![url.origin, `${url.origin}/`].includes(parsed.PUBLIC_BACKEND_URL) ||
+    ((parsed.NODE_ENV === 'production' || isSupabaseConfigured) && url.protocol !== 'https:')
+  ) {
+    throw new Error('PUBLIC_BACKEND_URL must be a bare HTTPS origin in production');
+  }
+}
+// A real Supabase issuer must never be paired with metadata assembled from
+// request headers, even if NODE_ENV was accidentally left at development.
+if ((parsed.NODE_ENV === 'production' || isSupabaseConfigured) && !parsed.PUBLIC_BACKEND_URL) {
+  throw new Error(
+    'PUBLIC_BACKEND_URL is required with Supabase or in production for OAuth discovery',
   );
 }
 

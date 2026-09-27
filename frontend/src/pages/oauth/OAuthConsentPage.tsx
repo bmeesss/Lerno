@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { OAuthAuthorizationDetails } from '@supabase/supabase-js';
 import { Button, ButtonLink } from '../../components/ui/Button';
+import { useAuth } from '../../hooks/useAuth';
 import { EmptyState, LoadingRow } from '../../components/ui/Primitives';
 import {
   attachLernoSession,
@@ -17,6 +18,7 @@ import {
   isSupabaseOAuthConfigured,
 } from '../../lib/supabase';
 import { AuthLayout } from '../auth/AuthLayout';
+import { safeOAuthRedirect } from './redirect';
 
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
   openid: 'Verify your identity',
@@ -33,13 +35,17 @@ type Status =
   | { kind: 'ready'; details: OAuthAuthorizationDetails; busy: boolean };
 
 export function OAuthConsentPage() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const authorizationId = params.get('authorization_id');
   const [status, setStatus] = useState<Status>({ kind: 'loading' });
 
   useEffect(() => {
-    if (!authorizationId) {
-      setStatus({ kind: 'error', message: 'Missing authorization_id. Start again from your AI app.' });
+    if (!authorizationId || !/^[a-zA-Z0-9_-]{1,256}$/.test(authorizationId)) {
+      setStatus({
+        kind: 'error',
+        message: 'Missing authorization_id. Start again from your AI app.',
+      });
       return;
     }
     if (!isSupabaseOAuthConfigured()) {
@@ -48,35 +54,59 @@ export function OAuthConsentPage() {
     }
     let cancelled = false;
     void (async () => {
-      const client = getSupabaseClient();
-      if (!client) {
-        if (!cancelled) setStatus({ kind: 'not-configured' });
-        return;
+      try {
+        const client = getSupabaseClient();
+        if (!client) {
+          if (!cancelled) setStatus({ kind: 'not-configured' });
+          return;
+        }
+        if (!(await attachLernoSession(client))) {
+          if (!cancelled) setStatus({ kind: 'session-expired' });
+          return;
+        }
+        // The backend-verified Lerno user and the Supabase SDK session must
+        // agree before even displaying/auto-approving an OAuth request.
+        const { data: session, error: sessionError } = await client.auth.getUser();
+        if (cancelled) return;
+        if (sessionError || !user || session.user?.id !== user.id) {
+          setStatus({ kind: 'error', message: 'Account changed. Please log in again.' });
+          return;
+        }
+        const { data, error } = await client.auth.oauth.getAuthorizationDetails(authorizationId);
+        if (cancelled) return;
+        if (error || !data) {
+          setStatus({
+            kind: 'error',
+            message: 'This authorization request is invalid or expired.',
+          });
+          return;
+        }
+        if (!('authorization_id' in data)) {
+          // Already consented: Supabase returned the client redirect directly.
+          if (!safeOAuthRedirect(data.redirect_url)) {
+            setStatus({ kind: 'error', message: 'Invalid client redirect.' });
+            return;
+          }
+          window.location.assign(data.redirect_url);
+          return;
+        }
+        if (data.authorization_id !== authorizationId || data.user.id !== user.id) {
+          setStatus({ kind: 'error', message: 'Account changed. Please log in again.' });
+          return;
+        }
+        setStatus({ kind: 'ready', details: data, busy: false });
+      } catch {
+        if (!cancelled)
+          setStatus({
+            kind: 'error',
+            message: 'Could not reach the authorization server. Please try again.',
+          });
       }
-      if (!(await attachLernoSession(client))) {
-        if (!cancelled) setStatus({ kind: 'session-expired' });
-        return;
-      }
-      const { data, error } = await client.auth.oauth.getAuthorizationDetails(authorizationId);
-      if (cancelled) return;
-      if (error || !data) {
-        setStatus({
-          kind: 'error',
-          message: error?.message ?? 'This authorization request is invalid or expired.',
-        });
-        return;
-      }
-      if (!('authorization_id' in data)) {
-        // Already consented: Supabase returned the client redirect directly.
-        window.location.assign(data.redirect_url);
-        return;
-      }
-      setStatus({ kind: 'ready', details: data, busy: false });
     })();
     return () => {
       cancelled = true;
     };
-  }, [authorizationId]);
+  }, [authorizationId, user?.id]);
 
   async function decide(approve: boolean): Promise<void> {
     if (status.kind !== 'ready' || !authorizationId) return;
@@ -86,14 +116,50 @@ export function OAuthConsentPage() {
       setStatus({ kind: 'not-configured' });
       return;
     }
-    const { error } = approve
-      ? await client.auth.oauth.approveAuthorization(authorizationId)
-      : await client.auth.oauth.denyAuthorization(authorizationId);
-    if (error) {
-      setStatus({ kind: 'error', message: error.message });
+    let response;
+    try {
+      // A logout/login in another tab must not approve with a stale cached
+      // Supabase session. Reattach the current Lerno session before deciding.
+      if (!(await attachLernoSession(client))) {
+        setStatus({ kind: 'session-expired' });
+        return;
+      }
+      const { data: session, error: sessionError } = await client.auth.getUser();
+      if (
+        sessionError ||
+        !user ||
+        session.user?.id !== user.id ||
+        session.user.id !== status.details.user.id
+      ) {
+        setStatus({ kind: 'error', message: 'Account changed. Please log in again.' });
+        return;
+      }
+      response = approve
+        ? await client.auth.oauth.approveAuthorization(authorizationId, {
+            skipBrowserRedirect: true,
+          })
+        : await client.auth.oauth.denyAuthorization(authorizationId, { skipBrowserRedirect: true });
+    } catch {
+      setStatus({
+        kind: 'error',
+        message: 'Could not reach the authorization server. Please try again.',
+      });
       return;
     }
-    // Success auto-redirects to the AI app (Supabase handles the redirect).
+    const { data, error } = response;
+    if (error) {
+      setStatus({
+        kind: 'error',
+        message: 'Authorization could not be completed. Please try again.',
+      });
+      return;
+    }
+    if (!data?.redirect_url || !safeOAuthRedirect(data.redirect_url, status.details.redirect_uri)) {
+      setStatus({ kind: 'error', message: 'Invalid client redirect.' });
+      return;
+    }
+    // Supabase has validated the registered URI and generated code + state.
+    window.location.assign(data.redirect_url);
   }
 
   if (status.kind === 'loading') {
@@ -106,7 +172,10 @@ export function OAuthConsentPage() {
 
   if (status.kind === 'not-configured') {
     return (
-      <AuthLayout title="OAuth not available" subtitle="This Lerno environment has no OAuth server configured.">
+      <AuthLayout
+        title="OAuth not available"
+        subtitle="This Lerno environment has no OAuth server configured."
+      >
         <EmptyState
           title="Not configured"
           description="AI-app connections need a Lerno environment with Supabase OAuth enabled."
@@ -119,7 +188,10 @@ export function OAuthConsentPage() {
   if (status.kind === 'session-expired') {
     const next = encodeURIComponent(`/oauth/consent?authorization_id=${authorizationId}`);
     return (
-      <AuthLayout title="Session expired" subtitle="Log in again to continue connecting your AI app.">
+      <AuthLayout
+        title="Session expired"
+        subtitle="Log in again to continue connecting your AI app."
+      >
         <EmptyState
           title="Log in again"
           description="Your Lerno session expired before the connection finished."
@@ -131,7 +203,10 @@ export function OAuthConsentPage() {
 
   if (status.kind === 'error') {
     return (
-      <AuthLayout title="Connection failed" subtitle="This authorization request could not be completed.">
+      <AuthLayout
+        title="Connection failed"
+        subtitle="This authorization request could not be completed."
+      >
         <EmptyState
           title="Something went wrong"
           description={status.message}
@@ -152,6 +227,8 @@ export function OAuthConsentPage() {
         <div style={{ fontWeight: 600 }}>{status.details.client.name}</div>
         <div className="muted" style={{ fontSize: '0.875rem', marginTop: 4 }}>
           Returns to: {status.details.redirect_uri}
+          <br />
+          Connected as: {status.details.user.email}
         </div>
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
@@ -168,16 +245,12 @@ export function OAuthConsentPage() {
           <p className="muted">No special permissions requested.</p>
         )}
         <p className="muted" style={{ fontSize: '0.875rem', marginTop: 10 }}>
-          Lerno shares only your learning data with this app — never your password. You can revoke
-          access at any time.
+          This app can read and change your Lerno learning data (including deleting sets). Your
+          password is never shared.
         </p>
       </div>
       <div className="study-controls">
-        <Button
-          variant="secondary"
-          disabled={status.busy}
-          onClick={() => void decide(false)}
-        >
+        <Button variant="secondary" disabled={status.busy} onClick={() => void decide(false)}>
           Deny
         </Button>
         <Button disabled={status.busy} onClick={() => void decide(true)}>

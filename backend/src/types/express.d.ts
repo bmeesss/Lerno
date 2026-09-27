@@ -5,6 +5,8 @@ export interface AuthContext {
   id: string;
   email: string;
   role: Role;
+  oauthClient?: boolean;
+  audience?: string | string[];
 }
 
 declare global {

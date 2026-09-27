@@ -36,10 +36,7 @@ interface RpcEnvelope {
   error?: { code: number; message: string };
 }
 
-async function mcpRaw(
-  token: string | null,
-  body: unknown,
-): Promise<request.Response> {
+async function mcpRaw(token: string | null, body: unknown): Promise<request.Response> {
   const req = request(app).post('/api/mcp').set('Accept', ACCEPT).send(body);
   if (token) req.set('Authorization', `Bearer ${token}`);
   return req;
@@ -226,7 +223,7 @@ describe('mcp: sets', () => {
     expect(otherBody.count).toBe(2);
   });
 
-  it('serves own private and foreign public sets, never foreign private ones', async () => {
+  it('serves only owned sets, including when another set is public', async () => {
     const { a, privateId, publicId, foreignPrivateId, foreignPublicId } = await setupSets();
 
     const own = await callTool(a.token, 'lerno_get_set', { setId: privateId });
@@ -241,8 +238,8 @@ describe('mcp: sets', () => {
     expect(pub.isError).toBe(false);
 
     const foreignPub = await callTool(a.token, 'lerno_get_set', { setId: foreignPublicId });
-    expect(foreignPub.isError).toBe(false);
-    expect((foreignPub.structured as { set: { isOwner: boolean } }).set.isOwner).toBe(false);
+    expect(foreignPub.isError).toBe(true);
+    expect(foreignPub.text).toMatch(/^\[NOT_FOUND\]/);
 
     const foreignPriv = await callTool(a.token, 'lerno_get_set', { setId: foreignPrivateId });
     expect(foreignPriv.isError).toBe(true);
@@ -306,7 +303,7 @@ describe('mcp: cards', () => {
     });
 
     const pub = await callTool(a.token, 'lerno_get_cards', { setId: foreignPublic.id });
-    expect(pub.isError).toBe(false);
+    expect(pub.isError).toBe(true);
 
     const priv = await callTool(a.token, 'lerno_get_cards', { setId: foreignPrivate.id });
     expect(priv.isError).toBe(true);
@@ -490,7 +487,9 @@ describe('mcp: protocol errors and secret hygiene', () => {
 
   it('answers unknown methods and tools without leaking internals', async () => {
     const { token } = await signup('McpUnknown');
-    const badMethod = rpc(await mcpRaw(token, { jsonrpc: '2.0', id: 1, method: 'nope', params: {} }));
+    const badMethod = rpc(
+      await mcpRaw(token, { jsonrpc: '2.0', id: 1, method: 'nope', params: {} }),
+    );
     expect(badMethod.error).toBeDefined();
     expect(JSON.stringify(badMethod)).not.toMatch(/stack|at \/|\.ts:|node_modules/i);
 

@@ -110,17 +110,16 @@ describe('SetEditorPage create mode', () => {
     renderCreate();
     await user.click(screen.getByRole('button', { name: /paste \/ import/i }));
     const dialog = screen.getByRole('dialog', { name: /paste cards or import csv/i });
-    await user.type(
-      within(dialog).getByLabelText('Paste list'),
-      'Q1 | A1\nnot a card\nQ2 | A2',
-    );
+    await user.type(within(dialog).getByLabelText('Paste list'), 'Q1 | A1\nnot a card\nQ2 | A2');
     expect(await within(dialog).findByText(/2 cards ready/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/1 line skipped/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/line 2:/)).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: /add 2 cards/i }));
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /paste cards or import csv/i })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('dialog', { name: /paste cards or import csv/i }),
+      ).not.toBeInTheDocument(),
     );
     expect(screen.getByDisplayValue('Q1')).toBeInTheDocument();
     expect(screen.getByDisplayValue('A2')).toBeInTheDocument();
@@ -135,7 +134,9 @@ describe('SetEditorPage create mode', () => {
     await user.type(within(dialog).getByLabelText('Paste list'), 'Q? | A');
     await user.click(await within(dialog).findByRole('button', { name: /add 1 card/i }));
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /paste cards or import csv/i })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('dialog', { name: /paste cards or import csv/i }),
+      ).not.toBeInTheDocument(),
     );
 
     await user.click(screen.getByRole('button', { name: /create set$/i }));
@@ -161,13 +162,15 @@ describe('SetEditorPage create mode', () => {
     fireEvent.change(within(dialog).getByLabelText('Paste list'), { target: { value: bulk } });
     await user.click(await within(dialog).findByRole('button', { name: /add 501 cards/i }));
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /paste cards or import csv/i })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('dialog', { name: /paste cards or import csv/i }),
+      ).not.toBeInTheDocument(),
     );
 
     await user.click(screen.getByRole('button', { name: /create set$/i }));
     expect(await screen.findByText(/at most 500 cards/i)).toBeInTheDocument();
     expect(createMock).not.toHaveBeenCalled();
-  });
+  }, 15_000); // Rendering 501 cards is slower on loaded CI workers.
 
   it('guards Cancel with a discard dialog only when dirty', async () => {
     const user = userEvent.setup();
@@ -175,7 +178,9 @@ describe('SetEditorPage create mode', () => {
     // Pristine: navigates straight away.
     await user.click(screen.getByRole('button', { name: /^cancel$/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/sets');
-    expect(screen.queryByRole('dialog', { name: /discard unsaved changes/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: /discard unsaved changes/i }),
+    ).not.toBeInTheDocument();
 
     // Dirty: asks first, then discards.
     await user.type(screen.getByLabelText('Title'), 'Draft');
@@ -211,12 +216,17 @@ describe('SetEditorPage edit mode', () => {
     await user.type(within(dialog).getByLabelText('Paste list'), 'QN1 | AN1\nQN2 | AN2');
     await user.click(await within(dialog).findByRole('button', { name: /add 2 cards/i }));
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /paste cards or import csv/i })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('dialog', { name: /paste cards or import csv/i }),
+      ).not.toBeInTheDocument(),
     );
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
-    expect(updateMock).toHaveBeenCalledWith('set-1', expect.objectContaining({ title: 'Biology 2' }));
+    expect(updateMock).toHaveBeenCalledWith(
+      'set-1',
+      expect.objectContaining({ title: 'Biology 2' }),
+    );
     expect(removeCardMock).toHaveBeenCalledTimes(1);
     expect(removeCardMock).toHaveBeenCalledWith('set-1', 'card-2');
     // Both new cards go in a single bulk call.

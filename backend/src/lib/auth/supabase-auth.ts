@@ -4,6 +4,7 @@
  * stores passwords itself.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import jwt from 'jsonwebtoken';
 import { config } from '../../config.js';
 import { errors } from '../errors.js';
 import type { AuthProvider, AuthIdentity, SignInResult, SignUpResult } from './types.js';
@@ -83,7 +84,23 @@ export function createSupabaseAuthProvider(): AuthProvider {
       const client = anonClient();
       const { data, error } = await client.auth.getUser(accessToken);
       if (error || !data.user) return null;
-      return identityFromUser(data.user);
+      // getUser validates the token with Supabase Auth server-side. Decode
+      // only *after* that check, to read the OAuth client and audience for
+      // resource authorization. Decoded JWTs alone are never trusted as auth.
+      const claims = jwt.decode(accessToken);
+      if (
+        !claims ||
+        typeof claims === 'string' ||
+        claims.sub !== data.user.id ||
+        ('client_id' in claims &&
+          (typeof claims.client_id !== 'string' || claims.client_id.trim().length === 0))
+      )
+        return null;
+      return {
+        ...identityFromUser(data.user),
+        oauthClient: 'client_id' in claims,
+        audience: claims.aud,
+      };
     },
 
     async refresh(refreshToken): Promise<SignInResult> {

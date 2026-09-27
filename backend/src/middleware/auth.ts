@@ -28,7 +28,13 @@ async function loadIdentity(req: Request): Promise<boolean> {
 
   const profile = await req.db.profiles.get(identity.id);
   const role: Role = profile?.role ?? 'user';
-  req.auth = { id: identity.id, email: identity.email, role };
+  req.auth = {
+    id: identity.id,
+    email: identity.email,
+    role,
+    oauthClient: identity.oauthClient,
+    audience: identity.audience,
+  };
   return true;
 }
 
@@ -67,7 +73,9 @@ export const requireAdmin: RequestHandler = (req, _res, next) => {
         next(errors.unauthorized('You must be logged in to do this'));
         return;
       }
-      if (req.auth?.role !== 'admin') {
+      // Client tokens are consented for learning data, not service-role
+      // moderation, even when the account owner is a website administrator.
+      if (req.auth?.role !== 'admin' || req.auth.oauthClient) {
         next(errors.forbidden('Admin access required'));
         return;
       }

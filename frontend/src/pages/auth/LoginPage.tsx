@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { ApiError } from '../../lib/api';
 import { AuthLayout } from './AuthLayout';
+import { safeNext } from './safeNext';
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -14,7 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to={params.get('next') ?? '/dashboard'} replace />;
+  if (user) return <Navigate to={safeNext(params.get('next'))} replace />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -22,7 +23,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-      navigate(params.get('next') ?? '/dashboard', { replace: true });
+      navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed. Please try again.');
     } finally {

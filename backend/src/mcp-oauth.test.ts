@@ -63,7 +63,7 @@ describe('mcp oauth: discovery metadata', () => {
     const res = await request(app).get('/.well-known/oauth-protected-resource');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/);
-    expect(res.body.resource).toMatch(/^https?:\/\/.+/);
+    expect(res.body.resource).toMatch(/^https?:\/\/.+\/api\/mcp$/);
     expect(res.body.resource_name).toBe('Lerno MCP');
     expect(Array.isArray(res.body.authorization_servers)).toBe(true);
     expect(res.body.scopes_supported).toEqual(['openid', 'profile', 'email']);
@@ -72,12 +72,21 @@ describe('mcp oauth: discovery metadata', () => {
     expect(res.body.authorization_servers).toEqual([]);
   });
 
-  it('derives the resource origin from proxy headers when no public URL is set', async () => {
+  it('never reflects Host or proxy headers, even in local data mode', async () => {
     const res = await request(app)
-      .get('/.well-known/oauth-protected-resource')
+      .get('/.well-known/oauth-protected-resource/api/mcp')
+      .set('Host', 'attacker.invalid')
       .set('X-Forwarded-Proto', 'https')
-      .set('X-Forwarded-Host', 'lerno-backend.onrender.com');
-    expect(res.body.resource).toBe('https://lerno-backend.onrender.com');
+      .set('X-Forwarded-Host', 'spoofed.invalid');
+    expect(res.body.resource).toBe('http://localhost:4000/api/mcp');
+    const challenge = await request(app)
+      .post('/api/mcp')
+      .set('Host', 'attacker.invalid')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    expect(challenge.headers['www-authenticate']).toBe(
+      'Bearer resource_metadata="http://localhost:4000/.well-known/oauth-protected-resource/api/mcp"',
+    );
   });
 
   it('tolerates garbage tokens on the public metadata endpoint', async () => {
@@ -95,7 +104,9 @@ describe('mcp oauth: bearer authentication', () => {
     expect(res.body.error.code).toBe('UNAUTHORIZED');
     expect(res.body).not.toHaveProperty('data');
     const challenge = res.headers['www-authenticate'] as string;
-    expect(challenge).toMatch(/^Bearer resource_metadata="https?:\/\/.+\/.well-known\/oauth-protected-resource"$/);
+    expect(challenge).toMatch(
+      /^Bearer resource_metadata="https?:\/\/.+\/.well-known\/oauth-protected-resource\/api\/mcp"$/,
+    );
   });
 
   it('rejects invalid and expired tokens the same way', async () => {
@@ -168,18 +179,24 @@ describe('mcp oauth: cross-user isolation over the wire', () => {
     const authA = { Authorization: `Bearer ${a.token}` };
     const authB = { Authorization: `Bearer ${b.token}` };
     const priv = (
-      await request(app).post('/api/sets').set(authA).send({
-        title: 'Iso private',
-        visibility: 'private',
-        cards: [{ question: 'Q?', answer: 'A' }],
-      })
+      await request(app)
+        .post('/api/sets')
+        .set(authA)
+        .send({
+          title: 'Iso private',
+          visibility: 'private',
+          cards: [{ question: 'Q?', answer: 'A' }],
+        })
     ).body.data.id as string;
     const pub = (
-      await request(app).post('/api/sets').set(authB).send({
-        title: 'Iso public',
-        visibility: 'public',
-        cards: [{ question: 'Q?', answer: 'A' }],
-      })
+      await request(app)
+        .post('/api/sets')
+        .set(authB)
+        .send({
+          title: 'Iso public',
+          visibility: 'public',
+          cards: [{ question: 'Q?', answer: 'A' }],
+        })
     ).body.data.id as string;
 
     const getSet = (setId: string) => ({
@@ -196,7 +213,7 @@ describe('mcp oauth: cross-user isolation over the wire', () => {
 
     expect(await textOf(a.token, priv)).toContain('Iso private');
     expect(await textOf(b.token, priv)).toMatch(/^\[NOT_FOUND\]/);
-    expect(await textOf(a.token, pub)).toContain('Iso public');
+    expect(await textOf(a.token, pub)).toMatch(/^\[NOT_FOUND\]/);
     expect(await textOf(b.token, pub)).toContain('Iso public');
   });
 });

@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { ApiError } from '../lib/errors.js';
 import { asyncHandler, sendOk } from '../lib/http.js';
@@ -75,11 +75,17 @@ describe('error handler', () => {
     expect(res.body).toEqual({ error: { code: 'FORBIDDEN', message: 'Owners only' } });
   });
 
-  it('hides internal error details', async () => {
-    const res = await request(app).get('/boom');
-    expect(res.status).toBe(500);
-    expect(res.body.error.code).toBe('INTERNAL_ERROR');
-    expect(res.body.error.message).not.toContain('secret-token');
+  it('hides internal error details from both response and logs', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const res = await request(app).get('/boom');
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('INTERNAL_ERROR');
+      expect(res.body.error.message).not.toContain('secret-token');
+      expect(JSON.stringify(log.mock.calls)).not.toContain('secret-token');
+    } finally {
+      log.mockRestore();
+    }
   });
 });
 
