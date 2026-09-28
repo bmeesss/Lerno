@@ -16,6 +16,7 @@ import { progressRoutes, reviewRoutes, studyRoutes } from './routes/study.routes
 import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { discoverRoutes, favoriteRoutes } from './routes/discover.routes.js';
 import { adminRoutes, reportRoutes } from './routes/report.routes.js';
+import { aiRoutes } from './routes/ai.routes.js';
 
 export interface AppDeps {
   /** Lightweight optional database probe for /api/health. */
@@ -71,6 +72,7 @@ export function createApp(deps: AppDeps = {}): Express {
   api.use('/favorites', favoriteRoutes());
   api.use('/reports', reportRoutes());
   api.use('/admin', adminRoutes());
+  api.use('/ai', aiRoutes());
   api.use('/mcp', mcpRoutes());
   // Feature route groups are mounted here as their phases land.
 

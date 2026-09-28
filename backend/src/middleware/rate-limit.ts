@@ -9,6 +9,8 @@ export interface LimiterOptions {
   name: string;
   /** Force-disable/enable; defaults to enabled except in tests. */
   skip?: () => boolean;
+  /** Custom key extractor (defaults to the client IP). */
+  keyBy?: (req: Request) => string;
 }
 
 /**
@@ -21,7 +23,7 @@ export function createLimiter(options: LimiterOptions) {
     max: options.max,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req: Request) => `${options.name}:${clientIp(req)}`,
+    keyGenerator: (req: Request) => `${options.name}:${options.keyBy?.(req) ?? clientIp(req)}`,
     handler: (_req: Request, res: Response) => {
       res.status(429).json({
         error: {
@@ -42,3 +44,22 @@ export const writeRateLimit = createLimiter({ windowMs: 10 * 60 * 1000, max: 120
 
 /** Public read + report endpoints: basic abuse protection (spec §15). */
 export const publicRateLimit = createLimiter({ windowMs: 5 * 60 * 1000, max: 240, name: 'public' });
+
+/**
+ * Rate-limit key for AI chat: per authenticated user (fallback: client IP),
+ * so one student cannot exhaust another's budget from a shared IP.
+ */
+export function aiLimiterKey(req: Request): string {
+  return req.auth?.id ?? clientIp(req);
+}
+
+/**
+ * Lerno AI chat: every request is an upstream Groq call, so the limit is
+ * strict and keyed per authenticated user (fallback: IP) (spec §15).
+ */
+export const aiRateLimit = createLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 20,
+  name: 'ai',
+  keyBy: aiLimiterKey,
+});

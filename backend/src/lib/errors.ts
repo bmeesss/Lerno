@@ -8,6 +8,8 @@ export type ErrorCode =
   | 'METHOD_NOT_ALLOWED'
   | 'CONFLICT'
   | 'RATE_LIMITED'
+  | 'AI_UNAVAILABLE'
+  | 'AI_ERROR'
   | 'INTERNAL_ERROR';
 
 const statusByCode: Record<ErrorCode, number> = {
@@ -18,6 +20,8 @@ const statusByCode: Record<ErrorCode, number> = {
   METHOD_NOT_ALLOWED: 405,
   CONFLICT: 409,
   RATE_LIMITED: 429,
+  AI_UNAVAILABLE: 503,
+  AI_ERROR: 502,
   INTERNAL_ERROR: 500,
 };
 
@@ -44,5 +48,11 @@ export const errors = {
   conflict: (message = 'Resource already exists') => new ApiError('CONFLICT', message),
   rateLimited: (message = 'Too many requests, please slow down') =>
     new ApiError('RATE_LIMITED', message),
+  /** Lerno AI is not configured (no GROQ_API_KEY) — safe, pre-checked message. */
+  aiUnavailable: (message = 'Lerno AI is not available right now') =>
+    new ApiError('AI_UNAVAILABLE', message),
+  /** The AI provider failed — generic message, never leaks upstream details. */
+  aiError: (message = 'Lerno AI could not answer right now. Please try again.') =>
+    new ApiError('AI_ERROR', message),
   internal: (message = 'Something went wrong') => new ApiError('INTERNAL_ERROR', message),
 };

@@ -13,6 +13,14 @@ const envSchema = z.object({
    * Used for OAuth protected-resource metadata. Never fall back to request headers.
    */
   PUBLIC_BACKEND_URL: z.string().url().optional().or(z.literal('')),
+  /**
+   * Groq API key for Lerno AI (server-side only — never shipped to the
+   * frontend or committed). Empty disables the AI endpoints with a clean
+   * "not available" error.
+   */
+  GROQ_API_KEY: z.string().optional().or(z.literal('')),
+  /** Groq chat model. Central so it can be swapped without code changes. */
+  GROQ_MODEL: z.string().trim().min(1).default('openai/gpt-oss-120b'),
   HEALTH_CHECK_DB: z
     .enum(['true', 'false'])
     .default('false')
@@ -91,6 +99,9 @@ export const config = {
   publicBackendUrl: parsed.PUBLIC_BACKEND_URL || null,
   authJwtSecret: parsed.AUTH_JWT_SECRET,
   healthCheckDb: parsed.HEALTH_CHECK_DB,
+  /** Server-only Groq credentials (Lerno AI). */
+  groqApiKey: parsed.GROQ_API_KEY ?? '',
+  groqModel: parsed.GROQ_MODEL,
 } as const;
 
 /** Secret used to sign dev-mode access tokens. */
