@@ -201,3 +201,17 @@ export const IconSend = icon(
     <path d="M22 2 15 22l-4-9-9-4 20-7z" />
   </>,
 );
+
+export const IconCopy = icon(
+  <>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+  </>,
+);
+
+export const IconRefresh = icon(
+  <>
+    <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+    <path d="M21 4v5h-5" />
+  </>,
+);
