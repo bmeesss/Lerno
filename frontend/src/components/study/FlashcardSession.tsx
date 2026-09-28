@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Primitives';
+import { Badge, ProgressBar } from '../ui/Primitives';
 import { useToast } from '../ui/Toast';
 
 export interface SessionCard {
@@ -123,8 +123,9 @@ export function FlashcardSession({ cards, onReview, onDone, title, onQuit }: Pro
         </span>
       </div>
 
+      <ProgressBar value={seen} max={total} />
       <div
-        className="flashcard"
+        className={`flashcard${revealed ? ' flashcard-revealed' : ''}`}
         role="button"
         tabIndex={0}
         onClick={() => setRevealed((value) => !value)}

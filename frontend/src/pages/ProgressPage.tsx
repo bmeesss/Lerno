@@ -1,4 +1,5 @@
-import { ButtonLink } from '../components/ui/Button';
+import { IconFlame } from '../components/ui/Icons';
+import { Button, ButtonLink } from '../components/ui/Button';
 import { EmptyState, LoadingRow, ProgressBar } from '../components/ui/Primitives';
 import { TodayPanel } from '../components/dashboard/TodayPanel';
 import { useAsync } from '../hooks/useAsync';
@@ -8,13 +9,23 @@ import type { ProgressStats, TodaySummary, WeekSummary } from '../types';
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function ProgressPage() {
-  const { data, loading, error } = useAsync<ProgressStats>(() => progressService.get(), []);
+  const { data, loading, error, reload } = useAsync<ProgressStats>(() => progressService.get(), []);
   const { data: today } = useAsync<TodaySummary>(() => progressService.today(), []);
   const { data: week } = useAsync<WeekSummary>(() => progressService.week(), []);
 
   if (loading) return <LoadingRow large />;
   if (error || !data) {
-    return <EmptyState title="Could not load progress" description={error ?? 'Unknown error'} />;
+    return (
+      <EmptyState
+        title="Could not load progress"
+        description={error ?? 'Try again in a moment.'}
+        action={
+          <Button variant="secondary" onClick={reload}>
+            Try again
+          </Button>
+        }
+      />
+    );
   }
 
   return (
@@ -27,20 +38,14 @@ export function ProgressPage() {
         <ButtonLink to="/review">Go to review</ButtonLink>
       </div>
 
-      {today ? <TodayPanel today={today} /> : null}
-
-      <div className="dash-grid" style={{ marginBottom: 24 }}>
-        <div className="card stat-card">
+      <div className="progress-highlights">
+        <section className="card stat-card progress-highlight">
           <div className="stat-label">Cards studied</div>
           <div className="stat-value">{data.cardsStudied}</div>
           <div className="stat-sub">Unique cards with progress</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Quiz attempts</div>
-          <div className="stat-value">{data.quizAttempts}</div>
-          <div className="stat-sub">All time</div>
-        </div>
-        <div className="card stat-card">
+          <IconFlame size={24} />
+        </section>
+        <section className="card stat-card">
           <div className="stat-label">Flashcard accuracy</div>
           <div className="stat-value">
             {data.accuracy === null ? '—' : `${Math.round(data.accuracy * 100)}%`}
@@ -48,36 +53,41 @@ export function ProgressPage() {
           <div className="stat-sub">
             {data.correctAnswers} correct · {data.incorrectAnswers} incorrect
           </div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Quiz accuracy</div>
+        </section>
+        <section className="card stat-card">
+          <div className="stat-label">Study streak</div>
           <div className="stat-value">
-            {data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}
+            {data.streakDays} <span className="stat-unit">days</span>
           </div>
-          <div className="stat-sub">{data.quizAttempts} attempts</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Due now</div>
-          <div className="stat-value">{data.dueCards}</div>
-          <div className="stat-sub">Cards waiting for review</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Study time</div>
-          <div className="stat-value">{formatMinutes(data.studyTimeMinutes)}</div>
-          <div className="stat-sub">Timed study sessions</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-label">Streak</div>
-          <div className="stat-value">{data.streakDays} 🔥</div>
           <div className="stat-sub">
             {data.longestStreak > 0
               ? `Best ${data.longestStreak} days`
               : 'Study today to start one'}
           </div>
-        </div>
+        </section>
       </div>
-
-      {week ? <WeekPanel week={week} /> : null}
+      <dl className="progress-details">
+        <div>
+          <dt>Study time</dt>
+          <dd>{formatMinutes(data.studyTimeMinutes)}</dd>
+        </div>
+        <div>
+          <dt>Quiz attempts</dt>
+          <dd>{data.quizAttempts}</dd>
+        </div>
+        <div>
+          <dt>Quiz accuracy</dt>
+          <dd>{data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}</dd>
+        </div>
+        <div>
+          <dt>Due now</dt>
+          <dd>{data.dueCards}</dd>
+        </div>
+      </dl>
+      <div className="progress-activity">
+        {week ? <WeekPanel week={week} /> : null}
+        {today ? <TodayPanel today={today} showAction={false} /> : null}
+      </div>
 
       {data.subjectProgress.length > 0 ? (
         <>
@@ -136,14 +146,14 @@ export function ProgressPage() {
 /** This week at a glance: compare against yourself, not others. */
 function WeekPanel({ week }: { week: WeekSummary }) {
   return (
-    <>
+    <section className="card week-panel">
       <div className="section-title">
         <h2>This week</h2>
         <span className="muted" style={{ fontSize: '0.875rem' }}>
           {week.studyDays} of 7 days active
         </span>
       </div>
-      <div className="card" style={{ marginBottom: 28 }}>
+      <div className="week-panel-body">
         <div
           style={{
             display: 'grid',
@@ -172,7 +182,7 @@ function WeekPanel({ week }: { week: WeekSummary }) {
                   justifyContent: 'center',
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: entry.active ? '#0c1512' : 'var(--text-muted)',
+                  color: entry.active ? 'var(--text-inverse)' : 'var(--text-muted)',
                 }}
               >
                 {entry.cardsTouched > 0 ? entry.cardsTouched : ''}
@@ -189,7 +199,7 @@ function WeekPanel({ week }: { week: WeekSummary }) {
           {` · ${week.studyTimeMinutes} min studying`}
         </div>
       </div>
-    </>
+    </section>
   );
 }
 

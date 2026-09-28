@@ -1,96 +1,102 @@
-/* Lerno design tokens — one design system, CSS variables.
-   Dark is the default theme; light theme overrides below. */
-
-:root,
-[data-theme='dark'] {
-  color-scheme: dark;
-
-  /* Surfaces — near-black background, dark gray cards */
-  --bg: #0c0f0d;
-  --bg-subtle: #101412;
-  --surface: #151a17;
-  --surface-hover: #1a201c;
-  --surface-raised: #202722;
-  --border: #252d28;
-  --border-strong: #333d37;
-
-  /* Text */
-  --text: #f1f5f2;
-  --text-secondary: #b3bdb7;
-  --text-muted: #7c8781;
-  --text-inverse: #08130d;
-
-  /* Accent — green */
-  --accent: #35d07f;
-  --accent-hover: #2ebd72;
-  --accent-active: #27a864;
-  --accent-subtle: rgba(53, 208, 127, 0.12);
-  --accent-border: rgba(53, 208, 127, 0.35);
-  --accent-text: var(--accent);
-
-  /* Status */
-  --danger: #ef7b80;
-  --danger-subtle: rgba(239, 123, 128, 0.12);
-  --warning: #e6b464;
-  --warning-subtle: rgba(230, 180, 100, 0.12);
-  --info: #7aa7e8;
-  --info-subtle: rgba(122, 167, 232, 0.12);
-
-  /* Radii — rounded but restrained */
+/* Lerno / Field Notes. Warm neutrals, evergreen actions, quiet tinted surfaces.
+   Light by default; a saved dark preference always wins. No remote font requests. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-full: 999px;
-
-  /* Shadows — layered, subtle */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.32), 0 2px 6px -2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.45), 0 4px 12px -4px rgba(0, 0, 0, 0.24);
-
-  /* Layout */
-  --sidebar-width: 256px;
-  --topbar-height: 60px;
-  --mobile-nav-height: 62px;
-  --content-max: 1080px;
-
-  /* Type */
-  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SFMono-Regular', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+  --sidebar-width: 240px;
+  --topbar-height: 72px;
+  --mobile-nav-height: 64px;
+  --content-max: 1280px;
+  --font-sans: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 
+:root,
 [data-theme='light'] {
   color-scheme: light;
-
-  --bg: #f5f7f6;
-  --bg-subtle: #eef1ef;
+  --bg: #f7f8f5;
+  --bg-subtle: #eff2ed;
   --surface: #ffffff;
-  --surface-hover: #f3f6f4;
-  --surface-raised: #e9eeeb;
-  --border: #dfe5e1;
-  --border-strong: #c6cfc9;
-
-  --text: #101613;
-  --text-secondary: #414c46;
-  --text-muted: #616d66;
+  --surface-hover: #f2f5f0;
+  --surface-raised: #edf1eb;
+  --border: #e0e5df;
+  --border-strong: #bdc8bd;
+  --control-border: #87948b;
+  --text: #202f2a;
+  --text-secondary: #4c5e55;
+  --text-muted: #5f6c63;
   --text-inverse: #ffffff;
+  --accent: #25634e;
+  --accent-hover: #1d533f;
+  --accent-active: #174534;
+  --accent-subtle: #e7f0e9;
+  --accent-border: #b7d0bf;
+  --accent-text: #25634e;
+  --feature-bg: #e9f0e6;
+  --feature-text: #234b38;
+  --warm-bg: #f7eee2;
+  --warm-text: #855e30;
+  --blue-bg: #ecf0f8;
+  --blue-text: #496088;
+  --danger: #b3303c;
+  --danger-subtle: #fcebee;
+  --warning: #866013;
+  --warning-subtle: #fbf1dc;
+  --info: #395c97;
+  --info-subtle: #eaf0fb;
+  --success: var(--accent-text);
+  --shadow-xs: 0 1px 2px rgb(25 45 32 / 3%);
+  --shadow-sm: 0 2px 6px rgb(25 45 32 / 5%);
+  --shadow-md: 0 6px 20px -6px rgb(25 45 32 / 12%);
+  --shadow-lg: 0 16px 48px -12px rgb(25 45 32 / 18%);
+}
 
-  /* Darker green than dark mode: keeps white button text at WCAG AA (≥ 4.5:1). */
-  --accent: #0f7a46;
-  --accent-hover: #0d6b3d;
-  --accent-active: #0b5f35;
-  --accent-subtle: rgba(15, 122, 70, 0.1);
-  --accent-border: rgba(15, 122, 70, 0.35);
-
-  --danger: #cc3b42;
-  --danger-subtle: rgba(204, 59, 66, 0.1);
-  --warning: #9a6b13;
-  --warning-subtle: rgba(154, 107, 19, 0.1);
-  --info: #2c5fa8;
-  --info-subtle: rgba(44, 95, 168, 0.1);
-
-  --shadow-xs: 0 1px 2px rgba(16, 24, 20, 0.05);
-  --shadow-sm: 0 1px 3px rgba(16, 24, 20, 0.07), 0 1px 2px rgba(16, 24, 20, 0.05);
-  --shadow-md: 0 6px 16px -4px rgba(16, 24, 20, 0.1), 0 2px 6px -2px rgba(16, 24, 20, 0.06);
-  --shadow-lg: 0 16px 40px -8px rgba(16, 24, 20, 0.14), 0 4px 12px -4px rgba(16, 24, 20, 0.08);
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141b18;
+  --bg-subtle: #1a231e;
+  --surface: #1e2923;
+  --surface-hover: #25332b;
+  --surface-raised: #2a3830;
+  --border: #35463b;
+  --border-strong: #566b5c;
+  --control-border: #819d8b;
+  --text: #edf2ec;
+  --text-secondary: #bdccbf;
+  --text-muted: #a4b7a9;
+  --text-inverse: #13271c;
+  --accent: #a6cfb4;
+  --accent-hover: #bddfc8;
+  --accent-active: #92bfa1;
+  --accent-subtle: #2b4033;
+  --accent-border: #557a60;
+  --accent-text: #b2d8bf;
+  --feature-bg: #263b2d;
+  --feature-text: #d1e4cd;
+  --warm-bg: #3c3226;
+  --warm-text: #e0bd8b;
+  --blue-bg: #293445;
+  --blue-text: #b5c8ed;
+  --danger: #f4a3ac;
+  --danger-subtle: #422c33;
+  --warning: #e6c583;
+  --warning-subtle: #3d3625;
+  --info: #b3c9ee;
+  --info-subtle: #28374b;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 8%);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 12%);
+  --shadow-md: 0 6px 20px -6px rgb(0 0 0 / 24%);
+  --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 32%);
 }

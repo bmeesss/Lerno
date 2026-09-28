@@ -1,3 +1,4 @@
+import { useTheme } from './hooks/useTheme';
 import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
@@ -37,6 +38,7 @@ const OAuthConsentPage = lazy(() =>
 );
 
 export function App() {
+  useTheme(); // Apply the saved appearance on focus routes, which have no theme toggle.
   return (
     <Routes>
       {/* Public */}

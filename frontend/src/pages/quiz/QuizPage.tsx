@@ -169,6 +169,7 @@ export function QuizPage() {
                     key={option}
                     type="button"
                     className={`quiz-option${answers[current.id] === option ? ' selected' : ''}`}
+                    aria-pressed={answers[current.id] === option}
                     onClick={() => setAnswers((prev) => ({ ...prev, [current.id]: option }))}
                   >
                     <span className="option-key">{OPTION_KEYS[optionIndex] ?? '?'}</span>
@@ -183,6 +184,7 @@ export function QuizPage() {
                     key={option}
                     type="button"
                     className={`quiz-option${answers[current.id] === option ? ' selected' : ''}`}
+                    aria-pressed={answers[current.id] === option}
                     onClick={() => setAnswers((prev) => ({ ...prev, [current.id]: option }))}
                   >
                     <span className="option-key">{option === 'True' ? 'T' : 'F'}</span>
@@ -377,7 +379,7 @@ function QuizResults({
         </div>
       ) : (
         <div className="form-success" style={{ textAlign: 'center' }}>
-          Perfect score — nothing to review this time. 🎉
+          Perfect score — nothing to review this time.
         </div>
       )}
 

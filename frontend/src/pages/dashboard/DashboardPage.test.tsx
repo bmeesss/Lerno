@@ -86,16 +86,16 @@ beforeEach(() => {
 });
 
 describe('DashboardPage', () => {
-  it('orders sections Today → due → continue → recent → discover', async () => {
+  it('prioritizes a study action and today, then library and review', async () => {
     renderPage();
     const headings = await screen.findAllByRole('heading', { level: 2 });
     const names = headings.map((heading) => heading.textContent);
     expect(names).toEqual([
+      'Keep your curiosity going.',
       'Today',
-      'Cards due for review',
-      'Continue learning',
-      'Recent sets',
-      'Discover',
+      'Your recent sets',
+      'Up next',
+      'A little more to explore',
     ]);
   });
 
@@ -103,11 +103,17 @@ describe('DashboardPage', () => {
     renderPage();
     const suggestion = await screen.findByRole('link', { name: /photosynthesis/i });
     expect(suggestion.getAttribute('href')).toBe('/sets/set-9');
-    const seeAll = screen.getAllByRole('link', { name: 'See all' });
-    expect(seeAll.some((link) => link.getAttribute('href') === '/discover')).toBe(true);
+    expect(screen.getByRole('link', { name: 'Discover sets' })).toHaveAttribute(
+      'href',
+      '/discover',
+    );
+    expect(screen.getByRole('link', { name: 'Continue studying' })).toHaveAttribute(
+      'href',
+      '/sets/set-1/study',
+    );
   });
 
-  it('hides due and discover sections when empty, keeps the continue empty state', async () => {
+  it('keeps actionable library and review empty states without invented activity', async () => {
     getMock.mockResolvedValue({
       ...DATA,
       dueGroups: [],
@@ -120,7 +126,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('heading', { name: 'Cards due for review' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Recent sets' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Discover' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Continue learning' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Your learning starts here' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Create a study set' })).toHaveAttribute(
       'href',
       '/sets/new',

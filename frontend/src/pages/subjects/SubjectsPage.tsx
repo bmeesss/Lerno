@@ -95,11 +95,19 @@ export function SubjectsPage() {
       {loading ? (
         <LoadingRow large />
       ) : error ? (
-        <EmptyState title="Could not load subjects" description={error} />
+        <EmptyState
+          title="Could not load subjects"
+          description={error}
+          action={
+            <Button variant="secondary" onClick={reload}>
+              Try again
+            </Button>
+          }
+        />
       ) : data && data.length > 0 ? (
-        <div className="stack" style={{ gap: 10 }}>
+        <div className="subject-grid">
           {data.map((subject) => (
-            <div key={subject.id} className="list-row">
+            <div key={subject.id} className="subject-tile">
               <span className="list-row-icon">
                 <IconBook size={19} />
               </span>
@@ -130,6 +138,7 @@ export function SubjectsPage() {
         </div>
       ) : (
         <EmptyState
+          icon={<IconBook size={24} />}
           title="No subjects yet"
           description="Create your first subject to organize your study sets."
           action={<Button onClick={() => setModalOpen(true)}>Create subject</Button>}

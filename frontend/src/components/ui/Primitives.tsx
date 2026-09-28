@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { IconBook } from './Icons';
 
 export function Spinner({ large }: { large?: boolean }) {
   return (
@@ -6,10 +7,29 @@ export function Spinner({ large }: { large?: boolean }) {
   );
 }
 
+/** Layout-shaped placeholders, announced once rather than as six loading cards. */
 export function LoadingRow({ large }: { large?: boolean }) {
   return (
-    <div className="loading-row">
-      <Spinner large={large} />
+    <div
+      className={`skeleton-layout${large ? ' skeleton-layout-large' : ''}`}
+      role="status"
+      aria-label="Loading"
+    >
+      <span className="visually-hidden">Loading content</span>
+      <div className="skeleton-heading" aria-hidden="true">
+        <span className="skeleton skeleton-title" />
+        <span className="skeleton skeleton-copy" />
+      </div>
+      <div className="skeleton-grid" aria-hidden="true">
+        {Array.from({ length: large ? 6 : 3 }, (_, index) => (
+          <div className="card skeleton-card" key={index}>
+            <span className="skeleton skeleton-icon" />
+            <span className="skeleton skeleton-title" />
+            <span className="skeleton skeleton-copy" />
+            <span className="skeleton skeleton-copy" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -28,7 +48,7 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      {icon ? <span className="empty-state-icon">{icon}</span> : null}
+      <span className="empty-state-icon">{icon ?? <IconBook size={24} />}</span>
       <h3>{title}</h3>
       <p>{description}</p>
       {action}
@@ -42,6 +62,7 @@ export function ProgressBar({ value, max = 100 }: { value: number; max?: number 
     <div
       className="progress-track"
       role="progressbar"
+      aria-label="Learning progress"
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}

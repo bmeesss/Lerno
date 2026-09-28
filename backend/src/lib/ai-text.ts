@@ -2,7 +2,7 @@
 export function cleanAiText(text: string): string {
   if (/```|~~~/.test(text)) return text.trim();
   const cleaned = text
-    .replace(/^(?:Sure!|Of course!|Natuurlijk!|Zeker!)[ \t]*\n+/i, '')
+    .replace(/^(?:Sure!|Of course!|Natuurlijk!|Zeker!)(?:[ \t]*\n+|[ \t]+)(?=\S)/i, '')
     .replace(
       /\n+(?:Laat het me weten als je (?:nog )?vragen hebt[.!]?|Let me know if you have any questions[.!]?)[ \t]*$/i,
       '',

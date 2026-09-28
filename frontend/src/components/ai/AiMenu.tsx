@@ -29,11 +29,28 @@ export function AiMenu({ label = 'Vraag Lerno AI', items, compact, disabled, tit
 
   useEffect(() => {
     if (!open) return;
+    const items = () =>
+      Array.from(
+        wrapperRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+      );
+    items()[0]?.focus();
 
     function onPointerDown(event: MouseEvent): void {
       if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
     }
     function onKey(event: KeyboardEvent): void {
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        const buttons = items();
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next =
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? buttons.length - 1
+              : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[next]?.focus();
+      }
       if (event.key === 'Escape') {
         setOpen(false);
         triggerRef.current?.focus();

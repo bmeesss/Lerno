@@ -63,9 +63,9 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="stack" style={{ gap: 16, maxWidth: 640 }}>
+      <div className="settings-groups">
         <section className="card">
-          <div className="stat-label">Profile</div>
+          <h2 className="settings-label">Account</h2>
           <div
             style={{
               display: 'flex',
@@ -87,7 +87,7 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <div className="stat-label">Theme</div>
+          <h2 className="settings-label">Appearance</h2>
           <div
             style={{
               display: 'flex',
@@ -99,7 +99,7 @@ export function SettingsPage() {
             <div>
               <div style={{ fontWeight: 600 }}>{theme === 'dark' ? 'Dark' : 'Light'} mode</div>
               <div className="muted" style={{ fontSize: '0.875rem' }}>
-                Lerno looks best in the dark — but the choice is yours.
+                A comfortable workspace, in the light or after dark.
               </div>
             </div>
             <ThemeToggle />
@@ -107,7 +107,7 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <div className="stat-label">Time zone</div>
+          <h2 className="settings-label">Study preferences</h2>
           <p style={{ margin: '8px 0 14px', fontSize: '0.925rem' }}>
             Lerno groups your streaks, reviews and “today” progress by calendar day in this time
             zone.
@@ -136,7 +136,7 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <div className="stat-label">Privacy</div>
+          <h2 className="settings-label">Privacy</h2>
           <p style={{ margin: '8px 0 14px', fontSize: '0.925rem' }}>
             Your study sets are private unless you make them public. Guest study data lives only on
             this device and never leaves it.
@@ -147,7 +147,17 @@ export function SettingsPage() {
         </section>
 
         <section className="card">
-          <div className="stat-label">Account</div>
+          <h2 className="settings-label">Lerno AI</h2>
+          <p>
+            Your study assistant uses the question and study material you provide. Always check
+            important facts against your course material.
+          </p>
+          <Button variant="secondary" onClick={() => navigate('/ai')}>
+            Open Lerno AI
+          </Button>
+        </section>
+        <section className="card">
+          <h2 className="settings-label">Session</h2>
           <p style={{ margin: '8px 0 14px', fontSize: '0.925rem' }}>
             Logging out ends this session on this device. Your study progress stays safe.
           </p>

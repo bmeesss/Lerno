@@ -1,0 +1,42 @@
+[
+  {
+    "name": "mobile-menu",
+    "violations": []
+  },
+  {
+    "name": "settings-dark",
+    "violations": []
+  },
+  {
+    "name": "library-filter-empty",
+    "violations": []
+  },
+  {
+    "name": "set-ai-menu",
+    "violations": []
+  },
+  {
+    "name": "card-ai-menu-desktop",
+    "violations": []
+  },
+  {
+    "name": "flashcard-revealed",
+    "violations": []
+  },
+  {
+    "name": "quiz-selected",
+    "violations": []
+  },
+  {
+    "name": "ai-chat-mock",
+    "violations": []
+  },
+  {
+    "name": "ai-short-viewport",
+    "violations": []
+  },
+  {
+    "name": "library-error",
+    "violations": []
+  }
+]

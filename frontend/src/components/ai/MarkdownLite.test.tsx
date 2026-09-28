@@ -3,6 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { MarkdownLite } from './MarkdownLite';
 
 describe('MarkdownLite', () => {
+  it.each(['-', '*'])('renders %s school bullets as real list items', (marker) => {
+    const { container } = render(
+      <MarkdownLite
+        text={`## Franse Revolutie\n${marker} Belangrijke gebeurtenissen\n${marker} Lodewijk XVI`}
+      />,
+    );
+    expect(container.querySelectorAll('ul > li')).toHaveLength(2);
+    expect(container.querySelector('ul > li')?.textContent).toBe('Belangrijke gebeurtenissen');
+  });
+
+  it.each(['$$c^2 = a^2 + b^2$$', '\\[c^2 = a^2 + b^2\\]'])(
+    'does not swallow text after one-line display math: %s',
+    (formula) => {
+      const { container } = render(
+        <MarkdownLite text={`${formula}\nDe schuine zijde is c.\n1. Vul in\n2. Reken uit`} />,
+      );
+      expect(container.querySelector('.ai-md-math')?.textContent).toBe('c² = a² + b²');
+      expect(container.querySelector('p')?.textContent).toBe('De schuine zijde is c.');
+      expect(container.querySelectorAll('ol > li')).toHaveLength(2);
+    },
+  );
+
+  it('preserves text on the same line after display math', () => {
+    const { container } = render(
+      <MarkdownLite text={'$$F = m \u00d7 g$$ Gewicht is een kracht.'} />,
+    );
+    expect(container.querySelector('p')?.textContent).toBe('Gewicht is een kracht.');
+  });
+
   it('renders bold, italic, inline code and lists', () => {
     const { container } = render(
       <MarkdownLite text={'**Fotosynthese** werkt zo:\n1. Licht\n2. Water'} />,

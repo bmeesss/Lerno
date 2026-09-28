@@ -31,7 +31,7 @@ describe('level and adaptive length policy', () => {
       ];
       expect(selectChatContext('En gewicht?', history).level).toBe(level);
       expect(buildConversation('En gewicht?', history)[0]!.content).toContain(`Level: ${level}.`);
-      expect(LEVEL_RULE).toContain('hard means hard within that level');
+      expect(LEVEL_RULE).toContain('hard stays within it');
     },
   );
   it('keeps difficult mavo within mavo and allows an explicit level change', () => {
@@ -76,8 +76,8 @@ describe('level and adaptive length policy', () => {
     );
     expect(chatOutputBudget('Leg fotosynthese uit op mavo 3-niveau.')).toBe(800);
     expect(chatOutputBudget('Leg fotosynthese uitgebreid uit')).toBeGreaterThan(800);
-    expect(STUDY_SYSTEM_PROMPT).toContain('question only');
-    expect(STUDY_SYSTEM_PROMPT).toContain('100–250 words');
+    expect(STUDY_SYSTEM_PROMPT).toContain('default one question');
+    expect(STUDY_SYSTEM_PROMPT).toContain('longer if needed');
   });
 });
 
@@ -154,14 +154,12 @@ describe('prompt and context token guardrails', () => {
 });
 
 describe('conservative response cleanup', () => {
-  it('removes only standalone stock phrases and excessive whitespace', () => {
+  it('removes stock openings and excessive whitespace', () => {
     expect(
       cleanAiText('Sure!\n\nF = m × g\n\n\nW = F × h\n\nLaat het me weten als je vragen hebt.'),
     ).toBe('F = m × g\n\nW = F × h');
     expect(cleanAiText('a² + b² = c²')).toBe('a² + b² = c²');
-    expect(cleanAiText('Natuurlijk! Dat is niet altijd waar.')).toBe(
-      'Natuurlijk! Dat is niet altijd waar.',
-    );
+    expect(cleanAiText('Natuurlijk! Dat is niet altijd waar.')).toBe('Dat is niet altijd waar.');
     expect(cleanAiText('```\nSure!\n\n\nx\n```')).toBe('```\nSure!\n\n\nx\n```');
     expect(cleanAiText('Sure!')).toBe('Sure!');
   });

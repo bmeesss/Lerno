@@ -327,7 +327,18 @@ export function parseBlocks(text: string): MarkdownBlock[] {
 
     // Display math: $$ … $$ or \[ … \] (tolerates a mismatched closing token).
     if (MATH_OPEN.test(raw)) {
-      const body: string[] = [raw.replace(MATH_OPEN, '')];
+      const firstLine = raw.replace(MATH_OPEN, '');
+      // A complete one-line display must not swallow the following paragraph.
+      if (MATH_CLOSE.test(firstLine)) {
+        const closing = MATH_CLOSE.exec(firstLine)!;
+        const value = formatMath(firstLine.slice(0, closing.index));
+        if (value) blocks.push({ kind: 'math', value });
+        const trailing = firstLine.slice(closing.index + closing[0].length).trim();
+        if (trailing) blocks.push({ kind: 'paragraph', inline: parseInline(trailing) });
+        index += 1;
+        continue;
+      }
+      const body: string[] = [firstLine];
       index += 1;
       while (index < lines.length) {
         const current = lines[index]!;

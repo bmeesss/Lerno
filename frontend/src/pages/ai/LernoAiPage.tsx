@@ -13,7 +13,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { MarkdownLite } from '../../components/ai/MarkdownLite';
-import { IconCopy, IconRefresh, IconSend, IconSparkles } from '../../components/ui/Icons';
+import {
+  IconArrowRight,
+  IconBook,
+  IconCopy,
+  IconLightbulb,
+  IconQuiz,
+  IconRefresh,
+  IconSend,
+  IconSparkles,
+} from '../../components/ui/Icons';
 import { ApiError } from '../../lib/api';
 import { AI_REQUEST_TIMEOUT_MS, aiService } from '../../services/aiService';
 
@@ -27,10 +36,30 @@ const MAX_INPUT_LENGTH = 2000;
 
 /** Quick prompts students can build on — they fill the input, not send it. */
 const SUGGESTIONS = [
-  { label: 'Leg dit simpel uit', prompt: 'Leg dit simpel uit: ' },
-  { label: 'Maak oefenvragen', prompt: 'Maak 5 oefenvragen over ' },
-  { label: 'Overhoor mij', prompt: 'Overhoor mij over ' },
-  { label: 'Help met deze som', prompt: 'Help mij deze som oplossen, stap voor stap: ' },
+  {
+    label: 'Leg dit simpel uit',
+    description: 'Find the idea behind the words',
+    Icon: IconBook,
+    prompt: 'Leg dit simpel uit: ',
+  },
+  {
+    label: 'Maak oefenvragen',
+    description: 'Put what you know into practice',
+    Icon: IconQuiz,
+    prompt: 'Maak 5 oefenvragen over ',
+  },
+  {
+    label: 'Overhoor mij',
+    description: 'One question at a time',
+    Icon: IconSparkles,
+    prompt: 'Overhoor mij over ',
+  },
+  {
+    label: 'Help met deze som',
+    description: 'Work it out, step by step',
+    Icon: IconLightbulb,
+    prompt: 'Help mij deze som oplossen, stap voor stap: ',
+  },
 ];
 
 /** Turns an API error into a sentence a student can act on — no internals. */
@@ -194,7 +223,10 @@ export function LernoAiPage() {
   // Follow new messages, but never yank the view while the student reads back.
   useEffect(() => {
     if (!stickToBottom.current) return;
-    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    bottomRef.current?.scrollIntoView?.({
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
   }, [messages, sending]);
 
   // Never leave a request running after the student navigates away.
@@ -243,7 +275,7 @@ export function LernoAiPage() {
         </span>
         <div className="ai-header-text">
           <h1>Lerno AI</h1>
-          <p>Your study assistant — ask anything, explained at your level.</p>
+          <p>Your personal study assistant</p>
         </div>
         {hasConversation ? (
           <button
@@ -278,8 +310,8 @@ export function LernoAiPage() {
             </span>
             <h2>What do you want to learn?</h2>
             <p>
-              Ask a question about any subject, or start from one of these. Mention your level —
-              mavo 3, havo 4, vwo 5 — and the explanation adapts to you.
+              Big question or small stumbling block? Start here. Tell me your school level, and
+              we’ll take it one step at a time.
             </p>
             <div className="ai-suggestions">
               {SUGGESTIONS.map((suggestion) => (
@@ -287,12 +319,18 @@ export function LernoAiPage() {
                   key={suggestion.label}
                   type="button"
                   className="ai-suggestion"
+                  aria-label={suggestion.label}
                   onClick={() => {
                     setInput(suggestion.prompt);
                     inputRef.current?.focus();
                   }}
                 >
-                  {suggestion.label}
+                  <suggestion.Icon size={20} />
+                  <span>
+                    <strong>{suggestion.label}</strong>
+                    <small>{suggestion.description}</small>
+                  </span>
+                  <IconArrowRight size={16} />
                 </button>
               ))}
             </div>

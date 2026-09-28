@@ -5,7 +5,7 @@ export function NotFoundPage() {
   return (
     <div className="auth-page">
       <Logo />
-      <div className="auth-card" style={{ textAlign: 'center' }}>
+      <div className="auth-card not-found-card" style={{ textAlign: 'center' }}>
         <h1>Page not found</h1>
         <p>The page you are looking for does not exist or has moved.</p>
         <ButtonLink to="/" block>

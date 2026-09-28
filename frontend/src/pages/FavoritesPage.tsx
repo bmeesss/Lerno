@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { ButtonLink } from '../components/ui/Button';
+import { StudySetCard } from '../components/ui/StudySetCard';
+import { Button, ButtonLink } from '../components/ui/Button';
 import { EmptyState, LoadingRow } from '../components/ui/Primitives';
 import { IconHeart } from '../components/ui/Icons';
 import { useAsync } from '../hooks/useAsync';
@@ -7,7 +7,10 @@ import { favoriteService } from '../services/favoriteService';
 import type { StudySetSummary } from '../types';
 
 export function FavoritesPage() {
-  const { data, loading, error } = useAsync<StudySetSummary[]>(() => favoriteService.list(), []);
+  const { data, loading, error, reload } = useAsync<StudySetSummary[]>(
+    () => favoriteService.list(),
+    [],
+  );
 
   return (
     <>
@@ -24,27 +27,26 @@ export function FavoritesPage() {
       {loading ? (
         <LoadingRow large />
       ) : error ? (
-        <EmptyState title="Could not load favorites" description={error} />
+        <EmptyState
+          title="Could not load favorites"
+          description={error}
+          action={
+            <Button variant="secondary" onClick={reload}>
+              Try again
+            </Button>
+          }
+        />
       ) : data && data.length > 0 ? (
         <div className="set-grid">
           {data.map((set) => (
-            <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive set-card">
-              <div className="set-card-title">{set.title}</div>
-              <div className="set-card-desc">{set.description || 'No description'}</div>
-              <div className="set-card-footer">
-                <span className="set-card-meta">
-                  <span>{set.authorName}</span>
-                </span>
-                <span>{set.cardCount} cards</span>
-              </div>
-            </Link>
+            <StudySetCard key={set.id} set={set} />
           ))}
         </div>
       ) : (
         <EmptyState
           icon={<IconHeart size={22} />}
-          title="No favorites yet"
-          description="Save public study sets to find them here — it works without clutter."
+          title="Nothing saved yet"
+          description="Found something worth coming back to? Save a set and keep it close."
           action={<ButtonLink to="/discover">Discover public sets</ButtonLink>}
         />
       )}

@@ -19,7 +19,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.55;
-  font-size: 16px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -61,11 +61,11 @@ h3 {
 
 /* Calmer product scale inside the app shell */
 .app-content h1 {
-  font-size: 1.55rem;
+  font-size: clamp(1.65rem, 2.5vw, 2rem);
 }
 
 .app-content h2 {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
 }
 
 .app-content h3 {
@@ -97,8 +97,8 @@ ul {
 .select:focus-visible,
 .btn:focus-visible,
 .chip:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-subtle);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -170,4 +170,57 @@ ul {
 
 .secondary-text {
   color: var(--text-secondary);
+}
+
+/* Flexible children and user-generated content must not widen the viewport. */
+.app-content,
+.card,
+.page-header > *,
+.field,
+.study-stage {
+  min-width: 0;
+}
+.app-content {
+  overflow-wrap: anywhere;
+}
+.app-content:focus {
+  outline: none;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button svg,
+a svg {
+  flex-shrink: 0;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 200;
+  padding: 12px 20px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-radius: var(--radius-sm);
+}
+.skip-link:focus {
+  top: 12px;
+}
+.eyebrow-label {
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Inline links need an affordance beyond color alone. */
+p a:not(.btn),
+.muted a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

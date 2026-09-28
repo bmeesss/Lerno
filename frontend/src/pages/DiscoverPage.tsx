@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Button, ButtonLink } from '../components/ui/Button';
-import { Badge, EmptyState, LoadingRow } from '../components/ui/Primitives';
+import { EmptyState, LoadingRow } from '../components/ui/Primitives';
+import { StudySetCard } from '../components/ui/StudySetCard';
 import { IconSearch } from '../components/ui/Icons';
 import { ApiError } from '../lib/api';
 import { discoverService, type DiscoverFacets } from '../services/discoverService';
@@ -65,15 +66,18 @@ export function DiscoverPage() {
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header discover-heading">
         <div>
-          <h1>Discover</h1>
-          <p>Public study sets from the Lerno community — free to use by anyone.</p>
+          <div className="eyebrow-label">The community library</div>
+          <h1>Find your next fascination.</h1>
+          <p>
+            Explore study sets made to be shared. A new perspective is always a good place to start.
+          </p>
         </div>
       </div>
 
       <form
-        className="filter-bar"
+        className="filter-bar discover-search"
         onSubmit={(e) => {
           e.preventDefault();
           updateParam('q', query.trim() || null);
@@ -113,6 +117,7 @@ export function DiscoverPage() {
               key={value}
               type="button"
               className={`chip${level === value ? ' chip-active' : ''}`}
+              aria-pressed={level === value}
               onClick={() => updateParam('level', level === value ? null : value)}
             >
               {value}
@@ -123,6 +128,7 @@ export function DiscoverPage() {
               key={value}
               type="button"
               className={`chip${subject === value ? ' chip-active' : ''}`}
+              aria-pressed={subject === value}
               onClick={() => updateParam('subject', subject === value ? null : value)}
             >
               {value}
@@ -133,6 +139,7 @@ export function DiscoverPage() {
               key={value}
               type="button"
               className={`chip${tag === value ? ' chip-active' : ''}`}
+              aria-pressed={tag === value}
               onClick={() => updateParam('tag', tag === value ? null : value)}
             >
               #{value}
@@ -149,7 +156,15 @@ export function DiscoverPage() {
       {loading ? (
         <LoadingRow large />
       ) : error ? (
-        <EmptyState title="Search failed" description={error} />
+        <EmptyState
+          title="Search failed"
+          description={error}
+          action={
+            <Button variant="secondary" onClick={() => void search()}>
+              Try again
+            </Button>
+          }
+        />
       ) : results && results.items.length > 0 ? (
         <>
           <p className="muted" style={{ marginBottom: 14, fontSize: '0.875rem' }}>
@@ -157,26 +172,7 @@ export function DiscoverPage() {
           </p>
           <div className="set-grid">
             {results.items.map((set) => (
-              <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive set-card">
-                <div className="set-card-top">
-                  <div className="set-card-title">{set.title}</div>
-                  {set.level ? <Badge variant="accent">{set.level}</Badge> : null}
-                </div>
-                <div className="set-card-desc">{set.description || 'No description'}</div>
-                {set.tags.length > 0 ? (
-                  <div className="set-card-tags">
-                    {set.tags.slice(0, 3).map((value) => (
-                      <Badge key={value}>#{value}</Badge>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="set-card-footer">
-                  <span className="set-card-meta">
-                    <span>{set.authorName}</span>
-                  </span>
-                  <span>{set.cardCount} cards</span>
-                </div>
-              </Link>
+              <StudySetCard key={set.id} set={set} />
             ))}
           </div>
 
