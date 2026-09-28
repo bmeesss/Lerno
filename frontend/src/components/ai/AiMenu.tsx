@@ -57,6 +57,7 @@ export function AiMenu({ label = 'Vraag Lerno AI', items, compact, disabled, tit
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={label}
         disabled={disabled}
         title={title}
       >

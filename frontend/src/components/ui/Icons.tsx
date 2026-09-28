@@ -215,3 +215,11 @@ export const IconRefresh = icon(
     <path d="M21 4v5h-5" />
   </>,
 );
+
+export const IconLightbulb = icon(
+  <>
+    <path d="M9 18h6" />
+    <path d="M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5.9 1.1 1 1.8l.1.8h4.8l.1-.8c.1-.7.4-1.3 1-1.8A6 6 0 0 0 12 3z" />
+  </>,
+);
