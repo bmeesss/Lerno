@@ -10,7 +10,6 @@
  * - Empty input produces an empty, honest context — never invented content.
  */
 import type { CardRecord, StudySetRecord } from '../lib/db/types.js';
-import { MAX_CONTEXT_CHARS as MAX_CHAT_CONTEXT_CHARS } from '../lib/ai-limits.js';
 import { capLength } from '../lib/ai-sanitize.js';
 import { config } from '../config.js';
 
@@ -43,11 +42,7 @@ const MAX_DESCRIPTION_CHARS = 300;
 /** Collapses whitespace and cuts control characters — model payload hygiene. */
 export function normalizeText(value: string, maxChars: number): string {
   return capLength(
-    value
-      .replace(/\r\n?/g, '\n')
-      .replace(CONTROL_CHARS, ' ')
-      .replace(/\s+/g, ' ')
-      .trim(),
+    value.replace(/\r\n?/g, '\n').replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim(),
     maxChars,
   );
 }
@@ -165,6 +160,3 @@ export function buildQuizContext(
     maxChars: options.maxChars ?? config.aiContextMaxChars,
   });
 }
-
-/** Free-chat context budget, re-exported so route handlers can reason about limits. */
-export const MAX_CHAT_CONTEXT = MAX_CHAT_CONTEXT_CHARS;

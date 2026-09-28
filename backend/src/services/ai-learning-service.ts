@@ -13,7 +13,6 @@
  * over a bounded, normalized text block (`ai-context.ts`).
  */
 import type { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 import type { Database } from '../lib/db/repository.js';
 import type { CardRecord, StudySetRecord } from '../lib/db/types.js';
 import { errors } from '../lib/errors.js';
@@ -628,14 +627,3 @@ export const aiLearningService = {
     };
   },
 };
-
-/** Exposed for later phases: the shared runner + set loader. */
-export const aiLearningInternals = {
-  runTextTask,
-  runStructuredTask,
-  requestId: () => randomUUID(),
-  logSetAction: (action: string, setId: string, outcome: string, extra: Record<string, unknown>) =>
-    logger.info('ai.set.action', { action, setId, outcome, ...extra }),
-};
-
-export { buildCardContext, buildStudyContext };
