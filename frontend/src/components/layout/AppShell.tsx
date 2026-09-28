@@ -14,6 +14,7 @@ import {
   IconHome,
   IconLayers,
   IconShield,
+  IconSparkles,
   IconUser,
 } from '../ui/Icons';
 import { Logo } from './Logo';
@@ -28,6 +29,7 @@ interface NavItem {
 
 const desktopNav: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: <IconHome /> },
+  { to: '/ai', label: 'Lerno AI', icon: <IconSparkles /> },
   { to: '/subjects', label: 'My subjects', icon: <IconBook /> },
   { to: '/sets', label: 'My sets', icon: <IconLayers /> },
   { to: '/discover', label: 'Discover', icon: <IconCompass /> },

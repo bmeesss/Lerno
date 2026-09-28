@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
-import { IconBook } from '../../components/ui/Icons';
+import { IconBook, IconSparkles } from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { TodayPanel } from '../../components/dashboard/TodayPanel';
@@ -19,6 +19,16 @@ export function DashboardPage() {
       <div className="greeting" style={{ marginBottom: 24 }}>
         <h1>Hi {firstName} 👋</h1>
         <p>Here is what to study today. One short session keeps the habit going.</p>
+      </div>
+
+      <div className="guest-banner" style={{ marginBottom: 24 }}>
+        <p>
+          <strong>Stuck on something?</strong> Ask Lerno AI — it explains any topic at your level.
+        </p>
+        <ButtonLink to="/ai" size="sm">
+          <IconSparkles size={16} />
+          Ask Lerno AI
+        </ButtonLink>
       </div>
 
       {loading ? (
