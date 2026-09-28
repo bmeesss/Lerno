@@ -406,3 +406,355 @@ export interface AiStudySummary {
   topicsToReview: string[];
   persisted: boolean;
 }
+
+/* -------------------------------- Study Packs ------------------------------- */
+
+export type PackSourceKind = 'text' | 'pdf' | 'set' | 'powerpoint' | 'youtube' | 'image' | 'audio';
+export type PackSourceStatus = 'uploading' | 'processing' | 'ready' | 'failed';
+
+export interface StudyPackSource {
+  id: string;
+  packId: string;
+  kind: PackSourceKind;
+  title: string;
+  status: PackSourceStatus;
+  characterCount: number;
+  pageCount: number | null;
+  failureReason: string | null;
+  legacySetId: string | null;
+  origin: 'user' | 'ai' | 'imported';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyPackConcept {
+  id: string;
+  packId: string;
+  name: string;
+  explanation: string;
+  sourceId: string | null;
+  sourceTitle: string | null;
+  origin: 'user' | 'ai' | 'imported';
+  position: number;
+  masteryPercent: number;
+  attempts: number;
+  cardCount: number;
+  questionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RecommendedActionType =
+  | 'add-source'
+  | 'generate-concepts'
+  | 'generate-flashcards'
+  | 'generate-practice'
+  | 'learn'
+  | 'review'
+  | 'practice'
+  | 'test';
+
+export interface RecommendedAction {
+  type: RecommendedActionType;
+  label: string;
+  description: string;
+  conceptId?: string | null;
+  conceptName?: string | null;
+}
+
+export interface StudyPackSummary {
+  id: string;
+  ownerId: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  title: string;
+  description: string;
+  level: string;
+  visibility: Visibility;
+  examDate: string | null;
+  examDaysLeft: number | null;
+  legacySetId: string | null;
+  sources: number;
+  flashcards: number;
+  concepts: number;
+  practiceQuestions: number;
+  masteryPercent: number;
+  weakConcepts: number;
+  dueCards: number;
+  summaryUpdatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyPackTestSummary {
+  id: string;
+  title: string;
+  mode: 'quick10' | 'quick20' | 'exam';
+  questionCount: number;
+  createdAt: string;
+}
+
+export interface PackTestAnswerRecord {
+  questionId: string;
+  prompt: string;
+  questionType: QuestionType;
+  yourAnswer: string;
+  correctAnswer: string;
+  verdict: 'correct' | 'partial' | 'incorrect';
+  explanation: string;
+  conceptId: string | null;
+  conceptName: string | null;
+}
+
+export interface PackTestAttempt {
+  id: string;
+  testId: string;
+  packId: string;
+  packTitle: string | null;
+  score: number;
+  total: number;
+  correctCount: number;
+  partialCount: number;
+  incorrectCount: number;
+  answers: PackTestAnswerRecord[];
+  strongConceptIds: string[];
+  weakConceptIds: string[];
+  createdAt: string;
+}
+
+export interface StudyPlanSession {
+  day: number;
+  date: string | null;
+  focus: string;
+  activities: string[];
+  minutes: number;
+}
+
+export interface StudyPlan {
+  id: string;
+  packId: string;
+  examDate: string | null;
+  overview: string;
+  sessions: StudyPlanSession[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyPackDetail {
+  id: string;
+  ownerId: string;
+  isOwner: boolean;
+  title: string;
+  description: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  level: string;
+  visibility: Visibility;
+  examDate: string | null;
+  examDaysLeft: number | null;
+  summary: string | null;
+  summarySourceId: string | null;
+  summaryUpdatedAt: string | null;
+  legacySetId: string | null;
+  schoolMethod: {
+    publisher: string | null;
+    method: string | null;
+    edition: string | null;
+    chapter: string | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+  counts: {
+    sources: number;
+    readySources: number;
+    flashcards: number;
+    concepts: number;
+    practiceQuestions: number;
+    tests: number;
+  };
+  progress: {
+    masteryPercent: number;
+    dueCards: number;
+    studiedCards: number;
+    totalCards: number;
+    practiceAnswers: number;
+    practiceAccuracy: number | null;
+    testAttempts: number;
+    bestTestScorePercent: number | null;
+    weakConcepts: { id: string; name: string }[];
+    strongConcepts: { id: string; name: string }[];
+    lastActivityAt: string;
+  };
+  recommended: RecommendedAction;
+  sources: StudyPackSource[];
+  concepts: StudyPackConcept[];
+  studyPlan: StudyPlan | null;
+  tests: StudyPackTestSummary[];
+  recentAttempts: PackTestAttempt[];
+}
+
+export interface PackPracticeQuestion {
+  id: string;
+  packId: string;
+  conceptId: string | null;
+  sourceId: string | null;
+  prompt: string;
+  questionType: QuestionType;
+  options: string[] | null;
+  explanation: string;
+  position: number;
+  conceptName: string | null;
+  sourceTitle: string | null;
+}
+
+export interface PackPracticeQueue {
+  packId: string;
+  packTitle: string;
+  setId: string | null;
+  total: number;
+  questions: PackPracticeQuestion[];
+}
+
+export interface PackPracticeGrade {
+  questionId: string;
+  verdict: 'correct' | 'partial' | 'incorrect';
+  correctAnswer: string;
+  explanation: string;
+  concept: { id: string; name: string } | null;
+  conceptMasteryPercent: number | null;
+  sourceTitle: string | null;
+}
+
+export interface PackTestRun {
+  test: StudyPackTestSummary;
+  questions: PackPracticeQuestion[];
+}
+
+export interface PackTestSubmission {
+  attempt: PackTestAttempt;
+  accuracy: number;
+  results: (PackTestAnswerRecord & {
+    options: string[] | null;
+    verdict: 'correct' | 'partial' | 'incorrect';
+    conceptMasteryPercent: number | null;
+  })[];
+  strongConcepts: { id: string; name: string }[];
+  weakConcepts: { id: string; name: string }[];
+  recommended: RecommendedAction;
+}
+
+export interface StudyPackProgressOverview {
+  packId: string;
+  masteryPercent: number;
+  dueCards: number;
+  studiedCards: number;
+  totalCards: number;
+  practiceAnswers: number;
+  practiceAccuracy: number | null;
+  testAttempts: PackTestAttempt[];
+  weakConcepts: {
+    id: string;
+    name: string;
+    masteryPercent: number;
+    attempts: number;
+    sourceTitle: string | null;
+  }[];
+  strongConcepts: { id: string; name: string; masteryPercent: number }[];
+  concepts: {
+    id: string;
+    name: string;
+    masteryPercent: number;
+    attempts: number;
+    lastPracticedAt: string | null;
+  }[];
+  recommended: RecommendedAction;
+}
+
+export interface StudyPackTodayTask {
+  type: 'review' | 'learn' | 'practice' | 'test' | 'add-material';
+  label: string;
+  description: string;
+  packId: string | null;
+  conceptId: string | null;
+  conceptName: string | null;
+}
+
+export interface StudyPackToday {
+  date: string;
+  tasks: StudyPackTodayTask[];
+  exams: {
+    packId: string;
+    title: string;
+    examDate: string | null;
+    daysLeft: number | null;
+    masteryPercent: number;
+    weakConcepts: number;
+    dueCards: number;
+  }[];
+  totalDue: number;
+  packs: StudyPackSummary[];
+}
+
+export interface PackReviewSummary {
+  cardsDue: number;
+  packsNeedingReview: {
+    packId: string | null;
+    title: string;
+    dueCount: number;
+    nextReviewAt: string | null;
+  }[];
+  weakConceptPacks: {
+    packId: string;
+    packTitle: string;
+    weakConcepts: number;
+    masteryPercent: number;
+  }[];
+  weakConceptCount: number;
+  packs: StudyPackSummary[];
+}
+
+/* --------------------------- editable AI previews -------------------------- */
+
+export interface PackSummaryPreview {
+  target: 'summary';
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  terms: { term: string; definition: string }[];
+  sourceId: string | null;
+}
+
+export interface PackConceptsPreview {
+  target: 'concepts';
+  concepts: { name: string; explanation: string; sourceId: string | null }[];
+}
+
+export interface PackCardsPreview {
+  target: 'flashcards';
+  title: string;
+  description: string;
+  cards: { front: string; back: string }[];
+  sourceId: string | null;
+}
+
+export interface PackQuestionsPreview {
+  target: 'practice';
+  questions: {
+    questionType: QuestionType;
+    prompt: string;
+    correctAnswer: string;
+    options: string[] | null;
+    explanation: string;
+    sourceId: string | null;
+  }[];
+}
+
+export type PackPreview =
+  | PackSummaryPreview
+  | PackConceptsPreview
+  | PackCardsPreview
+  | PackQuestionsPreview;
+
+export interface PackTutorReply {
+  reply: string;
+}
