@@ -332,9 +332,9 @@ describe('POST /api/ai/chat — happy path', () => {
 
     expect(res.status).toBe(200);
     const payload = lastPayload();
-    // system + last 12 history entries + the new user message
-    expect(payload.messages).toHaveLength(MAX_HISTORY_MESSAGES_SENT + 2);
-    expect(payload.messages[1]!.content).toBe(`bericht ${20 - MAX_HISTORY_MESSAGES_SENT}`);
+    // system + most recent relevant pair + the new user message
+    expect(payload.messages).toHaveLength(4);
+    expect(payload.messages[1]!.content).toBe(`bericht 18`);
     expect(payload.messages.at(-1)!.content).toBe('En wat doet chlorofyl?');
   });
 
@@ -428,7 +428,7 @@ describe('POST /api/ai/chat — happy path', () => {
       { model: string; max_completion_tokens: number; temperature: number },
     ];
     expect(body.model).toBe('llama-3.3-70b-versatile');
-    expect(body.max_completion_tokens).toBe(1024);
+    expect(body.max_completion_tokens).toBe(96);
     expect(body.temperature).toBe(0.2);
   });
 });
@@ -637,9 +637,9 @@ describe('conversation history bounding', () => {
 
     const messages = buildConversation('nieuwe vraag', history);
 
-    expect(messages).toHaveLength(MAX_HISTORY_MESSAGES_SENT + 2);
+    expect(messages).toHaveLength(4);
     expect(messages[0]!.role).toBe('system');
-    expect(messages[1]!.content).toBe(`turn ${60 - MAX_HISTORY_MESSAGES_SENT}`);
+    expect(messages[1]!.content).toBe(`turn 58`);
     expect(messages.at(-1)).toEqual({ role: 'user', content: 'nieuwe vraag' });
   });
 
@@ -674,7 +674,7 @@ describe('prompt safety rules in the system prompt', () => {
   it('instructs the model to refuse leaking instructions and keys', () => {
     expect(LERNO_AI_SYSTEM_PROMPT).toMatch(/API keys/i);
     expect(LERNO_AI_SYSTEM_PROMPT).toMatch(/system prompt/i);
-    expect(LERNO_AI_SYSTEM_PROMPT).toMatch(/length to the question/i);
+    expect(LERNO_AI_SYSTEM_PROMPT).toMatch(/Simple: 1–4 sentences/i);
   });
 });
 

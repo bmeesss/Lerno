@@ -18,6 +18,7 @@ import type { CardRecord, StudySetRecord } from '../lib/db/types.js';
 import { errors } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { describeAiJsonFailure, parseAiJson, type AiJsonFailure } from '../lib/ai-json.js';
+import { cleanAiText } from '../lib/ai-text.js';
 import { guardSecretLeak } from '../lib/ai-guard.js';
 import { AI_TASKS, taskMessages, type AiTaskName } from './ai-prompts.js';
 import {
@@ -120,7 +121,7 @@ async function runTextTask(
 
   const safe = guardSecretLeak(result.text);
   logAiAction(task, result, safe === result.text ? 'ok' : 'blocked', extra);
-  return safe;
+  return cleanAiText(safe);
 }
 
 /**

@@ -106,6 +106,12 @@ export interface ChatResult {
   durationMs: number;
 }
 
+/** Visible-answer budget plus bounded reasoning headroom for the default model. */
+export function completionBudget(request: Pick<ChatRequest, 'action' | 'maxOutputTokens'>): number {
+  const budget = request.maxOutputTokens + (/gpt-oss/.test(config.groqModel) ? 256 : 0);
+  return request.action === 'chat' ? Math.min(config.groqMaxOutputTokens, budget) : budget;
+}
+
 /** Sends one chat completion and returns the trimmed text (never throws raw upstream errors). */
 export async function requestChat(request: ChatRequest): Promise<ChatResult> {
   const apiKey = requireGroqKey();
@@ -125,7 +131,10 @@ export async function requestChat(request: ChatRequest): Promise<ChatResult> {
       {
         model: config.groqModel,
         messages: request.messages as ChatCompletionMessageParam[],
-        max_completion_tokens: request.maxOutputTokens,
+        // GPT-OSS counts hidden reasoning against the same ceiling. Reserve a
+        // little headroom so a tiny hint/greeting budget still yields visible text.
+        max_completion_tokens: completionBudget(request),
+        ...(/gpt-oss/.test(config.groqModel) ? { reasoning_effort: 'low' as const } : {}),
         temperature: request.temperature ?? config.groqTemperature,
         ...(request.jsonMode && config.groqJsonMode
           ? { response_format: { type: 'json_object' as const } }
