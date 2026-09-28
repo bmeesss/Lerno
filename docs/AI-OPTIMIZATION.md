@@ -155,3 +155,83 @@ attraction rather than advanced gravity formulas; preserved follow-up meaning;
 long-history coherence. Also review havo/vwo, hints and structured generation.
 The script's regex checks are only smoke checks, not educational correctness
 proofs. Keep any content review private; do not add student content to logs.
+
+---
+
+# GPT-OSS inference settings — same day, follow-up
+
+The prompt/context optimization above stays as it is. This follow-up changes
+**how the model is called**, not how much text it gets: reasoning effort per
+task, one compact level line, and an output budget that follows the effort.
+
+## What changed
+
+| Area                 | Before                                             | After                                                                                                                        |
+| -------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `reasoning_effort`   | `low` for every GPT-OSS request                    | `low` / `medium` per task and per chat question                                                                              |
+| Reasoning reserve    | fixed `+256`                                       | `+256` low, `+512` medium, `+1024` high                                                                                      |
+| Model                | `openai/gpt-oss-120b`                              | unchanged (measured first, no model switch)                                                                                  |
+| Level in the request | `Level: mavo 3.` in chat, set level in the context | unchanged, plus the level now also travels with evaluate/hint context                                                        |
+| Factual depth        | —                                                  | one shared rule: prefer the simplest correct explanation, no unsought advanced formulas, never simplify into a factual error |
+| Logging              | action/model/duration/tokens                       | + `reasoningEffort` and `reasoningTokens`                                                                                    |
+| Config               | —                                                  | `GROQ_REASONING_EFFORT` (`auto` default)                                                                                     |
+
+Prompt growth from the new simplicity rule: **+21 content tokens** for every
+system prompt (free chat 169 → 190; the largest task prompt, quiz, 193 → 214).
+That is the entire prompt cost of this change.
+
+## Policy (why)
+
+- `low` for explanations, definitions, "why" questions, greetings and hints:
+  a school explanation does not need a long chain of thought, and it costs
+  latency and tokens on every request.
+- `medium` for problem solving (math), complex evaluation and generation: these
+  are the cases where the model has to do more than restate.
+- `high` is never used by default. Nothing in the measurements justifies it for
+  school-level questions; `GROQ_REASONING_EFFORT=high` is available to prove
+  that on a real key.
+- Free chat classifies the question (`chatReasoningEffort`): "Los 3x + 7 = 22
+  stap voor stap op" and "Geef één moeilijke vraag over …" get `medium`;
+  "Leg fotosynthese uit op mavo 3-niveau." and "Waarom is mijn gewicht op de
+  maan kleiner?" stay `low`. This is request shaping — **not** a claim about
+  answer quality.
+- Reasoning is never a substitute for prompt quality: the prompt stays compact,
+  the level stays explicit, and the level is never promoted because a question
+  is technically hard.
+
+## Reproducible
+
+`npx tsx backend/scripts/measure-ai.ts` now also reports the per-task reasoning
+effort and the effort/ceiling of every chat case; `--live` additionally streams
+the five canonical school questions and reports input/output/reasoning tokens,
+TTFT and total latency per request.
+
+Offline run after the change (content tokens, `o200k_base` proxy):
+
+| Case                         | System | History | User | Effort | Ceiling |
+| ---------------------------- | -----: | ------: | ---: | ------ | ------: |
+| Hallo                        |    190 |       0 |    1 | low    |     352 |
+| 15% van 240                  |    190 |       0 |    9 | low    |     456 |
+| Fotosynthese, mavo 3         |    190 |       0 |   13 | low    |   1 056 |
+| Moeilijke massa/gewichtvraag |    190 |       0 |   15 | medium |     792 |
+| Gewicht op de maan           |    190 |       0 |    8 | low    |     576 |
+| En gewicht?                  |    197 |      30 |    3 | low    |   1 056 |
+| Long chat (30 input entries) |    197 |     812 |    6 | low    |   1 056 |
+
+One fix belongs here: "Geef **één** moeilijke vraag" did not match the
+single-practice-question budget because of the accent, so that question got the
+full 800-token explanation budget instead of 280.
+
+## Verification
+
+`npm test` (472 backend + 166 frontend), `npm run lint`, `npm run typecheck`
+and `npm run build` pass. New deterministic tests live in
+`backend/src/ai-inference.test.ts`: reasoning per task and per chat question,
+the `GROQ_REASONING_EFFORT` override, non-reasoning models receiving no
+parameter, reserve and ceiling maths, level stability (mavo stays mavo, an
+explicit vwo wins, no level → simple default), and prompt-size guardrails.
+
+**Live measurement still blocked:** no `GROQ_API_KEY` is configured in this
+environment, so `--live` exits before any provider call. Token counts, TTFT,
+latency and answer quality above remain unverified — the tables are request
+shaping, not model results.

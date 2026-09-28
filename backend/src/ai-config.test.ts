@@ -47,22 +47,35 @@ describe('Lerno AI configuration', () => {
     expect(config.groqApiKey).toBe('test-key-placeholder');
   });
 
+  it('defaults the reasoning effort to the per-task policy', async () => {
+    const { config } = await loadConfig();
+    expect(config.groqReasoningEffort).toBe('auto');
+  });
+
+  it('can force one reasoning level for a measurement run', async () => {
+    const { config } = await loadConfig({ GROQ_REASONING_EFFORT: 'medium' });
+    expect(config.groqReasoningEffort).toBe('medium');
+  });
+
   it('treats empty values as "unset" and keeps the defaults', async () => {
     const { config } = await loadConfig({
       GROQ_MODEL: '',
       GROQ_MAX_OUTPUT_TOKENS: '',
       GROQ_TEMPERATURE: '',
+      GROQ_REASONING_EFFORT: '',
     });
 
     expect(config.groqModel).toBe('openai/gpt-oss-120b');
     expect(config.groqMaxOutputTokens).toBe(2048);
     expect(config.groqTemperature).toBeCloseTo(0.6);
+    expect(config.groqReasoningEffort).toBe('auto');
   });
 
   it('rejects out-of-range values instead of silently misbehaving', async () => {
     await expect(loadConfig({ GROQ_MAX_OUTPUT_TOKENS: '99999' })).rejects.toThrow();
     await expect(loadConfig({ GROQ_TEMPERATURE: '5' })).rejects.toThrow();
     await expect(loadConfig({ GROQ_MAX_OUTPUT_TOKENS: 'not-a-number' })).rejects.toThrow();
+    await expect(loadConfig({ GROQ_REASONING_EFFORT: 'extreme' })).rejects.toThrow();
   });
 
   it('configures the AI quota separately from normal API limits', async () => {

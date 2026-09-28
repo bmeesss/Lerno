@@ -144,9 +144,14 @@ export function buildStudyContext(
 ): string {
   return [
     `SET: ${normalizeText(set.title, MAX_TITLE_CHARS)}`,
+    // The level is already known here, so it travels with the task: the judge
+    // and the hint stay at the student's level.
+    set.level ? `LEVEL: ${normalizeText(set.level, 40)}` : null,
     `QUESTION: ${normalizeText(card.question, MAX_QUESTION_CHARS)}`,
     `MODEL ANSWER: ${normalizeText(card.answer, MAX_ANSWER_CHARS)}`,
-  ].join('\n');
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
 }
 
 /** Context for generating a quiz from a set (same shaping, quiz-sized budget). */

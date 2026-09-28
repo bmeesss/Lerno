@@ -175,13 +175,9 @@ function buildEvaluationPayload(
   task: string,
 ): string {
   const reference = card ? card.answer : (body.expectedAnswer ?? '');
-  const head = card
-    ? buildStudyContext(set, card)
-    : [
-        `SET: ${normalizeText(set.title, 120)}`,
-        `QUESTION: ${normalizeText(body.question, 300)}`,
-        `MODEL ANSWER: ${normalizeText(reference, 500)}`,
-      ].join('\n');
+  // One builder for both paths, so the set level and the caps are identical
+  // whether the question came from a card or from the request body.
+  const head = buildStudyContext(set, { question: body.question, answer: reference });
 
   return [
     task,
