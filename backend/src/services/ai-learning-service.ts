@@ -29,10 +29,12 @@ import {
 } from './ai-context.js';
 import {
   evaluationSchema,
+  generatedCardsSchema,
   generatedQuestionsSchema,
   generatedQuizSchema,
   hintResponseSchema,
 } from '../lib/ai-schemas.js';
+import { sanitizeChatText } from '../lib/ai-sanitize.js';
 import { logAiAction, requestChat, type ChatResult } from './ai-completion.js';
 import { canViewSet } from './set-service.js';
 import { studyService } from './study-service.js';
@@ -40,6 +42,7 @@ import type {
   EvaluateAnswerBody,
   FinishStudyBody,
   GenerateQuestionsBody,
+  GenerateSetBody,
   HintRequestBody,
 } from '../validators/ai-set.validators.js';
 
@@ -199,6 +202,11 @@ const DIFFICULTY_HINT: Record<string, string> = {
 /** Questions scale with the requested count — 15 questions need more room. */
 function questionsBudget(count: number): number {
   return Math.min(2200, 520 + count * 110);
+}
+
+/** Flashcards scale with the requested count — 30 cards need more room. */
+function cardsBudget(count: number): number {
+  return Math.min(4000, 600 + count * 110);
 }
 
 interface StudyTarget {
@@ -374,6 +382,51 @@ export const aiLearningService = {
     });
 
     return data;
+  },
+
+  /**
+   * "Genereer met AI" (#6): turn a description into flashcards.
+   *
+   * Returns a preview only — nothing is stored. The student reviews the cards
+   * and saves them through the normal `POST /api/sets` endpoint.
+   */
+  async generateSet(
+    _db: Database,
+    _userId: string,
+    body: GenerateSetBody,
+  ): Promise<z.infer<typeof generatedCardsSchema>> {
+    // User text is sanitized before it reaches the model (control characters,
+    // chat-template tokens, fake role prefixes).
+    const prompt = sanitizeChatText(body.prompt, 600);
+    if (!prompt) throw errors.validation('Describe what you want to study in a few words');
+
+    const payload = [
+      `TASK: Create ${body.cardCount} flashcards.`,
+      body.level ? `LEVEL: ${sanitizeChatText(body.level, 60)}` : null,
+      '',
+      `REQUEST: ${prompt}`,
+      '',
+      `Return ${body.cardCount} cards at most, in the language of the request.`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
+
+    const { data } = await runStructuredTask(
+      'cards',
+      payload,
+      generatedCardsSchema,
+      {
+        cardCount: body.cardCount,
+        hasLevel: Boolean(body.level),
+      },
+      { maxOutputTokens: cardsBudget(body.cardCount) },
+    );
+
+    return {
+      title: data.title,
+      description: data.description,
+      cards: data.cards.slice(0, body.cardCount),
+    };
   },
 
   /**

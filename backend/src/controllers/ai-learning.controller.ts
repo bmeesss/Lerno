@@ -12,6 +12,7 @@ import type {
   ExplainSetBody,
   FinishStudyBody,
   GenerateQuestionsBody,
+  GenerateSetBody,
   HintRequestBody,
   SummarizeSetBody,
 } from '../validators/ai-set.validators.js';
@@ -52,6 +53,14 @@ export const aiLearningController = {
   }),
 
   // ------------------------------------------------------------ overhoor mode
+
+  /** POST /api/ai/generate-set — preview only, never auto-saved (#6). */
+  generateSet: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const body = req.body as GenerateSetBody;
+    const generated = await aiLearningService.generateSet(req.db, userId, body);
+    sendOk(res, generated);
+  }),
 
   /** POST /api/ai/study/evaluate — judge one answer (#4). */
   evaluateAnswer: asyncHandler(async (req: Request, res: Response) => {

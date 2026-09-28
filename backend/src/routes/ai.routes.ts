@@ -11,6 +11,7 @@ import {
   explainSetSchema,
   finishStudySchema,
   generateQuestionsSchema,
+  generateSetSchema,
   hintRequestSchema,
   summarizeSetSchema,
 } from '../validators/ai-set.validators.js';
@@ -63,6 +64,14 @@ export function aiRoutes(): Router {
     ...aiGuards(),
     validate({ params: aiSetParamsSchema, body: generateQuestionsSchema }),
     aiLearningController.generateQuestions,
+  );
+
+  // Generation (preview only — never auto-saved) --------------------------
+  router.post(
+    '/generate-set',
+    ...aiGuards(),
+    validate({ body: generateSetSchema }),
+    aiLearningController.generateSet,
   );
 
   // Overhoor / AI study mode ---------------------------------------------
