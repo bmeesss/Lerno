@@ -1,0 +1,449 @@
+/**
+ * Study Pack domain rules — pure, testable helpers shared by the pack services.
+ *
+ * Everything in this file is deterministic and side-effect free:
+ *  - answer grading (multiple choice / true-false / open answers)
+ *  - concept mastery updates (the basis for adaptive learning later)
+ *  - concept ↔ card/question matching
+ *  - weak-topic detection and the single recommended next action
+ *  - exam countdown + study-plan generation
+ *
+ * No database access and no AI calls happen here, so the rules can be unit
+ * tested and later replaced (e.g. by a smarter mastery model) without touching
+ * services or controllers.
+ */
+import type {
+  AnswerVerdict,
+  CardRecord,
+  ConceptMasteryRecord,
+  ConceptRecord,
+  PracticeQuestionRecord,
+  StudyPlanSession,
+} from '../lib/db/types.js';
+
+/* --------------------------------- grading -------------------------------- */
+
+/** Lowercases, strips accents/punctuation and collapses whitespace. */
+export function normalizeAnswer(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'from',
+  'een',
+  'het',
+  'van',
+  'dat',
+  'die',
+  'met',
+  'voor',
+  'als',
+  'zijn',
+  'wordt',
+  'worden',
+  'naar',
+  'door',
+]);
+
+function keywords(value: string): string[] {
+  return normalizeAnswer(value)
+    .split(' ')
+    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+}
+
+export interface GradeResult {
+  verdict: AnswerVerdict;
+  /** Normalized student answer echoed back for storage/display. */
+  normalized: string;
+}
+
+/**
+ * Grades one practice/test answer without an AI call.
+ *
+ * Deliberately generous on wording (open answers are compared by meaning at
+ * word level) and strict about emptiness: an empty answer is never correct.
+ * AI grading stays available for open answers elsewhere in Lerno; this baseline
+ * keeps Practice and Test useful even when AI is not configured.
+ */
+export function gradeAnswer(
+  question: Pick<PracticeQuestionRecord, 'questionType' | 'correctAnswer' | 'options'>,
+  answer: string,
+): GradeResult {
+  const normalized = normalizeAnswer(answer);
+  if (!normalized) return { verdict: 'incorrect', normalized };
+
+  const expected = normalizeAnswer(question.correctAnswer);
+
+  if (question.questionType === 'multiple_choice' || question.questionType === 'true_false') {
+    // Accept either the option text or its 0-based index (what a UI radio sends).
+    const options = question.options ?? [];
+    const index = Number.parseInt(normalized, 10);
+    const picked =
+      Number.isInteger(index) && String(index) === normalized ? (options[index] ?? '') : answer;
+    const pickedNormalized = normalizeAnswer(picked);
+    const matches = options.length > 0 && options.some((option) => normalizeAnswer(option) === pickedNormalized);
+    const verdict: AnswerVerdict = matches && pickedNormalized === expected ? 'correct' : 'incorrect';
+    return { verdict, normalized: pickedNormalized || normalized };
+  }
+
+  if (normalized === expected) return { verdict: 'correct', normalized };
+
+  const expectedWords = keywords(question.correctAnswer);
+  const answerWords = new Set(keywords(answer));
+  if (expectedWords.length === 0) {
+    return { verdict: normalized.includes(expected) ? 'correct' : 'incorrect', normalized };
+  }
+
+  const hit = expectedWords.filter((word) => answerWords.has(word)).length;
+  const coverage = hit / expectedWords.length;
+  if (coverage >= 0.8) return { verdict: 'correct', normalized };
+  if (coverage >= 0.5) return { verdict: 'partial', normalized };
+  return { verdict: 'incorrect', normalized };
+}
+
+/* -------------------------------- mastery --------------------------------- */
+
+export const WEAK_MASTERY_THRESHOLD = 0.6;
+export const STRONG_MASTERY_THRESHOLD = 0.8;
+
+/** Self-ratings used by Learn mode (adaptive-ready, no AI needed). */
+export type ConceptRating = 'again' | 'hard' | 'good' | 'easy';
+
+const RATING_DELTA: Record<ConceptRating, number> = {
+  again: -0.1,
+  hard: 0.05,
+  good: 0.15,
+  easy: 0.25,
+};
+
+const VERDICT_DELTA: Record<AnswerVerdict, number> = {
+  correct: 0.2,
+  partial: 0.08,
+  incorrect: -0.15,
+};
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, Math.round(value * 100) / 100));
+}
+
+export interface MasteryState {
+  mastery: number;
+  attempts: number;
+  correctCount: number;
+  incorrectCount: number;
+  lastPracticedAt: string | null;
+}
+
+export function emptyMastery(): MasteryState {
+  return { mastery: 0, attempts: 0, correctCount: 0, incorrectCount: 0, lastPracticedAt: null };
+}
+
+/** Applies one graded answer to a mastery state. */
+export function applyVerdict(state: MasteryState, verdict: AnswerVerdict, now: Date): MasteryState {
+  return {
+    mastery: clamp01(state.mastery + VERDICT_DELTA[verdict]),
+    attempts: state.attempts + 1,
+    correctCount: state.correctCount + (verdict === 'correct' ? 1 : 0),
+    incorrectCount: state.incorrectCount + (verdict === 'incorrect' ? 1 : 0),
+    lastPracticedAt: now.toISOString(),
+  };
+}
+
+/** Applies one Learn-mode self-rating to a mastery state. */
+export function applyRating(state: MasteryState, rating: ConceptRating, now: Date): MasteryState {
+  return {
+    mastery: clamp01(state.mastery + RATING_DELTA[rating]),
+    attempts: state.attempts + 1,
+    correctCount: state.correctCount + (rating === 'good' || rating === 'easy' ? 1 : 0),
+    incorrectCount: state.incorrectCount + (rating === 'again' ? 1 : 0),
+    lastPracticedAt: now.toISOString(),
+  };
+}
+
+export function masteryFromRecord(record: ConceptMasteryRecord | null): MasteryState {
+  if (!record) return emptyMastery();
+  return {
+    mastery: record.mastery,
+    attempts: record.attempts,
+    correctCount: record.correctCount,
+    incorrectCount: record.incorrectCount,
+    lastPracticedAt: record.lastPracticedAt,
+  };
+}
+
+/** A concept is weak when the student has practised it and stays below the bar. */
+export function isWeakConcept(state: MasteryState): boolean {
+  return state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD;
+}
+
+export function isStrongConcept(state: MasteryState): boolean {
+  return state.attempts > 0 && state.mastery >= STRONG_MASTERY_THRESHOLD;
+}
+
+/* --------------------------- concept ↔ content ---------------------------- */
+
+/**
+ * Matches a generated card/question to the concept it belongs to, using plain
+ * word overlap between the content and the concept text. Deterministic and
+ * explainable — good enough for "related flashcards/questions", and easy to
+ * replace with an explicit AI reference later.
+ */
+export function matchConcept(
+  text: string,
+  concepts: ConceptRecord[],
+  minimumScore = 0.34,
+): ConceptRecord | null {
+  const textWords = new Set(keywords(text));
+  if (textWords.size === 0) return null;
+
+  let best: { concept: ConceptRecord; score: number } | null = null;
+  for (const concept of concepts) {
+    const conceptBase = keywords(concept.name);
+    if (conceptBase.length === 0) continue;
+    const conceptWords = new Set([...conceptBase, ...keywords(concept.explanation).slice(0, 12)]);
+    let hit = 0;
+    for (const word of conceptWords) if (textWords.has(word)) hit += 1;
+    const score = hit / conceptWords.size;
+    const nameHit = conceptBase.some((word) => textWords.has(word));
+    const weighted = nameHit ? Math.min(1, score + 0.34) : score;
+    if (weighted >= minimumScore && (!best || weighted > best.score)) {
+      best = { concept, score: weighted };
+    }
+  }
+  return best?.concept ?? null;
+}
+
+export function conceptIdForCard(card: Pick<CardRecord, 'question' | 'answer'>, concepts: ConceptRecord[]) {
+  return matchConcept(`${card.question} ${card.answer}`, concepts)?.id ?? null;
+}
+
+/* ---------------------------- exam + planning ----------------------------- */
+
+/** Whole days from `now` until an ISO calendar day (negative when past). */
+export function daysUntil(dayIso: string, now: Date): number {
+  const target = Date.parse(`${dayIso}T00:00:00Z`);
+  if (Number.isNaN(target)) return 0;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((target - today) / 86_400_000);
+}
+
+export function addDaysIso(dayIso: string, days: number): string {
+  const base = Date.parse(`${dayIso}T00:00:00Z`);
+  const result = new Date((Number.isNaN(base) ? Date.now() : base) + days * 86_400_000);
+  return result.toISOString().slice(0, 10);
+}
+
+export function todayIso(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+export interface StudyPlanInput {
+  title: string;
+  days: number;
+  minutesPerDay: number;
+  /** Days actually needed for the first pass over all concepts/cards. */
+  conceptCount: number;
+  cardCount: number;
+  questionCount: number;
+  dueCards: number;
+  weakConceptNames: string[];
+  startDay: string;
+}
+
+/**
+ * Builds a practical, deterministic study plan: a first pass over the material
+ * (concepts), then interleaved practice and spaced review with a final exam
+ * simulation. No AI required, so the plan always exists once there is an exam
+ * date — it can later be enriched by the AI planner.
+ */
+export function buildStudyPlan(input: StudyPlanInput): { overview: string; sessions: StudyPlanSession[] } {
+  const days = Math.max(1, Math.min(60, Math.round(input.days)));
+  const minutes = Math.max(10, Math.min(180, Math.round(input.minutesPerDay)));
+
+  // Roughly 4 concepts or 12 cards per study day as the first-pass workload.
+  const workloadDays =
+    input.conceptCount > 0 || input.cardCount > 0
+      ? Math.ceil(Math.max(input.conceptCount / 4, input.cardCount / 12))
+      : 1;
+  const learningDays = Math.max(1, Math.min(days - 1 > 0 ? days - 1 : days, workloadDays));
+  const practiceReady = input.questionCount > 0;
+
+  const sessions: StudyPlanSession[] = [];
+  for (let day = 1; day <= days; day += 1) {
+    const date = addDaysIso(input.startDay, day - 1);
+    const isExamEve = day === days;
+    const focusConcept = input.weakConceptNames[(day - 1) % Math.max(1, input.weakConceptNames.length)];
+
+    if (isExamEve) {
+      sessions.push({
+        day,
+        date,
+        focus: 'Exam simulation and final review',
+        activities: [
+          'Take one exam simulation without hints',
+          'Review every mistake from the test',
+          'Review the cards that are due today',
+        ],
+        minutes,
+      });
+      continue;
+    }
+
+    if (day <= learningDays) {
+      sessions.push({
+        day,
+        date,
+        focus: input.conceptCount > 0 ? 'Learn new concepts' : 'Learn new flashcards',
+        activities: [
+          `Learn the next concepts in ${input.title}`,
+          input.cardCount > 0 ? 'Study the matching flashcards' : 'Generate flashcards for this part',
+          focusConcept ? `Extra attention for ${focusConcept}` : 'Mark what feels unclear',
+        ],
+        minutes,
+      });
+      continue;
+    }
+
+    sessions.push({
+      day,
+      date,
+      focus: day % 2 === 0 ? 'Practice weak topics' : 'Spaced review',
+      activities: [
+        practiceReady ? 'Practice questions on the weakest concepts' : 'Generate practice questions',
+        'Review the cards that are due',
+        day >= days - 2 ? 'Make a short practice test' : 'Check your mastery and adjust',
+      ],
+      minutes,
+    });
+  }
+
+  const overviewParts = [
+    `${days} days of study at ${minutes} minutes per day.`,
+    input.conceptCount > 0 ? `${input.conceptCount} concepts to understand.` : null,
+    input.cardCount > 0 ? `${input.cardCount} flashcards to learn.` : null,
+    input.dueCards > 0 ? `${input.dueCards} cards are already due for review.` : null,
+    input.weakConceptNames.length > 0
+      ? `Weakest right now: ${input.weakConceptNames.slice(0, 3).join(', ')}.`
+      : null,
+  ].filter((part): part is string => part !== null);
+
+  return { overview: overviewParts.join(' '), sessions };
+}
+
+/* --------------------------- recommended action --------------------------- */
+
+export interface PackStats {
+  readySources: number;
+  totalSources: number;
+  concepts: number;
+  flashcards: number;
+  practiceQuestions: number;
+  dueCards: number;
+  weakConcepts: { id: string; name: string }[];
+  unlearnedConcepts: number;
+  /** Accuracy over graded practice answers (0..1) or null when none yet. */
+  accuracy: number | null;
+}
+
+export type RecommendedAction =
+  | { type: 'add-source'; label: string; description: string }
+  | { type: 'generate-concepts'; label: string; description: string }
+  | { type: 'generate-flashcards'; label: string; description: string }
+  | { type: 'generate-practice'; label: string; description: string }
+  | { type: 'learn'; label: string; description: string; conceptId: string | null; conceptName: string | null }
+  | { type: 'review'; label: string; description: string }
+  | { type: 'practice'; label: string; description: string; conceptId: string | null; conceptName: string | null }
+  | { type: 'test'; label: string; description: string };
+
+/**
+ * The single next action for a student, in the order that actually helps most:
+ * material → understanding → recall → practice → testing.
+ */
+export function recommendNextAction(stats: PackStats): RecommendedAction {
+  if (stats.totalSources === 0) {
+    return {
+      type: 'add-source',
+      label: 'Add study material',
+      description: 'Add notes, a PDF or an existing set so Lerno can build this pack.',
+    };
+  }
+  if (stats.readySources === 0) {
+    return {
+      type: 'generate-concepts',
+      label: 'Finish processing your material',
+      description: 'Your source is still processing. Come back in a moment.',
+    };
+  }
+  if (stats.concepts === 0) {
+    return {
+      type: 'generate-concepts',
+      label: 'Extract key concepts',
+      description: 'Let Lerno find the key concepts in your material.',
+    };
+  }
+  if (stats.dueCards > 0) {
+    return {
+      type: 'review',
+      label: `Review ${stats.dueCards} due card${stats.dueCards === 1 ? '' : 's'}`,
+      description: 'Spaced repetition says these are ready to come back.',
+    };
+  }
+  const weakest = stats.weakConcepts[0];
+  if (weakest) {
+    return {
+      type: 'practice',
+      label: `Practice: ${weakest.name}`,
+      description: `You're weakest on ${stats.weakConcepts.length} concept${stats.weakConcepts.length === 1 ? '' : 's'}.`,
+      conceptId: weakest.id,
+      conceptName: weakest.name,
+    };
+  }
+  if (stats.unlearnedConcepts > 0) {
+    return {
+      type: 'learn',
+      label: `Learn ${Math.min(stats.unlearnedConcepts, 5)} new concept${stats.unlearnedConcepts === 1 ? '' : 's'}`,
+      description: 'Understand the material before practising it.',
+      conceptId: null,
+      conceptName: null,
+    };
+  }
+  if (stats.flashcards === 0) {
+    return {
+      type: 'generate-flashcards',
+      label: 'Generate flashcards',
+      description: 'Turn your concepts into cards you can study and review.',
+    };
+  }
+  if (stats.practiceQuestions === 0) {
+    return {
+      type: 'generate-practice',
+      label: 'Generate practice questions',
+      description: 'Check whether you really understand the material.',
+    };
+  }
+  return {
+    type: 'test',
+    label: 'Take a practice test',
+    description: 'Test yourself under exam conditions to find the last gaps.',
+  };
+}
+
+/** Overall mastery of a pack: average mastery over its concepts (0..100). */
+export function packMasteryPercent(concepts: number, masteryValues: number[]): number {
+  if (concepts === 0) return 0;
+  const sum = masteryValues.reduce((total, value) => total + value, 0);
+  return Math.round((sum / concepts) * 100);
+}
