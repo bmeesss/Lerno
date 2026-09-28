@@ -10,6 +10,8 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'AI_UNAVAILABLE'
   | 'AI_ERROR'
+  | 'AI_TIMEOUT'
+  | 'AI_INVALID_CONTENT'
   | 'INTERNAL_ERROR';
 
 const statusByCode: Record<ErrorCode, number> = {
@@ -22,6 +24,8 @@ const statusByCode: Record<ErrorCode, number> = {
   RATE_LIMITED: 429,
   AI_UNAVAILABLE: 503,
   AI_ERROR: 502,
+  AI_TIMEOUT: 504,
+  AI_INVALID_CONTENT: 502,
   INTERNAL_ERROR: 500,
 };
 
@@ -43,16 +47,22 @@ export const errors = {
   forbidden: (message = 'You do not have access to this resource') =>
     new ApiError('FORBIDDEN', message),
   notFound: (message = 'Resource not found') => new ApiError('NOT_FOUND', message),
-  methodNotAllowed: (message = 'Method not allowed') =>
-    new ApiError('METHOD_NOT_ALLOWED', message),
+  methodNotAllowed: (message = 'Method not allowed') => new ApiError('METHOD_NOT_ALLOWED', message),
   conflict: (message = 'Resource already exists') => new ApiError('CONFLICT', message),
   rateLimited: (message = 'Too many requests, please slow down') =>
     new ApiError('RATE_LIMITED', message),
   /** Lerno AI is not configured (no GROQ_API_KEY) — safe, pre-checked message. */
-  aiUnavailable: (message = 'Lerno AI is not available right now') =>
+  aiUnavailable: (message = 'The AI is temporarily unavailable. Please try again in a moment.') =>
     new ApiError('AI_UNAVAILABLE', message),
   /** The AI provider failed — generic message, never leaks upstream details. */
-  aiError: (message = 'Lerno AI could not answer right now. Please try again.') =>
+  aiError: (message = 'The AI is temporarily unavailable. Please try again in a moment.') =>
     new ApiError('AI_ERROR', message),
+  /** The AI answered, but the content failed validation. */
+  aiInvalidContent: (
+    message = 'The AI returned a response we could not use. Please try again.',
+  ) => new ApiError('AI_INVALID_CONTENT', message),
+  /** The AI provider did not answer in time. */
+  aiTimeout: (message = 'The AI took too long to answer. Please try again.') =>
+    new ApiError('AI_TIMEOUT', message),
   internal: (message = 'Something went wrong') => new ApiError('INTERNAL_ERROR', message),
 };

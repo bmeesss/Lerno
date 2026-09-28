@@ -23,6 +23,7 @@ import { QuizPage } from './pages/quiz/QuizPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { PracticePage } from './pages/study/PracticePage';
 import { StudyPage } from './pages/study/StudyPage';
+import { AiStudyPage } from './pages/sets/AiStudyPage';
 import { SubjectDetailPage } from './pages/subjects/SubjectDetailPage';
 import { SubjectsPage } from './pages/subjects/SubjectsPage';
 
@@ -59,6 +60,8 @@ export function App() {
         <Route path="/sets/:setId/study" element={<StudyPage />} />
         <Route path="/sets/:setId/practice" element={<PracticePage />} />
         <Route path="/sets/:setId/quiz" element={<QuizPage />} />
+        {/* AI Study Mode — extra option next to the normal study flow */}
+        <Route path="/sets/:setId/ai-study" element={authed(<AiStudyPage />)} />
 
         {/* Authenticated */}
         <Route path="/dashboard" element={authed(<DashboardPage />)} />

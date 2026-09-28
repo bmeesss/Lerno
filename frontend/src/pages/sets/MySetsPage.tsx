@@ -1,16 +1,19 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ButtonLink } from '../../components/ui/Button';
+import { Button, ButtonLink } from '../../components/ui/Button';
 import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
-import { IconLayers, IconPlus } from '../../components/ui/Icons';
+import { IconLayers, IconPlus, IconSparkles } from '../../components/ui/Icons';
+import { AiGenerateSetModal } from '../../components/ai/AiGenerateSetModal';
 import { useAsync } from '../../hooks/useAsync';
 import { studySetService } from '../../services/studySetService';
 import type { StudySetSummary } from '../../types';
 
 export function MySetsPage() {
-  const { data, loading, error } = useAsync<StudySetSummary[]>(
+  const { data, loading, error, reload } = useAsync<StudySetSummary[]>(
     () => studySetService.listMine(),
     [],
   );
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   return (
     <>
@@ -19,9 +22,14 @@ export function MySetsPage() {
           <h1>My sets</h1>
           <p>Study sets you created — private or shared publicly.</p>
         </div>
-        <ButtonLink to="/sets/new">
-          <IconPlus size={17} /> New set
-        </ButtonLink>
+        <div className="page-header-actions">
+          <Button variant="secondary" onClick={() => setGenerateOpen(true)}>
+            <IconSparkles size={16} /> Genereer met AI
+          </Button>
+          <ButtonLink to="/sets/new">
+            <IconPlus size={17} /> New set
+          </ButtonLink>
+        </div>
       </div>
 
       {loading ? (
@@ -59,6 +67,15 @@ export function MySetsPage() {
           action={<ButtonLink to="/sets/new">Create your first set</ButtonLink>}
         />
       )}
+
+      <AiGenerateSetModal
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        onSaved={() => {
+          setGenerateOpen(false);
+          reload();
+        }}
+      />
     </>
   );
 }

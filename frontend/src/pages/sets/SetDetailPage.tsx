@@ -7,6 +7,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../components/ui/Toast';
 import { ReportModal } from '../../components/moderation/ReportModal';
 import { IconEdit, IconFlag, IconHeart, IconStar, IconTrash } from '../../components/ui/Icons';
+import { AiSetActions } from '../../components/ai/AiSetActions';
+import { AiCardActions } from '../../components/ai/AiCardActions';
 import { ApiError } from '../../lib/api';
 import { favoriteService } from '../../services/favoriteService';
 import { studySetService } from '../../services/studySetService';
@@ -133,6 +135,7 @@ export function SetDetailPage() {
           <ButtonLink to={`/sets/${data.id}/quiz`} variant="secondary" size="lg">
             Quiz
           </ButtonLink>
+          <AiSetActions setId={data.id} signedIn={Boolean(user)} />
           <Button variant="secondary" size="lg" onClick={() => void toggleFavorite()}>
             {isFavorited ? <IconHeart size={18} /> : <IconStar size={18} />}
             {isFavorited ? 'Favorited' : 'Favorite'}
@@ -167,8 +170,16 @@ export function SetDetailPage() {
             <div key={card.id} className="card-row">
               <div className="card-q">{card.question}</div>
               <div className="card-a">{card.answer}</div>
-              <div className="muted" style={{ fontSize: '0.8rem' }}>
-                #{card.position + 1}
+              <div className="card-row-meta">
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  #{card.position + 1}
+                </span>
+                <AiCardActions
+                  cardId={card.id}
+                  setId={data.id}
+                  signedIn={Boolean(user)}
+                  label={card.question}
+                />
               </div>
             </div>
           ))}
