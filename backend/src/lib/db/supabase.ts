@@ -14,9 +14,15 @@ import type {
   AuthUserRecord,
   CardProgressRecord,
   CardRecord,
+  ConceptMasteryRecord,
+  ConceptRecord,
   FavoriteRecord,
   NewCard,
+  NewConcept,
+  NewPracticeQuestion,
   NewQuizQuestion,
+  PracticeAttemptRecord,
+  PracticeQuestionRecord,
   ProfileRecord,
   ProgressUpsert,
   QuizAttemptRecord,
@@ -27,11 +33,18 @@ import type {
   ReportRecord,
   Role,
   SetFilter,
+  StudyPackRecord,
+  StudyPackSourceRecord,
+  StudyPlanRecord,
   StudySessionCreate,
   StudySessionPatch,
   StudySessionRecord,
   StudySetRecord,
   SubjectRecord,
+  TestAttemptRecord,
+  TestMode,
+  TestQuestionRecord,
+  TestRecord,
 } from './types.js';
 
 type Row = Record<string, unknown>;
@@ -87,6 +100,9 @@ function cardRow(row: Row): CardRecord {
     question: field(row, 'question'),
     answer: field(row, 'answer'),
     position: field<number>(row, 'position') ?? 0,
+    // Tolerant of pre-0007 databases where the provenance columns do not exist yet.
+    sourceId: field<string | null>(row, 'source_id') ?? null,
+    conceptId: field<string | null>(row, 'concept_id') ?? null,
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -186,6 +202,162 @@ function reportRow(row: Row): ReportRecord {
     createdAt: field(row, 'created_at'),
     resolvedAt: field<string | null>(row, 'resolved_at') ?? null,
     resolvedBy: field<string | null>(row, 'resolved_by') ?? null,
+  };
+}
+
+function packRow(row: Row): StudyPackRecord {
+  return {
+    id: field(row, 'id'),
+    ownerId: field(row, 'owner_id'),
+    subjectId: field<string | null>(row, 'subject_id') ?? null,
+    subjectName: field<string | null>(row, 'subject_name') ?? null,
+    title: field(row, 'title'),
+    description: field<string>(row, 'description') ?? '',
+    level: field<string>(row, 'level') ?? '',
+    visibility: field<string>(row, 'visibility') === 'public' ? 'public' : 'private',
+    examDate: field<string | null>(row, 'exam_date') ?? null,
+    summary: field<string | null>(row, 'summary') ?? null,
+    summarySourceId: field<string | null>(row, 'summary_source_id') ?? null,
+    summaryUpdatedAt: field<string | null>(row, 'summary_updated_at') ?? null,
+    legacySetId: field<string | null>(row, 'legacy_set_id') ?? null,
+    ownsLegacySet: field<boolean>(row, 'owns_legacy_set') ?? false,
+    publisher: field<string | null>(row, 'publisher') ?? null,
+    method: field<string | null>(row, 'method') ?? null,
+    methodEdition: field<string | null>(row, 'method_edition') ?? null,
+    methodChapter: field<string | null>(row, 'method_chapter') ?? null,
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function packSourceRow(row: Row): StudyPackSourceRecord {
+  return {
+    id: field(row, 'id'),
+    packId: field(row, 'pack_id'),
+    ownerId: field(row, 'owner_id'),
+    kind: field<string>(row, 'kind') as StudyPackSourceRecord['kind'],
+    title: field(row, 'title'),
+    status: field<string>(row, 'status') as StudyPackSourceRecord['status'],
+    content: field<string | null>(row, 'content') ?? null,
+    characterCount: field<number>(row, 'character_count') ?? 0,
+    pageCount: field<number | null>(row, 'page_count') ?? null,
+    failureReason: field<string | null>(row, 'failure_reason') ?? null,
+    legacySetId: field<string | null>(row, 'legacy_set_id') ?? null,
+    origin: field<string>(row, 'origin') as StudyPackSourceRecord['origin'],
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function conceptRow(row: Row): ConceptRecord {
+  return {
+    id: field(row, 'id'),
+    packId: field(row, 'pack_id'),
+    sourceId: field<string | null>(row, 'source_id') ?? null,
+    name: field(row, 'name'),
+    explanation: field<string>(row, 'explanation') ?? '',
+    origin: field<string>(row, 'origin') as ConceptRecord['origin'],
+    position: field<number>(row, 'position') ?? 0,
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function conceptMasteryRow(row: Row): ConceptMasteryRecord {
+  return {
+    id: field(row, 'id'),
+    userId: field(row, 'user_id'),
+    conceptId: field(row, 'concept_id'),
+    mastery: Number(field<number>(row, 'mastery') ?? 0),
+    attempts: field<number>(row, 'attempts') ?? 0,
+    correctCount: field<number>(row, 'correct_count') ?? 0,
+    incorrectCount: field<number>(row, 'incorrect_count') ?? 0,
+    lastPracticedAt: field<string | null>(row, 'last_practiced_at') ?? null,
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function practiceQuestionRow(row: Row): PracticeQuestionRecord {
+  return {
+    id: field(row, 'id'),
+    packId: field(row, 'pack_id'),
+    conceptId: field<string | null>(row, 'concept_id') ?? null,
+    sourceId: field<string | null>(row, 'source_id') ?? null,
+    prompt: field(row, 'prompt'),
+    questionType: field<string>(row, 'question_type') as PracticeQuestionRecord['questionType'],
+    correctAnswer: field(row, 'correct_answer'),
+    options: field<string[] | null>(row, 'options') ?? null,
+    explanation: field<string>(row, 'explanation') ?? '',
+    origin: field<string>(row, 'origin') as PracticeQuestionRecord['origin'],
+    position: field<number>(row, 'position') ?? 0,
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function practiceAttemptRow(row: Row): PracticeAttemptRecord {
+  return {
+    id: field(row, 'id'),
+    userId: field(row, 'user_id'),
+    packId: field(row, 'pack_id'),
+    questionId: field(row, 'question_id'),
+    conceptId: field<string | null>(row, 'concept_id') ?? null,
+    answer: field<string>(row, 'answer') ?? '',
+    verdict: field<string>(row, 'verdict') as PracticeAttemptRecord['verdict'],
+    createdAt: field(row, 'created_at'),
+  };
+}
+
+function testRow(row: Row): TestRecord {
+  return {
+    id: field(row, 'id'),
+    packId: field(row, 'pack_id'),
+    ownerId: field(row, 'owner_id'),
+    title: field(row, 'title'),
+    mode: field<string>(row, 'mode') as TestMode,
+    questionCount: field<number>(row, 'question_count') ?? 0,
+    createdAt: field(row, 'created_at'),
+  };
+}
+
+function testQuestionRow(row: Row): TestQuestionRecord {
+  return {
+    id: field(row, 'id'),
+    testId: field(row, 'test_id'),
+    questionId: field(row, 'question_id'),
+    position: field<number>(row, 'position') ?? 0,
+  };
+}
+
+function testAttemptRow(row: Row): TestAttemptRecord {
+  return {
+    id: field(row, 'id'),
+    testId: field(row, 'test_id'),
+    packId: field(row, 'pack_id'),
+    userId: field(row, 'user_id'),
+    score: Number(field<number>(row, 'score') ?? 0),
+    total: field<number>(row, 'total') ?? 0,
+    correctCount: field<number>(row, 'correct_count') ?? 0,
+    partialCount: field<number>(row, 'partial_count') ?? 0,
+    incorrectCount: field<number>(row, 'incorrect_count') ?? 0,
+    answers: field<TestAttemptRecord['answers']>(row, 'answers') ?? [],
+    strongConceptIds: field<string[]>(row, 'strong_concept_ids') ?? [],
+    weakConceptIds: field<string[]>(row, 'weak_concept_ids') ?? [],
+    createdAt: field(row, 'created_at'),
+  };
+}
+
+function studyPlanRow(row: Row): StudyPlanRecord {
+  return {
+    id: field(row, 'id'),
+    packId: field(row, 'pack_id'),
+    ownerId: field(row, 'owner_id'),
+    examDate: field<string | null>(row, 'exam_date') ?? null,
+    overview: field<string>(row, 'overview') ?? '',
+    sessions: field<StudyPlanRecord['sessions']>(row, 'sessions') ?? [],
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
   };
 }
 
@@ -536,6 +708,10 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           question: card.question,
           answer: card.answer,
           position: card.position,
+          // Provenance columns only when they carry a value, so classic set
+          // creation keeps working on databases without migration 0007.
+          ...(card.sourceId ? { source_id: card.sourceId } : {}),
+          ...(card.conceptId ? { concept_id: card.conceptId } : {}),
         }));
         const { data, error } = await client.from('cards').insert(payload).select();
         throwIfError(error);
@@ -546,6 +722,8 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         if (patch.question !== undefined) payload['question'] = patch.question;
         if (patch.answer !== undefined) payload['answer'] = patch.answer;
         if (patch.position !== undefined) payload['position'] = patch.position;
+        if (patch.sourceId !== undefined) payload['source_id'] = patch.sourceId;
+        if (patch.conceptId !== undefined) payload['concept_id'] = patch.conceptId;
         const { data, error } = await client
           .from('cards')
           .update(payload)
@@ -885,6 +1063,592 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .eq('status', 'open');
         throwIfError(error);
         return count ?? 0;
+      },
+    },
+
+    /* ----------------------------- study packs --------------------------- */
+
+    packs: {
+      async get(id) {
+        const { data, error } = await client.from('study_packs').select('*').eq('id', id).maybeSingle();
+        throwIfError(error);
+        return data ? packRow(data as Row) : null;
+      },
+      async listByOwner(ownerId) {
+        const { data, error } = await client
+          .from('study_packs')
+          .select('*')
+          .eq('owner_id', ownerId)
+          .order('updated_at', { ascending: false });
+        throwIfError(error);
+        return (data as Row[]).map(packRow);
+      },
+      async listByOwnerAndSubject(ownerId, subjectId) {
+        const { data, error } = await client
+          .from('study_packs')
+          .select('*')
+          .eq('owner_id', ownerId)
+          .eq('subject_id', subjectId)
+          .order('updated_at', { ascending: false });
+        throwIfError(error);
+        return (data as Row[]).map(packRow);
+      },
+      async listByIds(ids) {
+        if (ids.length === 0) return [];
+        const { data, error } = await client.from('study_packs').select('*').in('id', ids);
+        throwIfError(error);
+        return (data as Row[]).map(packRow);
+      },
+      async getByLegacySetId(setId) {
+        const { data, error } = await client
+          .from('study_packs')
+          .select('*')
+          .eq('legacy_set_id', setId)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? packRow(data as Row) : null;
+      },
+      async listUpcomingExams(ownerId, fromDay) {
+        const { data, error } = await client
+          .from('study_packs')
+          .select('*')
+          .eq('owner_id', ownerId)
+          .not('exam_date', 'is', null)
+          .gte('exam_date', fromDay)
+          .order('exam_date', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(packRow);
+      },
+      async create(data) {
+        const payload: Record<string, unknown> = {
+          owner_id: data.ownerId,
+          subject_id: data.subjectId,
+          subject_name: data.subjectName,
+          title: data.title,
+          description: data.description,
+          level: data.level,
+          visibility: data.visibility,
+          exam_date: data.examDate,
+          legacy_set_id: data.legacySetId,
+          owns_legacy_set: data.ownsLegacySet ?? false,
+        };
+        if (data.publisher !== undefined) payload['publisher'] = data.publisher;
+        if (data.method !== undefined) payload['method'] = data.method;
+        if (data.methodEdition !== undefined) payload['method_edition'] = data.methodEdition;
+        if (data.methodChapter !== undefined) payload['method_chapter'] = data.methodChapter;
+        const { data: row, error } = await client
+          .from('study_packs')
+          .insert(payload)
+          .select()
+          .single();
+        throwIfError(error);
+        return packRow(row as Row);
+      },
+      async update(id, patch) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (patch.subjectId !== undefined) payload['subject_id'] = patch.subjectId;
+        if (patch.subjectName !== undefined) payload['subject_name'] = patch.subjectName;
+        if (patch.title !== undefined) payload['title'] = patch.title;
+        if (patch.description !== undefined) payload['description'] = patch.description;
+        if (patch.level !== undefined) payload['level'] = patch.level;
+        if (patch.visibility !== undefined) payload['visibility'] = patch.visibility;
+        if (patch.examDate !== undefined) payload['exam_date'] = patch.examDate;
+        if (patch.summary !== undefined) payload['summary'] = patch.summary;
+        if (patch.summarySourceId !== undefined) payload['summary_source_id'] = patch.summarySourceId;
+        if (patch.summaryUpdatedAt !== undefined) payload['summary_updated_at'] = patch.summaryUpdatedAt;
+        if (patch.publisher !== undefined) payload['publisher'] = patch.publisher;
+        if (patch.method !== undefined) payload['method'] = patch.method;
+        if (patch.methodEdition !== undefined) payload['method_edition'] = patch.methodEdition;
+        if (patch.methodChapter !== undefined) payload['method_chapter'] = patch.methodChapter;
+        const { data, error } = await client
+          .from('study_packs')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        throwIfError(error);
+        return packRow(data as Row);
+      },
+      async delete(id) {
+        const { error } = await client.from('study_packs').delete().eq('id', id);
+        throwIfError(error);
+      },
+    },
+
+    packSources: {
+      async get(id) {
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? packSourceRow(data as Row) : null;
+      },
+      async listByPack(packId) {
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .select('*')
+          .eq('pack_id', packId)
+          .order('created_at', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(packSourceRow);
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        if (packIds.length === 0) return counts;
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .select('pack_id')
+          .in('pack_id', packIds);
+        throwIfError(error);
+        for (const row of (data ?? []) as Row[]) {
+          const packId = field<string>(row, 'pack_id');
+          if (counts[packId] !== undefined) counts[packId] += 1;
+        }
+        return counts;
+      },
+      async create(data) {
+        const payload = {
+          pack_id: data.packId,
+          owner_id: data.ownerId,
+          kind: data.kind,
+          title: data.title,
+          status: data.status,
+          content: data.content,
+          character_count: data.characterCount,
+          page_count: data.pageCount,
+          failure_reason: data.failureReason,
+          legacy_set_id: data.legacySetId,
+          origin: data.origin,
+        };
+        const { data: row, error } = await client
+          .from('study_pack_sources')
+          .insert(payload)
+          .select()
+          .single();
+        throwIfError(error);
+        return packSourceRow(row as Row);
+      },
+      async update(id, patch) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (patch.title !== undefined) payload['title'] = patch.title;
+        if (patch.status !== undefined) payload['status'] = patch.status;
+        if (patch.content !== undefined) payload['content'] = patch.content;
+        if (patch.characterCount !== undefined) payload['character_count'] = patch.characterCount;
+        if (patch.pageCount !== undefined) payload['page_count'] = patch.pageCount;
+        if (patch.failureReason !== undefined) payload['failure_reason'] = patch.failureReason;
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        throwIfError(error);
+        return packSourceRow(data as Row);
+      },
+      async delete(id) {
+        const { error } = await client.from('study_pack_sources').delete().eq('id', id);
+        throwIfError(error);
+      },
+    },
+
+    concepts: {
+      async get(id) {
+        const { data, error } = await client.from('concepts').select('*').eq('id', id).maybeSingle();
+        throwIfError(error);
+        return data ? conceptRow(data as Row) : null;
+      },
+      async listByPack(packId) {
+        const { data, error } = await client
+          .from('concepts')
+          .select('*')
+          .eq('pack_id', packId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(conceptRow);
+      },
+      async listByIds(ids) {
+        if (ids.length === 0) return [];
+        const { data, error } = await client.from('concepts').select('*').in('id', ids);
+        throwIfError(error);
+        return (data as Row[]).map(conceptRow);
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        if (packIds.length === 0) return counts;
+        const { data, error } = await client.from('concepts').select('pack_id').in('pack_id', packIds);
+        throwIfError(error);
+        for (const row of (data ?? []) as Row[]) {
+          const packId = field<string>(row, 'pack_id');
+          if (counts[packId] !== undefined) counts[packId] += 1;
+        }
+        return counts;
+      },
+      async createMany(packId, concepts: NewConcept[]) {
+        if (concepts.length === 0) return [];
+        const payload = concepts.map((concept) => ({
+          pack_id: packId,
+          source_id: concept.sourceId,
+          name: concept.name,
+          explanation: concept.explanation,
+          origin: concept.origin,
+          position: concept.position,
+        }));
+        const { data, error } = await client.from('concepts').insert(payload).select();
+        throwIfError(error);
+        return (data as Row[]).map(conceptRow);
+      },
+      async update(id, patch) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (patch.name !== undefined) payload['name'] = patch.name;
+        if (patch.explanation !== undefined) payload['explanation'] = patch.explanation;
+        if (patch.position !== undefined) payload['position'] = patch.position;
+        const { data, error } = await client
+          .from('concepts')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        throwIfError(error);
+        return conceptRow(data as Row);
+      },
+      async delete(id) {
+        const { error } = await client.from('concepts').delete().eq('id', id);
+        throwIfError(error);
+      },
+      async detachFromCards(conceptId) {
+        const { error } = await client
+          .from('cards')
+          .update({ concept_id: null })
+          .eq('concept_id', conceptId);
+        throwIfError(error);
+      },
+    },
+
+    conceptMastery: {
+      async get(userId, conceptId) {
+        const { data, error } = await client
+          .from('concept_mastery')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('concept_id', conceptId)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? conceptMasteryRow(data as Row) : null;
+      },
+      async listByUser(userId) {
+        const { data, error } = await client
+          .from('concept_mastery')
+          .select('*')
+          .eq('user_id', userId);
+        throwIfError(error);
+        return (data as Row[]).map(conceptMasteryRow);
+      },
+      async listByUserAndPack(userId, packId) {
+        const { data: concepts, error: conceptError } = await client
+          .from('concepts')
+          .select('id')
+          .eq('pack_id', packId);
+        throwIfError(conceptError);
+        const conceptIds = (concepts as Row[]).map((row) => field<string>(row, 'id'));
+        if (conceptIds.length === 0) return [];
+        const { data, error } = await client
+          .from('concept_mastery')
+          .select('*')
+          .eq('user_id', userId)
+          .in('concept_id', conceptIds);
+        throwIfError(error);
+        return (data as Row[]).map(conceptMasteryRow);
+      },
+      async upsert(record) {
+        const payload = {
+          user_id: record.userId,
+          concept_id: record.conceptId,
+          mastery: record.mastery,
+          attempts: record.attempts,
+          correct_count: record.correctCount,
+          incorrect_count: record.incorrectCount,
+          last_practiced_at: record.lastPracticedAt,
+          updated_at: new Date().toISOString(),
+        };
+        const { data, error } = await client
+          .from('concept_mastery')
+          .upsert(payload, { onConflict: 'user_id,concept_id' })
+          .select()
+          .single();
+        throwIfError(error);
+        return conceptMasteryRow(data as Row);
+      },
+    },
+
+    practiceQuestions: {
+      async get(id) {
+        const { data, error } = await client
+          .from('practice_questions')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? practiceQuestionRow(data as Row) : null;
+      },
+      async listByPack(packId) {
+        const { data, error } = await client
+          .from('practice_questions')
+          .select('*')
+          .eq('pack_id', packId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(practiceQuestionRow);
+      },
+      async listByIds(ids) {
+        if (ids.length === 0) return [];
+        const { data, error } = await client.from('practice_questions').select('*').in('id', ids);
+        throwIfError(error);
+        return (data as Row[]).map(practiceQuestionRow);
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        if (packIds.length === 0) return counts;
+        const { data, error } = await client
+          .from('practice_questions')
+          .select('pack_id')
+          .in('pack_id', packIds);
+        throwIfError(error);
+        for (const row of (data ?? []) as Row[]) {
+          const packId = field<string>(row, 'pack_id');
+          if (counts[packId] !== undefined) counts[packId] += 1;
+        }
+        return counts;
+      },
+      async createMany(packId, questions: NewPracticeQuestion[]) {
+        if (questions.length === 0) return [];
+        const payload = questions.map((question) => ({
+          pack_id: packId,
+          concept_id: question.conceptId,
+          source_id: question.sourceId,
+          prompt: question.prompt,
+          question_type: question.questionType,
+          correct_answer: question.correctAnswer,
+          options: question.options,
+          explanation: question.explanation,
+          origin: question.origin,
+          position: question.position,
+        }));
+        const { data, error } = await client.from('practice_questions').insert(payload).select();
+        throwIfError(error);
+        return (data as Row[]).map(practiceQuestionRow);
+      },
+      async update(id, patch) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (patch.prompt !== undefined) payload['prompt'] = patch.prompt;
+        if (patch.questionType !== undefined) payload['question_type'] = patch.questionType;
+        if (patch.correctAnswer !== undefined) payload['correct_answer'] = patch.correctAnswer;
+        if (patch.options !== undefined) payload['options'] = patch.options;
+        if (patch.explanation !== undefined) payload['explanation'] = patch.explanation;
+        if (patch.conceptId !== undefined) payload['concept_id'] = patch.conceptId;
+        const { data, error } = await client
+          .from('practice_questions')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        throwIfError(error);
+        return practiceQuestionRow(data as Row);
+      },
+      async delete(id) {
+        const { error } = await client.from('practice_questions').delete().eq('id', id);
+        throwIfError(error);
+      },
+    },
+
+    practiceAttempts: {
+      async create(data) {
+        const payload = {
+          user_id: data.userId,
+          pack_id: data.packId,
+          question_id: data.questionId,
+          concept_id: data.conceptId,
+          answer: data.answer,
+          verdict: data.verdict,
+        };
+        const { data: row, error } = await client
+          .from('practice_attempts')
+          .insert(payload)
+          .select()
+          .single();
+        throwIfError(error);
+        return practiceAttemptRow(row as Row);
+      },
+      async listByUser(userId) {
+        const { data, error } = await client
+          .from('practice_attempts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        throwIfError(error);
+        return (data as Row[]).map(practiceAttemptRow);
+      },
+      async listByUserAndPack(userId, packId) {
+        const { data, error } = await client
+          .from('practice_attempts')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('pack_id', packId)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        throwIfError(error);
+        return (data as Row[]).map(practiceAttemptRow);
+      },
+    },
+
+    tests: {
+      async get(id) {
+        const { data, error } = await client.from('tests').select('*').eq('id', id).maybeSingle();
+        throwIfError(error);
+        return data ? testRow(data as Row) : null;
+      },
+      async listByPack(packId) {
+        const { data, error } = await client
+          .from('tests')
+          .select('*')
+          .eq('pack_id', packId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        throwIfError(error);
+        return (data as Row[]).map(testRow);
+      },
+      async listByUser(userId) {
+        const { data, error } = await client
+          .from('tests')
+          .select('*')
+          .eq('owner_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        throwIfError(error);
+        return (data as Row[]).map(testRow);
+      },
+      async createTest(data) {
+        const { data: row, error } = await client
+          .from('tests')
+          .insert({
+            pack_id: data.packId,
+            owner_id: data.ownerId,
+            title: data.title,
+            mode: data.mode,
+            question_count: data.questionIds.length,
+          })
+          .select()
+          .single();
+        throwIfError(error);
+        const test = testRow(row as Row);
+        const payload = data.questionIds.map((questionId, index) => ({
+          test_id: test.id,
+          question_id: questionId,
+          position: index,
+        }));
+        const { data: questionRows, error: questionError } =
+          payload.length > 0
+            ? await client.from('test_questions').insert(payload).select()
+            : { data: [], error: null };
+        throwIfError(questionError);
+        return { test, questions: (questionRows as Row[]).map(testQuestionRow) };
+      },
+      async listQuestions(testId) {
+        const { data, error } = await client
+          .from('test_questions')
+          .select('*')
+          .eq('test_id', testId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(testQuestionRow);
+      },
+      async delete(id) {
+        const { error } = await client.from('tests').delete().eq('id', id);
+        throwIfError(error);
+      },
+    },
+
+    testAttempts: {
+      async create(data) {
+        const payload = {
+          test_id: data.testId,
+          pack_id: data.packId,
+          user_id: data.userId,
+          score: data.score,
+          total: data.total,
+          correct_count: data.correctCount,
+          partial_count: data.partialCount,
+          incorrect_count: data.incorrectCount,
+          answers: data.answers,
+          strong_concept_ids: data.strongConceptIds,
+          weak_concept_ids: data.weakConceptIds,
+        };
+        const { data: row, error } = await client
+          .from('test_attempts')
+          .insert(payload)
+          .select()
+          .single();
+        throwIfError(error);
+        return testAttemptRow(row as Row);
+      },
+      async listByUserAndPack(userId, packId) {
+        const { data, error } = await client
+          .from('test_attempts')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('pack_id', packId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        throwIfError(error);
+        return (data as Row[]).map(testAttemptRow);
+      },
+      async listByUser(userId) {
+        const { data, error } = await client
+          .from('test_attempts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        throwIfError(error);
+        return (data as Row[]).map(testAttemptRow);
+      },
+    },
+
+    studyPlans: {
+      async getByPack(packId) {
+        const { data, error } = await client
+          .from('study_plans')
+          .select('*')
+          .eq('pack_id', packId)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? studyPlanRow(data as Row) : null;
+      },
+      async upsert(data) {
+        const payload = {
+          pack_id: data.packId,
+          owner_id: data.ownerId,
+          exam_date: data.examDate,
+          overview: data.overview,
+          sessions: data.sessions,
+          updated_at: new Date().toISOString(),
+        };
+        const { data: row, error } = await client
+          .from('study_plans')
+          .upsert(payload, { onConflict: 'pack_id' })
+          .select()
+          .single();
+        throwIfError(error);
+        return studyPlanRow(row as Row);
+      },
+      async deleteByPack(packId) {
+        const { error } = await client.from('study_plans').delete().eq('pack_id', packId);
+        throwIfError(error);
       },
     },
   };

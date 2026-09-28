@@ -10,9 +10,16 @@ import type {
   AdminUserRecord,
   CardProgressRecord,
   CardRecord,
+  ConceptMasteryRecord,
+  ConceptMasteryUpsert,
+  ConceptRecord,
   FavoriteRecord,
   NewCard,
+  NewConcept,
+  NewPracticeQuestion,
   NewQuizQuestion,
+  PracticeAttemptRecord,
+  PracticeQuestionRecord,
   ProfileRecord,
   ProgressUpsert,
   QuizAttemptRecord,
@@ -23,11 +30,19 @@ import type {
   ReportRecord,
   Role,
   SetFilter,
+  StudyPackRecord,
+  StudyPackSourceRecord,
+  StudyPlanRecord,
   StudySessionCreate,
   StudySessionPatch,
   StudySessionRecord,
   StudySetRecord,
   SubjectRecord,
+  TestAnswerRecord,
+  TestAttemptRecord,
+  TestMode,
+  TestQuestionRecord,
+  TestRecord,
 } from './types.js';
 
 export interface Database {
@@ -110,7 +125,14 @@ export interface Database {
     createMany(setId: string, cards: NewCard[]): Promise<CardRecord[]>;
     update(
       id: string,
-      patch: { question?: string; answer?: string; position?: number },
+      patch: {
+        question?: string;
+        answer?: string;
+        position?: number;
+        /** Study Pack provenance (nullable; classic flows never set these). */
+        sourceId?: string | null;
+        conceptId?: string | null;
+      },
     ): Promise<CardRecord>;
     delete(id: string): Promise<void>;
     deleteBySet(setId: string): Promise<void>;
@@ -183,5 +205,185 @@ export interface Database {
     count(filter: { status?: string }): Promise<number>;
     update(id: string, patch: ReportPatch): Promise<ReportRecord>;
     countOpen(): Promise<number>;
+  };
+
+  /* ----------------------------- study packs ----------------------------- */
+
+  packs: {
+    get(id: string): Promise<StudyPackRecord | null>;
+    listByOwner(ownerId: string): Promise<StudyPackRecord[]>;
+    listByOwnerAndSubject(ownerId: string, subjectId: string): Promise<StudyPackRecord[]>;
+    listByIds(ids: string[]): Promise<StudyPackRecord[]>;
+    /** Reverse lookup for the compatibility bridge from a study_sets row. */
+    getByLegacySetId(setId: string): Promise<StudyPackRecord | null>;
+    /** Packs with an exam date on or after `fromDay` (YYYY-MM-DD), soonest first. */
+    listUpcomingExams(ownerId: string, fromDay: string): Promise<StudyPackRecord[]>;
+    create(data: {
+      ownerId: string;
+      subjectId: string | null;
+      subjectName: string | null;
+      title: string;
+      description: string;
+      level: string;
+      visibility: string;
+      examDate: string | null;
+      legacySetId: string | null;
+      ownsLegacySet?: boolean;
+      publisher?: string | null;
+      method?: string | null;
+      methodEdition?: string | null;
+      methodChapter?: string | null;
+    }): Promise<StudyPackRecord>;
+    update(
+      id: string,
+      patch: {
+        subjectId?: string | null;
+        subjectName?: string | null;
+        title?: string;
+        description?: string;
+        level?: string;
+        visibility?: string;
+        examDate?: string | null;
+        summary?: string | null;
+        summarySourceId?: string | null;
+        summaryUpdatedAt?: string | null;
+        publisher?: string | null;
+        method?: string | null;
+        methodEdition?: string | null;
+        methodChapter?: string | null;
+      },
+    ): Promise<StudyPackRecord>;
+    delete(id: string): Promise<void>;
+  };
+
+  packSources: {
+    get(id: string): Promise<StudyPackSourceRecord | null>;
+    listByPack(packId: string): Promise<StudyPackSourceRecord[]>;
+    countByPacks(packIds: string[]): Promise<Record<string, number>>;
+    create(data: {
+      packId: string;
+      ownerId: string;
+      kind: StudyPackSourceRecord['kind'];
+      title: string;
+      status: StudyPackSourceRecord['status'];
+      content: string | null;
+      characterCount: number;
+      pageCount: number | null;
+      failureReason: string | null;
+      legacySetId: string | null;
+      origin: StudyPackSourceRecord['origin'];
+    }): Promise<StudyPackSourceRecord>;
+    update(
+      id: string,
+      patch: {
+        title?: string;
+        status?: StudyPackSourceRecord['status'];
+        content?: string | null;
+        characterCount?: number;
+        pageCount?: number | null;
+        failureReason?: string | null;
+      },
+    ): Promise<StudyPackSourceRecord>;
+    delete(id: string): Promise<void>;
+  };
+
+  concepts: {
+    get(id: string): Promise<ConceptRecord | null>;
+    listByPack(packId: string): Promise<ConceptRecord[]>;
+    listByIds(ids: string[]): Promise<ConceptRecord[]>;
+    countByPacks(packIds: string[]): Promise<Record<string, number>>;
+    createMany(packId: string, concepts: NewConcept[]): Promise<ConceptRecord[]>;
+    update(
+      id: string,
+      patch: { name?: string; explanation?: string; position?: number },
+    ): Promise<ConceptRecord>;
+    delete(id: string): Promise<void>;
+    /** Cards/questions pointing at this concept, used for safe deletes. */
+    detachFromCards(conceptId: string): Promise<void>;
+  };
+
+  conceptMastery: {
+    get(userId: string, conceptId: string): Promise<ConceptMasteryRecord | null>;
+    listByUser(userId: string): Promise<ConceptMasteryRecord[]>;
+    listByUserAndPack(userId: string, packId: string): Promise<ConceptMasteryRecord[]>;
+    upsert(record: ConceptMasteryUpsert): Promise<ConceptMasteryRecord>;
+  };
+
+  practiceQuestions: {
+    get(id: string): Promise<PracticeQuestionRecord | null>;
+    listByPack(packId: string): Promise<PracticeQuestionRecord[]>;
+    listByIds(ids: string[]): Promise<PracticeQuestionRecord[]>;
+    countByPacks(packIds: string[]): Promise<Record<string, number>>;
+    createMany(packId: string, questions: NewPracticeQuestion[]): Promise<PracticeQuestionRecord[]>;
+    update(
+      id: string,
+      patch: {
+        prompt?: string;
+        questionType?: PracticeQuestionRecord['questionType'];
+        correctAnswer?: string;
+        options?: string[] | null;
+        explanation?: string;
+        conceptId?: string | null;
+      },
+    ): Promise<PracticeQuestionRecord>;
+    delete(id: string): Promise<void>;
+  };
+
+  practiceAttempts: {
+    create(data: {
+      userId: string;
+      packId: string;
+      questionId: string;
+      conceptId: string | null;
+      answer: string;
+      verdict: PracticeAttemptRecord['verdict'];
+    }): Promise<PracticeAttemptRecord>;
+    listByUser(userId: string): Promise<PracticeAttemptRecord[]>;
+    listByUserAndPack(userId: string, packId: string): Promise<PracticeAttemptRecord[]>;
+  };
+
+  tests: {
+    get(id: string): Promise<TestRecord | null>;
+    listByPack(packId: string): Promise<TestRecord[]>;
+    listByUser(userId: string): Promise<TestRecord[]>;
+    createTest(data: {
+      packId: string;
+      ownerId: string;
+      title: string;
+      mode: TestMode;
+      questionIds: string[];
+    }): Promise<{ test: TestRecord; questions: TestQuestionRecord[] }>;
+    listQuestions(testId: string): Promise<TestQuestionRecord[]>;
+    delete(id: string): Promise<void>;
+  };
+
+  testAttempts: {
+    create(data: {
+      testId: string;
+      packId: string;
+      userId: string;
+      score: number;
+      total: number;
+      correctCount: number;
+      partialCount: number;
+      incorrectCount: number;
+      answers: TestAnswerRecord[];
+      strongConceptIds: string[];
+      weakConceptIds: string[];
+    }): Promise<TestAttemptRecord>;
+    listByUserAndPack(userId: string, packId: string): Promise<TestAttemptRecord[]>;
+    listByUser(userId: string): Promise<TestAttemptRecord[]>;
+  };
+
+  studyPlans: {
+    getByPack(packId: string): Promise<StudyPlanRecord | null>;
+    upsert(data: {
+      packId: string;
+      ownerId: string;
+      examDate: string | null;
+      overview: string;
+      sessions: StudyPlanRecord['sessions'];
+    }): Promise<StudyPlanRecord>;
+    deleteByPack(packId: string): Promise<void>;
   };
 }

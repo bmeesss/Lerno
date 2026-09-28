@@ -12,9 +12,15 @@ import type {
   AuthUserRecord,
   CardProgressRecord,
   CardRecord,
+  ConceptMasteryRecord,
+  ConceptRecord,
   FavoriteRecord,
   NewCard,
+  NewConcept,
+  NewPracticeQuestion,
   NewQuizQuestion,
+  PracticeAttemptRecord,
+  PracticeQuestionRecord,
   ProfileRecord,
   ProgressUpsert,
   QuizAttemptRecord,
@@ -25,11 +31,18 @@ import type {
   ReportRecord,
   Role,
   SetFilter,
+  StudyPackRecord,
+  StudyPackSourceRecord,
+  StudyPlanRecord,
   StudySessionCreate,
   StudySessionPatch,
   StudySessionRecord,
   StudySetRecord,
   SubjectRecord,
+  TestAttemptRecord,
+  TestMode,
+  TestQuestionRecord,
+  TestRecord,
 } from './types.js';
 
 export interface MemoryState {
@@ -45,6 +58,17 @@ export interface MemoryState {
   sessions: Map<string, StudySessionRecord>;
   favorites: FavoriteRecord[];
   reports: Map<string, ReportRecord>;
+  /* Study packs */
+  packs: Map<string, StudyPackRecord>;
+  packSources: Map<string, StudyPackSourceRecord>;
+  concepts: Map<string, ConceptRecord>;
+  conceptMastery: Map<string, ConceptMasteryRecord>;
+  practiceQuestions: Map<string, PracticeQuestionRecord>;
+  practiceAttempts: PracticeAttemptRecord[];
+  tests: Map<string, TestRecord>;
+  testQuestions: Map<string, TestQuestionRecord[]>;
+  testAttempts: TestAttemptRecord[];
+  studyPlans: Map<string, StudyPlanRecord>;
 }
 
 export function createMemoryState(): MemoryState {
@@ -61,6 +85,16 @@ export function createMemoryState(): MemoryState {
     sessions: new Map(),
     favorites: [],
     reports: new Map(),
+    packs: new Map(),
+    packSources: new Map(),
+    concepts: new Map(),
+    conceptMastery: new Map(),
+    practiceQuestions: new Map(),
+    practiceAttempts: [],
+    tests: new Map(),
+    testQuestions: new Map(),
+    testAttempts: [],
+    studyPlans: new Map(),
   };
 }
 
@@ -306,6 +340,15 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
             state.quizQuestions.delete(key);
           }
         }
+        // Keep pack ↔ set links honest when the set is deleted directly.
+        for (const [key, pack] of [...state.packs.entries()]) {
+          if (pack.legacySetId === id) {
+            state.packs.set(key, { ...pack, legacySetId: null, ownsLegacySet: false });
+          }
+        }
+        for (const [key, source] of [...state.packSources.entries()]) {
+          if (source.legacySetId === id) state.packSources.delete(key);
+        }
       },
     },
 
@@ -334,6 +377,8 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           question: card.question,
           answer: card.answer,
           position: card.position,
+          sourceId: card.sourceId ?? null,
+          conceptId: card.conceptId ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         }));
@@ -348,6 +393,8 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           question: patch.question ?? existing.question,
           answer: patch.answer ?? existing.answer,
           position: patch.position ?? existing.position,
+          sourceId: patch.sourceId === undefined ? existing.sourceId : patch.sourceId,
+          conceptId: patch.conceptId === undefined ? existing.conceptId : patch.conceptId,
           updatedAt: now(),
         };
         state.cards.set(id, record);
@@ -580,6 +627,476 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
       },
       async countOpen() {
         return [...state.reports.values()].filter((report) => report.status === 'open').length;
+      },
+    },
+
+    /* ----------------------------- study packs ---------------------------- */
+
+    packs: {
+      async get(id) {
+        return state.packs.get(id) ?? null;
+      },
+      async listByOwner(ownerId) {
+        return [...state.packs.values()]
+          .filter((pack) => pack.ownerId === ownerId)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      },
+      async listByOwnerAndSubject(ownerId, subjectId) {
+        return [...state.packs.values()].filter(
+          (pack) => pack.ownerId === ownerId && pack.subjectId === subjectId,
+        );
+      },
+      async listByIds(ids) {
+        const wanted = new Set(ids);
+        return [...state.packs.values()].filter((pack) => wanted.has(pack.id));
+      },
+      async getByLegacySetId(setId) {
+        return [...state.packs.values()].find((pack) => pack.legacySetId === setId) ?? null;
+      },
+      async listUpcomingExams(ownerId, fromDay) {
+        return [...state.packs.values()]
+          .filter((pack) => pack.ownerId === ownerId && pack.examDate !== null && pack.examDate >= fromDay)
+          .sort((a, b) => (a.examDate ?? '').localeCompare(b.examDate ?? ''));
+      },
+      async create(data) {
+        const timestamp = now();
+        const record: StudyPackRecord = {
+          id: randomUUID(),
+          ownerId: data.ownerId,
+          subjectId: data.subjectId,
+          subjectName: data.subjectName,
+          title: data.title,
+          description: data.description,
+          level: data.level,
+          visibility: data.visibility as StudyPackRecord['visibility'],
+          examDate: data.examDate,
+          summary: null,
+          summarySourceId: null,
+          summaryUpdatedAt: null,
+          legacySetId: data.legacySetId,
+          ownsLegacySet: data.ownsLegacySet ?? false,
+          publisher: data.publisher ?? null,
+          method: data.method ?? null,
+          methodEdition: data.methodEdition ?? null,
+          methodChapter: data.methodChapter ?? null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        state.packs.set(record.id, record);
+        return record;
+      },
+      async update(id, patch) {
+        const existing = state.packs.get(id);
+        if (!existing) throw new Error(`pack ${id} not found`);
+        const record: StudyPackRecord = {
+          ...existing,
+          subjectId: patch.subjectId === undefined ? existing.subjectId : patch.subjectId,
+          subjectName: patch.subjectName === undefined ? existing.subjectName : patch.subjectName,
+          title: patch.title ?? existing.title,
+          description: patch.description ?? existing.description,
+          level: patch.level ?? existing.level,
+          visibility: (patch.visibility as StudyPackRecord['visibility']) ?? existing.visibility,
+          examDate: patch.examDate === undefined ? existing.examDate : patch.examDate,
+          summary: patch.summary === undefined ? existing.summary : patch.summary,
+          summarySourceId:
+            patch.summarySourceId === undefined ? existing.summarySourceId : patch.summarySourceId,
+          summaryUpdatedAt:
+            patch.summaryUpdatedAt === undefined ? existing.summaryUpdatedAt : patch.summaryUpdatedAt,
+          publisher: patch.publisher === undefined ? existing.publisher : patch.publisher,
+          method: patch.method === undefined ? existing.method : patch.method,
+          methodEdition: patch.methodEdition === undefined ? existing.methodEdition : patch.methodEdition,
+          methodChapter: patch.methodChapter === undefined ? existing.methodChapter : patch.methodChapter,
+          updatedAt: now(),
+        };
+        state.packs.set(id, record);
+        return record;
+      },
+      async delete(id) {
+        state.packs.delete(id);
+        for (const [key, source] of [...state.packSources.entries()]) {
+          if (source.packId === id) state.packSources.delete(key);
+        }
+        for (const [key, concept] of [...state.concepts.entries()]) {
+          if (concept.packId === id) {
+            state.concepts.delete(key);
+            state.conceptMastery.delete(
+              [...state.conceptMastery.keys()].find((k) => k.endsWith(`:${key}`)) ?? '',
+            );
+          }
+        }
+        for (const [key, question] of [...state.practiceQuestions.entries()]) {
+          if (question.packId === id) state.practiceQuestions.delete(key);
+        }
+        state.practiceAttempts = state.practiceAttempts.filter((attempt) => attempt.packId !== id);
+        state.testAttempts = state.testAttempts.filter((attempt) => attempt.packId !== id);
+        for (const [key, test] of [...state.tests.entries()]) {
+          if (test.packId === id) {
+            state.tests.delete(key);
+            state.testQuestions.delete(key);
+          }
+        }
+        state.studyPlans.delete(id);
+      },
+    },
+
+    packSources: {
+      async get(id) {
+        return state.packSources.get(id) ?? null;
+      },
+      async listByPack(packId) {
+        return [...state.packSources.values()]
+          .filter((source) => source.packId === packId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        for (const source of state.packSources.values()) {
+          if (counts[source.packId] !== undefined) counts[source.packId] += 1;
+        }
+        return counts;
+      },
+      async create(data) {
+        const timestamp = now();
+        const record: StudyPackSourceRecord = {
+          id: randomUUID(),
+          packId: data.packId,
+          ownerId: data.ownerId,
+          kind: data.kind,
+          title: data.title,
+          status: data.status,
+          content: data.content,
+          characterCount: data.characterCount,
+          pageCount: data.pageCount,
+          failureReason: data.failureReason,
+          legacySetId: data.legacySetId,
+          origin: data.origin,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        state.packSources.set(record.id, record);
+        return record;
+      },
+      async update(id, patch) {
+        const existing = state.packSources.get(id);
+        if (!existing) throw new Error(`pack source ${id} not found`);
+        const record: StudyPackSourceRecord = {
+          ...existing,
+          title: patch.title ?? existing.title,
+          status: patch.status ?? existing.status,
+          content: patch.content === undefined ? existing.content : patch.content,
+          characterCount: patch.characterCount ?? existing.characterCount,
+          pageCount: patch.pageCount === undefined ? existing.pageCount : patch.pageCount,
+          failureReason:
+            patch.failureReason === undefined ? existing.failureReason : patch.failureReason,
+          updatedAt: now(),
+        };
+        state.packSources.set(id, record);
+        return record;
+      },
+      async delete(id) {
+        state.packSources.delete(id);
+      },
+    },
+
+    concepts: {
+      async get(id) {
+        return state.concepts.get(id) ?? null;
+      },
+      async listByPack(packId) {
+        return [...state.concepts.values()]
+          .filter((concept) => concept.packId === packId)
+          .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+      },
+      async listByIds(ids) {
+        const wanted = new Set(ids);
+        return [...state.concepts.values()].filter((concept) => wanted.has(concept.id));
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        for (const concept of state.concepts.values()) {
+          if (counts[concept.packId] !== undefined) counts[concept.packId] += 1;
+        }
+        return counts;
+      },
+      async createMany(packId, concepts: NewConcept[]) {
+        const timestamp = now();
+        const created: ConceptRecord[] = concepts.map((concept) => ({
+          id: randomUUID(),
+          packId,
+          sourceId: concept.sourceId,
+          name: concept.name,
+          explanation: concept.explanation,
+          origin: concept.origin,
+          position: concept.position,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }));
+        for (const concept of created) state.concepts.set(concept.id, concept);
+        return created;
+      },
+      async update(id, patch) {
+        const existing = state.concepts.get(id);
+        if (!existing) throw new Error(`concept ${id} not found`);
+        const record: ConceptRecord = {
+          ...existing,
+          name: patch.name ?? existing.name,
+          explanation: patch.explanation ?? existing.explanation,
+          position: patch.position ?? existing.position,
+          updatedAt: now(),
+        };
+        state.concepts.set(id, record);
+        return record;
+      },
+      async delete(id) {
+        state.concepts.delete(id);
+        for (const [key, mastery] of [...state.conceptMastery.entries()]) {
+          if (mastery.conceptId === id) state.conceptMastery.delete(key);
+        }
+        for (const [key, card] of [...state.cards.entries()]) {
+          if (card.conceptId === id) state.cards.set(key, { ...card, conceptId: null });
+        }
+        for (const [key, question] of [...state.practiceQuestions.entries()]) {
+          if (question.conceptId === id) {
+            state.practiceQuestions.set(key, { ...question, conceptId: null });
+          }
+        }
+      },
+      async detachFromCards(conceptId) {
+        for (const [key, card] of [...state.cards.entries()]) {
+          if (card.conceptId === conceptId) state.cards.set(key, { ...card, conceptId: null });
+        }
+      },
+    },
+
+    conceptMastery: {
+      async get(userId, conceptId) {
+        return state.conceptMastery.get(`${userId}:${conceptId}`) ?? null;
+      },
+      async listByUser(userId) {
+        return [...state.conceptMastery.values()].filter((row) => row.userId === userId);
+      },
+      async listByUserAndPack(userId, packId) {
+        const conceptIds = new Set(
+          [...state.concepts.values()]
+            .filter((concept) => concept.packId === packId)
+            .map((concept) => concept.id),
+        );
+        return [...state.conceptMastery.values()].filter(
+          (row) => row.userId === userId && conceptIds.has(row.conceptId),
+        );
+      },
+      async upsert(record) {
+        const key = `${record.userId}:${record.conceptId}`;
+        const existing = state.conceptMastery.get(key);
+        const timestamp = now();
+        const saved: ConceptMasteryRecord = {
+          id: existing?.id ?? randomUUID(),
+          userId: record.userId,
+          conceptId: record.conceptId,
+          mastery: record.mastery,
+          attempts: record.attempts,
+          correctCount: record.correctCount,
+          incorrectCount: record.incorrectCount,
+          lastPracticedAt: record.lastPracticedAt,
+          createdAt: existing?.createdAt ?? timestamp,
+          updatedAt: timestamp,
+        };
+        state.conceptMastery.set(key, saved);
+        return saved;
+      },
+    },
+
+    practiceQuestions: {
+      async get(id) {
+        return state.practiceQuestions.get(id) ?? null;
+      },
+      async listByPack(packId) {
+        return [...state.practiceQuestions.values()]
+          .filter((question) => question.packId === packId)
+          .sort((a, b) => a.position - b.position);
+      },
+      async listByIds(ids) {
+        const wanted = new Set(ids);
+        return [...state.practiceQuestions.values()].filter((question) => wanted.has(question.id));
+      },
+      async countByPacks(packIds) {
+        const counts: Record<string, number> = {};
+        for (const id of packIds) counts[id] = 0;
+        for (const question of state.practiceQuestions.values()) {
+          if (counts[question.packId] !== undefined) counts[question.packId] += 1;
+        }
+        return counts;
+      },
+      async createMany(packId, questions: NewPracticeQuestion[]) {
+        const timestamp = now();
+        const created: PracticeQuestionRecord[] = questions.map((question) => ({
+          id: randomUUID(),
+          packId,
+          conceptId: question.conceptId,
+          sourceId: question.sourceId,
+          prompt: question.prompt,
+          questionType: question.questionType,
+          correctAnswer: question.correctAnswer,
+          options: question.options,
+          explanation: question.explanation,
+          origin: question.origin,
+          position: question.position,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }));
+        for (const question of created) state.practiceQuestions.set(question.id, question);
+        return created;
+      },
+      async update(id, patch) {
+        const existing = state.practiceQuestions.get(id);
+        if (!existing) throw new Error(`practice question ${id} not found`);
+        const record: PracticeQuestionRecord = {
+          ...existing,
+          prompt: patch.prompt ?? existing.prompt,
+          questionType: patch.questionType ?? existing.questionType,
+          correctAnswer: patch.correctAnswer ?? existing.correctAnswer,
+          options: patch.options === undefined ? existing.options : patch.options,
+          explanation: patch.explanation ?? existing.explanation,
+          conceptId: patch.conceptId === undefined ? existing.conceptId : patch.conceptId,
+          updatedAt: now(),
+        };
+        state.practiceQuestions.set(id, record);
+        return record;
+      },
+      async delete(id) {
+        state.practiceQuestions.delete(id);
+      },
+    },
+
+    practiceAttempts: {
+      async create(data) {
+        const record: PracticeAttemptRecord = {
+          id: randomUUID(),
+          userId: data.userId,
+          packId: data.packId,
+          questionId: data.questionId,
+          conceptId: data.conceptId,
+          answer: data.answer,
+          verdict: data.verdict,
+          createdAt: now(),
+        };
+        state.practiceAttempts.push(record);
+        return record;
+      },
+      async listByUser(userId) {
+        return state.practiceAttempts
+          .filter((attempt) => attempt.userId === userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async listByUserAndPack(userId, packId) {
+        return state.practiceAttempts
+          .filter((attempt) => attempt.userId === userId && attempt.packId === packId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+    },
+
+    tests: {
+      async get(id) {
+        return state.tests.get(id) ?? null;
+      },
+      async listByPack(packId) {
+        return [...state.tests.values()]
+          .filter((test) => test.packId === packId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async listByUser(userId) {
+        return [...state.tests.values()]
+          .filter((test) => test.ownerId === userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async createTest(data) {
+        const test: TestRecord = {
+          id: randomUUID(),
+          packId: data.packId,
+          ownerId: data.ownerId,
+          title: data.title,
+          mode: data.mode as TestMode,
+          questionCount: data.questionIds.length,
+          createdAt: now(),
+        };
+        const questions: TestQuestionRecord[] = data.questionIds.map((questionId, index) => ({
+          id: randomUUID(),
+          testId: test.id,
+          questionId,
+          position: index,
+        }));
+        state.tests.set(test.id, test);
+        state.testQuestions.set(test.id, questions);
+        return { test, questions };
+      },
+      async listQuestions(testId) {
+        return (state.testQuestions.get(testId) ?? [])
+          .slice()
+          .sort((a, b) => a.position - b.position);
+      },
+      async delete(id) {
+        state.tests.delete(id);
+        state.testQuestions.delete(id);
+        state.testAttempts = state.testAttempts.filter((attempt) => attempt.testId !== id);
+      },
+    },
+
+    testAttempts: {
+      async create(data) {
+        const record: TestAttemptRecord = {
+          id: randomUUID(),
+          testId: data.testId,
+          packId: data.packId,
+          userId: data.userId,
+          score: data.score,
+          total: data.total,
+          correctCount: data.correctCount,
+          partialCount: data.partialCount,
+          incorrectCount: data.incorrectCount,
+          answers: data.answers,
+          strongConceptIds: data.strongConceptIds,
+          weakConceptIds: data.weakConceptIds,
+          createdAt: now(),
+        };
+        state.testAttempts.push(record);
+        return record;
+      },
+      async listByUserAndPack(userId, packId) {
+        return state.testAttempts
+          .filter((attempt) => attempt.userId === userId && attempt.packId === packId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async listByUser(userId) {
+        return state.testAttempts
+          .filter((attempt) => attempt.userId === userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+    },
+
+    studyPlans: {
+      async getByPack(packId) {
+        return state.studyPlans.get(packId) ?? null;
+      },
+      async upsert(data) {
+        const existing = state.studyPlans.get(data.packId);
+        const timestamp = now();
+        const record: StudyPlanRecord = {
+          id: existing?.id ?? randomUUID(),
+          packId: data.packId,
+          ownerId: data.ownerId,
+          examDate: data.examDate,
+          overview: data.overview,
+          sessions: data.sessions,
+          createdAt: existing?.createdAt ?? timestamp,
+          updatedAt: timestamp,
+        };
+        state.studyPlans.set(data.packId, record);
+        return record;
+      },
+      async deleteByPack(packId) {
+        state.studyPlans.delete(packId);
       },
     },
   };
