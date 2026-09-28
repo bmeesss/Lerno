@@ -12,6 +12,7 @@ import type {
   ExplainSetBody,
   FinishStudyBody,
   GenerateQuestionsBody,
+  GenerateQuizBody,
   GenerateSetBody,
   HintRequestBody,
   SummarizeSetBody,
@@ -53,6 +54,15 @@ export const aiLearningController = {
   }),
 
   // ------------------------------------------------------------ overhoor mode
+
+  /** POST /api/ai/sets/:setId/quiz — generated quiz, schema validated (#7). */
+  generateQuiz: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const { setId } = req.params as { setId: string };
+    const body = req.body as GenerateQuizBody;
+    const result = await aiLearningService.generateQuiz(req.db, userId, setId, body);
+    sendOk(res, { questions: result.questions, meta: result.meta });
+  }),
 
   /** POST /api/ai/generate-set — preview only, never auto-saved (#6). */
   generateSet: asyncHandler(async (req: Request, res: Response) => {

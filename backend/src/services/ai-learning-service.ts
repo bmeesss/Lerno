@@ -42,6 +42,7 @@ import type {
   EvaluateAnswerBody,
   FinishStudyBody,
   GenerateQuestionsBody,
+  GenerateQuizBody,
   GenerateSetBody,
   HintRequestBody,
 } from '../validators/ai-set.validators.js';
@@ -199,6 +200,12 @@ const DIFFICULTY_HINT: Record<string, string> = {
   hard: 'Apply or connect: combine two ideas, or transfer to a new example.',
 };
 
+const QUIZ_TYPE_HINT: Record<string, string> = {
+  multiple_choice: 'multiple choice with exactly 4 options and a correctIndex',
+  open: 'open questions with a short expected answer',
+  true_false: 'statements the student judges with True/False',
+};
+
 /** Questions scale with the requested count — 15 questions need more room. */
 function questionsBudget(count: number): number {
   return Math.min(2200, 520 + count * 110);
@@ -329,6 +336,65 @@ export const aiLearningService = {
         cardId: card?.id ?? null,
       };
     });
+
+    return {
+      questions,
+      meta: {
+        setId,
+        totalCards: loaded.totalCards,
+        contextCards: loaded.contextCards,
+        omittedCards: loaded.totalCards - loaded.contextCards,
+      },
+    };
+  },
+
+  /**
+   * "Genereer quiz" (#7): a real quiz object (multiple choice, open,
+   * true/false) generated from the set and validated with Zod, so the frontend
+   * can render it as a quiz instead of parsing markdown.
+   */
+  async generateQuiz(
+    db: Database,
+    userId: string,
+    setId: string,
+    body: GenerateQuizBody,
+  ): Promise<{ questions: GeneratedQuizQuestion[]; meta: AiSetMeta }> {
+    const loaded = await loadSetForAi(db, userId, setId);
+    const payload = [
+      `TASK: Write ${body.count} quiz questions.`,
+      `TYPES TO USE (only these): ${body.types.join(', ')} — ${body.types
+        .map((type) => QUIZ_TYPE_HINT[type] ?? type)
+        .join('; ')}`,
+      `DIFFICULTY: ${body.difficulty} — ${DIFFICULTY_HINT[body.difficulty] ?? ''}`,
+      '',
+      loaded.context,
+      focusLine(body.focus),
+    ].join('\n');
+
+    const { data } = await runStructuredTask(
+      'quiz',
+      payload,
+      generatedQuizSchema,
+      {
+        setId,
+        count: body.count,
+        types: body.types.join('+'),
+        totalCards: loaded.totalCards,
+      },
+      { maxOutputTokens: questionsBudget(body.count) },
+    );
+
+    // Keep only the requested types, and never more than requested.
+    const allowed = new Set<string>(body.types);
+    const questions = data.questions
+      .filter((question) => allowed.has(question.type))
+      .slice(0, body.count);
+
+    if (questions.length === 0) {
+      throw errors.aiInvalidContent(
+        'Lerno AI could not make a quiz for this set. Please try again.',
+      );
+    }
 
     return {
       questions,

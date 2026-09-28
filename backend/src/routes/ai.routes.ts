@@ -11,6 +11,7 @@ import {
   explainSetSchema,
   finishStudySchema,
   generateQuestionsSchema,
+  generateQuizSchema,
   generateSetSchema,
   hintRequestSchema,
   summarizeSetSchema,
@@ -64,6 +65,13 @@ export function aiRoutes(): Router {
     ...aiGuards(),
     validate({ params: aiSetParamsSchema, body: generateQuestionsSchema }),
     aiLearningController.generateQuestions,
+  );
+
+  router.post(
+    '/sets/:setId/quiz',
+    ...aiGuards(),
+    validate({ params: aiSetParamsSchema, body: generateQuizSchema }),
+    aiLearningController.generateQuiz,
   );
 
   // Generation (preview only — never auto-saved) --------------------------
