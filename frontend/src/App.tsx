@@ -26,6 +26,7 @@ import { ReviewPage } from './pages/ReviewPage';
 import { PracticePage } from './pages/study/PracticePage';
 import { StudyPage } from './pages/study/StudyPage';
 import { AiStudyPage } from './pages/sets/AiStudyPage';
+import { MyStudyPage } from './pages/study/MyStudyPage';
 import { SubjectDetailPage } from './pages/subjects/SubjectDetailPage';
 import { SubjectsPage } from './pages/subjects/SubjectsPage';
 
@@ -33,16 +34,15 @@ function authed(element: React.ReactNode) {
   return <RequireAuth>{element}</RequireAuth>;
 }
 
-// Lazy: keeps @supabase/supabase-js (OAuth consent only) out of the main bundle.
 const OAuthConsentPage = lazy(() =>
   import('./pages/oauth/OAuthConsentPage').then((module) => ({ default: module.OAuthConsentPage })),
 );
 
 export function App() {
-  useTheme(); // Apply the saved appearance on focus routes, which have no theme toggle.
+  useTheme();
+
   return (
     <Routes>
-      {/* Public */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
@@ -56,18 +56,16 @@ export function App() {
         )}
       />
 
-      {/* App shell (guest-friendly routes included — spec §8) */}
       <Route element={<AppShell />}>
         <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/sets/:setId" element={<SetDetailPage />} />
         <Route path="/sets/:setId/study" element={<StudyPage />} />
         <Route path="/sets/:setId/practice" element={<PracticePage />} />
         <Route path="/sets/:setId/quiz" element={<QuizPage />} />
-        {/* AI Study Mode — extra option next to the normal study flow */}
         <Route path="/sets/:setId/ai-study" element={authed(<AiStudyPage />)} />
 
-        {/* Authenticated */}
         <Route path="/dashboard" element={authed(<DashboardPage />)} />
+        <Route path="/study" element={authed(<MyStudyPage />)} />
         <Route path="/ai" element={authed(<LernoAiPage />)} />
         <Route path="/ai/studio" element={authed(<AIStudioPage />)} />
         <Route path="/subjects" element={authed(<SubjectsPage />)} />

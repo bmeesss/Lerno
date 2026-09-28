@@ -17,6 +17,7 @@ import {
   IconSearch,
   IconPlus,
   IconArrowRight,
+  IconClock,
 } from '../ui/Icons';
 import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
@@ -25,16 +26,17 @@ const groups = [
   {
     label: 'Study',
     items: [
-      { to: '/dashboard', label: 'Dashboard', Icon: IconHome },
-      { to: '/ai', label: 'Lerno AI', Icon: IconSparkles },
-      { to: '/ai/studio', label: 'Study Studio', Icon: IconSparkles },
+      { to: '/dashboard', label: 'Home', Icon: IconHome },
+      { to: '/study', label: 'My Study', Icon: IconBook },
+      { to: '/review', label: 'Review', Icon: IconClock },
+      { to: '/ai', label: 'AI Tutor', Icon: IconSparkles },
     ],
   },
   {
     label: 'Library',
     items: [
-      { to: '/subjects', label: 'My subjects', Icon: IconBook },
-      { to: '/sets', label: 'My sets', Icon: IconLayers },
+      { to: '/sets', label: 'Study packs', Icon: IconLayers },
+      { to: '/subjects', label: 'Subjects', Icon: IconBook },
       { to: '/discover', label: 'Discover', Icon: IconCompass },
       { to: '/favorites', label: 'Favorites', Icon: IconHeart },
     ],
@@ -47,15 +49,17 @@ const groups = [
     ],
   },
 ];
+
 const mobileItems = [
   groups[0]!.items[0]!,
   groups[0]!.items[1]!,
-  groups[1]!.items[1]!,
   groups[1]!.items[2]!,
+  groups[2]!.items[0]!,
 ];
 
 function Navigation({ close }: { close?: () => void }) {
   const { user } = useAuth();
+
   return (
     <>
       {groups.map((group) => (
@@ -66,12 +70,16 @@ function Navigation({ close }: { close?: () => void }) {
               key={to}
               to={to}
               onClick={close}
-              end={to === '/ai' || to === '/ai/studio'}
+              end={to === '/ai' || to === '/review'}
               className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
             >
               <Icon size={19} />
               <span>{label}</span>
-              {to === '/ai' && <span className="nav-ai-badge" aria-hidden="true">AI</span>}
+              {to === '/ai' && (
+                <span className="nav-ai-badge" aria-hidden="true">
+                  AI
+                </span>
+              )}
             </NavLink>
           ))}
         </div>
@@ -86,7 +94,6 @@ function Navigation({ close }: { close?: () => void }) {
   );
 }
 
-/** Navigation and focus-mode are presentation only; study/session logic is unchanged. */
 export function AppShell() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
@@ -105,18 +112,22 @@ export function AppShell() {
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
+
       {!focusMatch && (
         <aside className="sidebar">
           <div className="sidebar-brand">
             <Logo to="/dashboard" />
-            <span className="brand-caption">A little learning, every day.</span>
+            <span className="brand-caption">Study material into real learning.</span>
           </div>
-          <Link to="/sets/new" className="btn btn-primary sidebar-create">
-            <IconPlus size={17} /> Create a set
+
+          <Link to="/ai/studio" className="btn btn-primary sidebar-create">
+            <IconPlus size={17} /> Add study material
           </Link>
+
           <nav className="sidebar-nav" aria-label="Main navigation">
             <Navigation />
           </nav>
+
           <div className="sidebar-footer">
             <Link className="sidebar-user" to={user ? '/profile' : '/login'}>
               <Avatar name={user?.profile.displayName ?? 'Guest'} />
@@ -128,6 +139,7 @@ export function AppShell() {
               </div>
               <IconArrowRight size={16} />
             </Link>
+
             <div className="sidebar-footer-actions">
               <ThemeToggle />
               {user ? (
@@ -153,8 +165,9 @@ export function AppShell() {
           <div className="topbar-brand">
             <Logo to={user ? '/dashboard' : '/'} />
           </div>
+
           <div className="workspace-crumb">
-            <span>{focusMatch ? 'Focus session' : 'Your workspace'}</span>
+            <span>{focusMatch ? 'Focus session' : 'Lerno'}</span>
             <span aria-hidden="true">/</span>
             <strong>
               {focusMatch
@@ -164,6 +177,7 @@ export function AppShell() {
                 : pageTitle}
             </strong>
           </div>
+
           {!focusMatch && (
             <form
               className="topbar-search"
@@ -185,6 +199,7 @@ export function AppShell() {
               </button>
             </form>
           )}
+
           <div className="topbar-actions">
             {focusMatch ? (
               <Link to={`/sets/${focusMatch[1]}`} className="btn btn-secondary btn-sm">
@@ -201,6 +216,7 @@ export function AppShell() {
             )}
           </div>
         </header>
+
         <main id="main-content" tabIndex={-1} className="app-content">
           <Outlet />
         </main>
@@ -212,16 +228,19 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
-              end={to === '/ai'}
+              end={to === '/dashboard' || to === '/study'}
               className={({ isActive }) => `mobile-nav-link${isActive ? ' active' : ''}`}
             >
               <Icon />
-              <span>{label === 'Dashboard' ? 'Home' : label === 'My sets' ? 'Sets' : label}</span>
+              <span>
+                {label === 'Home' ? 'Home' : label === 'My Study' ? 'Study' : label}
+              </span>
             </NavLink>
           ))}
+
           <button
             type="button"
-            className={`mobile-nav-link${menuOpen || !mobileItems.some((item) => pathname === item.to || (item.to !== '/ai' && pathname.startsWith(item.to + '/'))) ? ' active' : ''}`}
+            className={`mobile-nav-link${menuOpen || !mobileItems.some((item) => pathname === item.to || pathname.startsWith(item.to + '/')) ? ' active' : ''}`}
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
@@ -231,7 +250,8 @@ export function AppShell() {
           </button>
         </nav>
       )}
-      <Modal open={menuOpen} title="Your workspace" onClose={() => setMenuOpen(false)}>
+
+      <Modal open={menuOpen} title="Lerno" onClose={() => setMenuOpen(false)}>
         <nav className="mobile-menu" aria-label="All pages">
           <Navigation close={() => setMenuOpen(false)} />
           <Link to="/profile" className="sidebar-link" onClick={() => setMenuOpen(false)}>
@@ -239,6 +259,7 @@ export function AppShell() {
             Profile
           </Link>
         </nav>
+
         <div className="sidebar-footer-actions">
           <ThemeToggle />
           {user && (
