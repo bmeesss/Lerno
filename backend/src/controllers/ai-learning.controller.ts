@@ -7,7 +7,14 @@ import type { Request, Response } from 'express';
 import { asyncHandler, sendOk } from '../lib/http.js';
 import { errors } from '../lib/errors.js';
 import { aiLearningService } from '../services/ai-learning-service.js';
-import type { ExplainSetBody, SummarizeSetBody } from '../validators/ai-set.validators.js';
+import type {
+  EvaluateAnswerBody,
+  ExplainSetBody,
+  FinishStudyBody,
+  GenerateQuestionsBody,
+  HintRequestBody,
+  SummarizeSetBody,
+} from '../validators/ai-set.validators.js';
 
 function requireUser(req: Request): string {
   if (!req.auth) throw errors.unauthorized();
@@ -33,5 +40,40 @@ export const aiLearningController = {
     const body = req.body as SummarizeSetBody;
     const result = await aiLearningService.summarizeSet(req.db, userId, setId, body.focus);
     sendOk(res, { summary: result.text, meta: result.meta });
+  }),
+
+  /** POST /api/ai/sets/:setId/questions — structured practice questions (#3). */
+  generateQuestions: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const { setId } = req.params as { setId: string };
+    const body = req.body as GenerateQuestionsBody;
+    const result = await aiLearningService.generateQuestions(req.db, userId, setId, body);
+    sendOk(res, { questions: result.questions, meta: result.meta });
+  }),
+
+  // ------------------------------------------------------------ overhoor mode
+
+  /** POST /api/ai/study/evaluate — judge one answer (#4). */
+  evaluateAnswer: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const body = req.body as EvaluateAnswerBody;
+    const evaluation = await aiLearningService.evaluateAnswer(req.db, userId, body);
+    sendOk(res, evaluation);
+  }),
+
+  /** POST /api/ai/study/hint — a hint that never reveals the answer (#5). */
+  hint: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const body = req.body as HintRequestBody;
+    const result = await aiLearningService.hint(req.db, userId, body);
+    sendOk(res, result);
+  }),
+
+  /** POST /api/ai/study/finish — session summary + progress (#4, #14). */
+  finishStudy: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const body = req.body as FinishStudyBody;
+    const summary = await aiLearningService.finishStudy(req.db, userId, body);
+    sendOk(res, summary);
   }),
 };

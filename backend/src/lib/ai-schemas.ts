@@ -11,13 +11,19 @@
  */
 import { z } from 'zod';
 
-/** Compact whitespace-normalized text with a hard length cap. */
-function text(min: number, max: number) {
+/**
+ * Whitespace-normalized text with a hard length cap. Defaulting happens before
+ * the transform, so validated output is always a plain, non-optional string.
+ */
+function text(min: number, max: number, fallback = '') {
   return z
     .string()
+    .trim()
+    .max(max)
+    .default(fallback)
     .transform((value) => value.replace(/\s+/g, ' ').trim())
-    .refine((value) => value.length >= min && value.length <= max, {
-      message: `Text must be between ${min} and ${max} characters`,
+    .refine((value) => value.length >= min, {
+      message: `Text must be at least ${min} characters`,
     });
 }
 
@@ -35,6 +41,8 @@ export const generatedQuestionSchema = z
     hint: text(1, 200).default(''),
     options: z.array(text(1, 160)).max(4).optional(),
     correctIndex: z.number().int().min(0).max(3).optional(),
+    /** 1-based index of the card (as numbered in the context) this question is based on. */
+    cardRef: z.number().int().min(1).max(500).optional(),
   })
   .transform((question) => ({
     ...question,

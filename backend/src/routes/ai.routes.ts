@@ -7,7 +7,11 @@ import { validate } from '../middleware/validate.js';
 import { aiChatSchema } from '../validators/ai.validators.js';
 import {
   aiSetParamsSchema,
+  evaluateAnswerSchema,
   explainSetSchema,
+  finishStudySchema,
+  generateQuestionsSchema,
+  hintRequestSchema,
   summarizeSetSchema,
 } from '../validators/ai-set.validators.js';
 import { MAX_AI_BODY_CHARS } from '../lib/ai-limits.js';
@@ -54,5 +58,32 @@ export function aiRoutes(): Router {
     validate({ params: aiSetParamsSchema, body: summarizeSetSchema }),
     aiLearningController.summarizeSet,
   );
+  router.post(
+    '/sets/:setId/questions',
+    ...aiGuards(),
+    validate({ params: aiSetParamsSchema, body: generateQuestionsSchema }),
+    aiLearningController.generateQuestions,
+  );
+
+  // Overhoor / AI study mode ---------------------------------------------
+  router.post(
+    '/study/evaluate',
+    ...aiGuards(),
+    validate({ body: evaluateAnswerSchema }),
+    aiLearningController.evaluateAnswer,
+  );
+  router.post(
+    '/study/hint',
+    ...aiGuards(),
+    validate({ body: hintRequestSchema }),
+    aiLearningController.hint,
+  );
+  router.post(
+    '/study/finish',
+    ...aiGuards(),
+    validate({ body: finishStudySchema }),
+    aiLearningController.finishStudy,
+  );
+
   return router;
 }
