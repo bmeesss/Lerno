@@ -1785,3 +1785,115 @@ a.card-interactive:hover {
     max-height: 38vh;
   }
 }
+
+/* ---------- AI quiz ---------- */
+.ai-quiz {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-quiz-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.ai-quiz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.ai-quiz-question {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-quiz-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-quiz-option {
+  min-height: 44px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.13s ease,
+    background 0.13s ease;
+}
+
+.ai-quiz-option:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.ai-quiz-option:disabled {
+  cursor: default;
+}
+
+.ai-quiz-option-correct {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 650;
+}
+
+.ai-quiz-option-wrong {
+  border-color: var(--danger);
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.ai-quiz-open {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ai-quiz-open .input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.ai-quiz-good {
+  font-size: 0.88rem;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.ai-quiz-bad {
+  font-size: 0.88rem;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .ai-quiz-options {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-quiz-list {
+    max-height: 46vh;
+  }
+}

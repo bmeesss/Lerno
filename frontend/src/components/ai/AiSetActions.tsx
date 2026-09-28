@@ -4,10 +4,11 @@
  */
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconBook, IconCheck, IconSparkles } from '../ui/Icons';
+import { IconBook, IconCheck, IconQuiz, IconSparkles } from '../ui/Icons';
 import { aiLearningService } from '../../services/aiLearningService';
 import { AiMenu, type AiMenuItem } from './AiMenu';
 import { AiQuestionsModal } from './AiQuestionsModal';
+import { AiQuizModal } from './AiQuizModal';
 import { AiResultModal, friendlyAiError, type AiResultState } from './AiResultModal';
 
 type SetAction = 'explain' | 'summarize';
@@ -28,6 +29,7 @@ export function AiSetActions({ setId, signedIn, extraItems }: AiSetActionsProps)
   const [state, setState] = useState<AiResultState>({ status: 'idle' });
   const [action, setAction] = useState<SetAction | null>(null);
   const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
 
   const run = useCallback(
     async (next: SetAction) => {
@@ -98,6 +100,18 @@ export function AiSetActions({ setId, signedIn, extraItems }: AiSetActionsProps)
         navigate(`/sets/${setId}/ai-study`);
       },
     },
+    {
+      id: 'quiz',
+      label: 'Maak quiz',
+      icon: <IconQuiz size={15} />,
+      onSelect: () => {
+        if (!signedIn) {
+          navigate('/login?next=' + encodeURIComponent(`/sets/${setId}`));
+          return;
+        }
+        setQuizOpen(true);
+      },
+    },
     ...(extraItems ?? []),
   ];
 
@@ -109,6 +123,7 @@ export function AiSetActions({ setId, signedIn, extraItems }: AiSetActionsProps)
         setId={setId}
         onClose={() => setQuestionsOpen(false)}
       />
+      <AiQuizModal open={quizOpen} setId={setId} onClose={() => setQuizOpen(false)} />
       <AiResultModal
         open={open}
         title={title}
