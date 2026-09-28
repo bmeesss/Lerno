@@ -250,6 +250,7 @@ describe('POST /api/ai/sets/:setId/explain — context handling', () => {
       completionBudget({ action: 'explain', maxOutputTokens: AI_TASKS.explain.maxOutputTokens }),
     );
     expect(payload.messages[0]!.role).toBe('system');
+    expect(payload.messages[0]!.content).toContain('Context source: supplied Lerno set.');
     // One system prompt, one payload — no duplicated instructions.
     expect(payload.messages.filter((message) => message.role === 'system')).toHaveLength(1);
   });

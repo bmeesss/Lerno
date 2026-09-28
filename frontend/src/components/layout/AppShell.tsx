@@ -27,6 +27,7 @@ const groups = [
     items: [
       { to: '/dashboard', label: 'Dashboard', Icon: IconHome },
       { to: '/ai', label: 'Lerno AI', Icon: IconSparkles },
+      { to: '/ai/studio', label: 'Study Studio', Icon: IconSparkles },
     ],
   },
   {
@@ -65,11 +66,12 @@ function Navigation({ close }: { close?: () => void }) {
               key={to}
               to={to}
               onClick={close}
+              end={to === '/ai' || to === '/ai/studio'}
               className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
             >
               <Icon size={19} />
               <span>{label}</span>
-              {to === '/ai' && <span className="nav-ai-badge">AI</span>}
+              {to === '/ai' && <span className="nav-ai-badge" aria-hidden="true">AI</span>}
             </NavLink>
           ))}
         </div>
@@ -94,6 +96,7 @@ export function AppShell() {
   const pageTitle =
     groups
       .flatMap((group) => group.items)
+      .sort((a, b) => b.to.length - a.to.length)
       .find((item) => pathname === item.to || pathname.startsWith(item.to + '/'))?.label ??
     'Your workspace';
 
@@ -209,6 +212,7 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
+              end={to === '/ai'}
               className={({ isActive }) => `mobile-nav-link${isActive ? ' active' : ''}`}
             >
               <Icon />
@@ -217,7 +221,7 @@ export function AppShell() {
           ))}
           <button
             type="button"
-            className={`mobile-nav-link${menuOpen || !mobileItems.some((item) => pathname === item.to || pathname.startsWith(item.to + '/')) ? ' active' : ''}`}
+            className={`mobile-nav-link${menuOpen || !mobileItems.some((item) => pathname === item.to || (item.to !== '/ai' && pathname.startsWith(item.to + '/'))) ? ' active' : ''}`}
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}

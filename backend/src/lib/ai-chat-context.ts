@@ -1,8 +1,19 @@
 import { normalizeHistory, capLength, type NormalizedMessage } from './ai-sanitize.js';
+import type { AiContextSource } from './ai-context-source.js';
 import { MAX_HISTORY_MESSAGES_ACCEPTED } from './ai-limits.js';
 
 /** Sent history is much smaller than the accepted API payload. */
 export const CHAT_HISTORY_CHARS = 3200;
+const EXPLICIT_MATERIAL_INTRO =
+  /\b(?:hier (?:zijn|is)|dit zijn|dit is mijn|the topics are|here (?:are|is)|these are|my (?:notes|flashcards|study material))\b/i;
+const TOPIC_DECLARATION =
+  /\b(?:onderwerpen|begrippen|toetsstof|examenstof|leerstof|topics|terms|study material)\b\s*(?:zijn|is|:|=|are|include)\b/i;
+const CHAPTER_CONTENT =
+  /\b(?:hoofdstuk|chapter|paragraaf|section)\s+[\w.-]+\s+(?:gaat over|behandelt|bevat|is about|covers|contains)\b/i;
+const CHAPTER_LIST =
+  /\b(?:hoofdstuk|chapter|paragraaf|section)\s+[\w.-]+[^\n:]{0,30}:\s*(?:[-*•]|\d+[.)])\s*\S/im;
+const CARD_QA_LABEL = /\b(?:flashcards?|kaarten|cards?)\b/i;
+const CARD_QA_CONTENT = /\b(?:vraag|question)\s*[:?][\s\S]*\b(?:antwoord|answer)\s*:/i;
 const LEVEL =
   /\b(?:mavo|havo|vwo|vmbo(?:[ -](?:tl|gl|kb|bb))?|mbo|hbo|university|universitair)(?:[ -]*(?:klas|leerjaar|year)?[ -]*[1-6])?\b/gi;
 const STOP = new Set(
@@ -22,6 +33,36 @@ function terms(text: string): Set<string> {
 }
 function overlap(a: Set<string>, text: string): boolean {
   return [...terms(text)].some((w) => a.has(w));
+}
+
+/**
+ * Mark chat as a source only when the student explicitly supplies notes, topics,
+ * chapter content or Q/A cards. Assistant-generated text is never a source.
+ */
+function hasExplicitStudyMaterial(text: string): boolean {
+  return (
+    EXPLICIT_MATERIAL_INTRO.test(text) ||
+    TOPIC_DECLARATION.test(text) ||
+    CHAPTER_CONTENT.test(text) ||
+    CHAPTER_LIST.test(text) ||
+    (CARD_QA_LABEL.test(text) && CARD_QA_CONTENT.test(text)) ||
+    (text.length >= 240 &&
+      /[.!?].*[.!?]/s.test(text) &&
+      !/\b(?:wat moet ik leren|what should i learn)\b/i.test(text))
+  );
+}
+
+/** Classifies only supplied student text; absence of a set/card/document is `none`. */
+export function chatContextSource(
+  message: string,
+  history: ReadonlyArray<Pick<NormalizedMessage, 'role' | 'content'>>,
+): AiContextSource {
+  return [
+    message,
+    ...history.filter((entry) => entry.role === 'user').map((entry) => entry.content),
+  ].some(hasExplicitStudyMaterial)
+    ? 'chat'
+    : 'none';
 }
 
 /** Extractive context, not a model-generated summary. Bounded linear string work.
@@ -63,11 +104,22 @@ export function selectChatContext(
     (!/^(?:hallo|hoi|hello|hi)\b/i.test(message) &&
       message.trim().split(/\s+/).length <= 3 &&
       !/^(?:wat|what|leg|explain|beschrijf|describe|bereken|calculate)\b/i.test(message));
+  const studyPlanningFollowUp =
+    /\b(?:help|overhoor|quiz|plan|oefen|study|test)\b[\s\S]{0,80}\b(?:leren|study|morgen|toets|exam|tomorrow)\b/i.test(
+      message,
+    );
   const selected: NormalizedMessage[][] = [];
   let remaining = CHAT_HISTORY_CHARS;
   for (let i = groups.length - 1; i >= 0; i--) {
     const group = groups[i]!;
-    if (!(followUp && i === groups.length - 1) && !group.some((m) => overlap(query, m.content)))
+    const suppliedStudyMaterial =
+      studyPlanningFollowUp &&
+      group.some((entry) => entry.role === 'user' && hasExplicitStudyMaterial(entry.content));
+    if (
+      !(followUp && i === groups.length - 1) &&
+      !suppliedStudyMaterial &&
+      !group.some((m) => overlap(query, m.content))
+    )
       continue;
     // Keep both the start (definition) and end (last question/conclusion) of long answers.
     const compact = group.map((m) => ({

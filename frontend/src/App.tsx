@@ -13,6 +13,7 @@ import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { LernoAiPage } from './pages/ai/LernoAiPage';
+import { AIStudioPage } from './pages/ai/AIStudioPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { MySetsPage } from './pages/sets/MySetsPage';
 import { SetDetailPage } from './pages/sets/SetDetailPage';
@@ -68,6 +69,7 @@ export function App() {
         {/* Authenticated */}
         <Route path="/dashboard" element={authed(<DashboardPage />)} />
         <Route path="/ai" element={authed(<LernoAiPage />)} />
+        <Route path="/ai/studio" element={authed(<AIStudioPage />)} />
         <Route path="/subjects" element={authed(<SubjectsPage />)} />
         <Route path="/subjects/:subjectId" element={authed(<SubjectDetailPage />)} />
         <Route path="/sets" element={authed(<MySetsPage />)} />

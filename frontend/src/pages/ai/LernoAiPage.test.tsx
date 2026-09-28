@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../lib/api';
 import { aiService, type AiChatReply } from '../../services/aiService';
@@ -12,6 +13,10 @@ vi.mock('../../services/aiService', async (importOriginal) => {
 });
 
 const chatMock = vi.mocked(aiService.chat);
+
+function renderPage() {
+  return render(<MemoryRouter><LernoAiPage /></MemoryRouter>);
+}
 
 function resolveReply(text: string): Promise<AiChatReply> {
   return Promise.resolve({ reply: text });
@@ -41,7 +46,7 @@ describe('LernoAiPage', () => {
     chatMock.mockImplementation(() =>
       resolveReply('**Fotosynthese** werkt zo:\n1. Licht\n2. Water'),
     );
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Leg fotosynthese uit');
@@ -64,7 +69,7 @@ describe('LernoAiPage', () => {
 
   it('sends with Enter and allows Shift+Enter for a new line', async () => {
     chatMock.mockImplementation(() => resolveReply('Antwoord'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Eerste regel');
@@ -85,7 +90,7 @@ describe('LernoAiPage', () => {
           release = resolve;
         }),
     );
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Vraag');
@@ -111,7 +116,7 @@ describe('LernoAiPage', () => {
 
   it('shows a clear error and restores the message when sending fails', async () => {
     chatMock.mockRejectedValueOnce(new ApiError('nope', 'AI_ERROR', 502));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Mijn vraag');
@@ -127,7 +132,7 @@ describe('LernoAiPage', () => {
 
   it('explains rate limits and upstream problems in normal language', async () => {
     chatMock.mockRejectedValueOnce(new ApiError('slow down', 'RATE_LIMITED', 429));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Vraag');
@@ -143,7 +148,7 @@ describe('LernoAiPage', () => {
     chatMock
       .mockRejectedValueOnce(new ApiError('nope', 'AI_TIMEOUT', 504))
       .mockImplementation(() => resolveReply('Nu wel een antwoord'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Waarom is de lucht blauw?');
@@ -166,7 +171,7 @@ describe('LernoAiPage', () => {
           reject = rejectFn;
         }),
     );
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Eerste vraag');
@@ -182,7 +187,7 @@ describe('LernoAiPage', () => {
 
   it('sends bounded conversation history on follow-up questions', async () => {
     chatMock.mockImplementationOnce(() => resolveReply('Antwoord 1'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Leg fotosynthese uit');
@@ -207,7 +212,7 @@ describe('LernoAiPage', () => {
     chatMock
       .mockImplementationOnce(() => resolveReply('Eerste antwoord'))
       .mockImplementationOnce(() => resolveReply('Tweede antwoord'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Leg fotosynthese uit');
@@ -225,7 +230,7 @@ describe('LernoAiPage', () => {
 
   it('copies an answer to the clipboard', async () => {
     chatMock.mockImplementation(() => resolveReply('Dit is het antwoord'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Vraag');
@@ -240,7 +245,7 @@ describe('LernoAiPage', () => {
 
   it('starts a new chat, clearing the conversation', async () => {
     chatMock.mockImplementation(() => resolveReply('Antwoord'));
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     await userEvent.type(input, 'Vraag');
@@ -254,7 +259,7 @@ describe('LernoAiPage', () => {
   });
 
   it('does not send empty questions', async () => {
-    render(<LernoAiPage />);
+    renderPage();
 
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Your question for Lerno AI'), '   ');
@@ -263,7 +268,7 @@ describe('LernoAiPage', () => {
   });
 
   it('fills the input from a suggestion chip', async () => {
-    render(<LernoAiPage />);
+    renderPage();
 
     await userEvent.click(screen.getByRole('button', { name: 'Overhoor mij' }));
     const input = screen.getByLabelText('Your question for Lerno AI');
@@ -272,7 +277,7 @@ describe('LernoAiPage', () => {
   });
 
   it('shows all quick prompts as chips on the welcome state', () => {
-    render(<LernoAiPage />);
+    renderPage();
 
     for (const label of SUGGESTION_LABELS) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
@@ -286,7 +291,7 @@ describe('LernoAiPage', () => {
         `## Stap ${index}\n\nUitleg ${index} met **vetdruk**.\n\n- punt ${index}a\n- punt ${index}b`,
     ).join('\n\n');
     chatMock.mockImplementation(() => resolveReply(longReply));
-    const { container } = render(<LernoAiPage />);
+    const { container } = renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     fireEvent.change(input, { target: { value: 'Leer mij alles over hoofdstuk 1' } });
@@ -298,7 +303,7 @@ describe('LernoAiPage', () => {
   });
 
   it('shows the character counter when the question gets long', () => {
-    render(<LernoAiPage />);
+    renderPage();
 
     const input = screen.getByLabelText('Your question for Lerno AI');
     fireEvent.change(input, { target: { value: 'a'.repeat(1900) } });
@@ -314,7 +319,7 @@ describe('LernoAiPage', () => {
           release = resolve;
         }),
     );
-    render(<LernoAiPage />);
+    renderPage();
 
     const log = screen.getByRole('log', { name: 'Conversation with Lerno AI' });
     expect(log).toHaveAttribute('aria-live', 'polite');

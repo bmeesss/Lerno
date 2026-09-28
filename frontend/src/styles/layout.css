@@ -965,7 +965,7 @@
 }
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: var(--space-6);
   gap: var(--space-4);
 }
@@ -1205,6 +1205,9 @@
   }
   .learning-illustration {
     display: block;
+  }
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .quick-actions small {
     display: none;

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { getEncoding } from 'js-tiktoken';
-import { QUALITY_CASES, qualitySignals } from '../../scripts/fixtures/ai-quality.js';
+import {
+  CURRICULUM_QUALITY_CASES,
+  QUALITY_CASES,
+  curriculumQualitySignals,
+  qualitySignals,
+} from '../../scripts/fixtures/ai-quality.js';
 import { askLernoAi, buildChatRequest } from './ai-service.js';
-import { AI_TASKS, STUDY_SYSTEM_PROMPT } from './ai-prompts.js';
+import { AI_TASKS, CURRICULUM_RULE, STUDY_SYSTEM_PROMPT, taskMessages } from './ai-prompts.js';
+import { chatContextSource } from '../lib/ai-chat-context.js';
 import { requestChat } from './ai-completion.js';
 import { cleanAiText } from '../lib/ai-text.js';
 
@@ -61,6 +67,76 @@ describe('school quality regression probes', () => {
   });
 });
 
+describe('specific curriculum context regression probes', () => {
+  it.each(CURRICULUM_QUALITY_CASES)(
+    '$id: context policy accepts the expected response and rejects guessing',
+    (example) => {
+      expect(Object.values(curriculumQualitySignals(example, example.good)).every(Boolean)).toBe(
+        true,
+      );
+      expect(Object.values(curriculumQualitySignals(example, example.bad)).every(Boolean)).toBe(
+        false,
+      );
+
+      const request = buildChatRequest(example.prompt, example.history ?? []);
+      expect(request.messages.at(-1)?.content).toBe(example.prompt);
+      expect(
+        chatContextSource(
+          example.prompt,
+          request.messages.slice(1, -1).filter((message) => message.role !== 'system'),
+        ),
+      ).toBe(example.contextSource);
+      if (example.contextSource === 'chat') {
+        expect(request.messages[0]?.content).toContain(
+          'Context source: student-provided chat material.',
+        );
+      } else {
+        expect(request.messages[0]?.content).not.toContain('Context source:');
+      }
+      expect(request.messages[0]?.content).toContain(CURRICULUM_RULE);
+      if (example.id === 'follow-up-after-material') {
+        expect(request.messages.some((message) => message.content.includes('bloedsomloop'))).toBe(
+          true,
+        );
+      }
+    },
+  );
+
+  it('uses explicit set and card provenance without treating them as missing context', () => {
+    const setMessages = taskMessages(
+      'explain',
+      'TASK: Leg deze Lerno-set uit.\\nSET: Biology\\nCONTENT:\\n1. Q: What is photosynthesis? | A: Plants use light.',
+      'set',
+    );
+    expect(setMessages[0]?.content).toContain('Context source: supplied Lerno set.');
+    expect(setMessages[1]?.content).toContain('What is photosynthesis?');
+
+    const cardMessages = taskMessages(
+      'card',
+      'TASK: Leg deze kaart uit.\\nCARD 2: Q: Define osmosis. A: Water movement.',
+      'card',
+    );
+    expect(cardMessages[0]?.content).toContain('Context source: supplied card only.');
+    expect(cardMessages[1]?.content).toContain('Define osmosis.');
+
+    const futureDocumentMessages = taskMessages('explain', 'DOCUMENT: supplied notes', 'document');
+    expect(futureDocumentMessages[0]?.content).toContain(
+      'Context source: student-provided document.',
+    );
+  });
+
+  it('never treats assistant claims as student-provided curriculum content', () => {
+    expect(
+      chatContextSource('Help mij leren voor morgen.', [
+        {
+          role: 'assistant',
+          content: 'Hoofdstuk 1 gaat over cellen, weefsels en organen.',
+        },
+      ]),
+    ).toBe('none');
+  });
+});
+
 describe('compact teaching policy', () => {
   it('retains student level on hard follow-ups, never the assistant’s proposed level', () => {
     const request = buildChatRequest('Geef een moeilijke vraag over gewicht.', [
@@ -90,9 +166,13 @@ describe('compact teaching policy', () => {
     expect(AI_TASKS.study.parseAttempts).toBe(1);
   });
 
-  it('keeps prompt tokens inside the existing limits without fixture facts in prompts', () => {
+  it('keeps prompt tokens compact without fixture facts in prompts', () => {
     const encoder = getEncoding('o200k_base');
-    expect(encoder.encode(STUDY_SYSTEM_PROMPT).length).toBeLessThanOrEqual(200);
+    expect(encoder.encode(STUDY_SYSTEM_PROMPT).length).toBeLessThanOrEqual(210);
+    expect(
+      encoder.encode(`${STUDY_SYSTEM_PROMPT} Context source: student-provided chat material.`)
+        .length,
+    ).toBeLessThanOrEqual(220);
     for (const task of Object.values(AI_TASKS)) {
       expect(encoder.encode(task.system).length).toBeLessThan(270);
       expect(task.system).not.toMatch(/Lodewijk|GM\/R|chlorofyl/);

@@ -95,7 +95,9 @@ describe('POST /api/ai/cards/:cardId/action', () => {
       action: 'explain',
     });
 
-    const userMessage = lastPayload().messages.at(-1)!.content;
+    const sentMessages = lastPayload().messages;
+    expect(sentMessages[0]!.content).toContain('Context source: supplied card only.');
+    const userMessage = sentMessages.at(-1)!.content;
     expect(userMessage).toContain('Wat is fotosynthese?');
     // The other card of the set is not part of the context.
     expect(userMessage).not.toContain('chlorofyl');

@@ -79,6 +79,16 @@ export const generatedQuestionsSchema = z
           path: ['questions', index, 'options'],
         });
       }
+      if (question.type === 'multiple_choice') {
+        const options = question.options.map(key);
+        if (new Set(options).size !== options.length) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Multiple-choice options must be distinct',
+            path: ['questions', index, 'options'],
+          });
+        }
+      }
       if (question.type === 'multiple_choice' && question.correctIndex !== null) {
         if (question.correctIndex < 0 || question.correctIndex >= question.options.length) {
           ctx.addIssue({
@@ -112,7 +122,7 @@ export const generatedCardsSchema = z
   .superRefine((value, ctx) => {
     const seen = new Set<string>();
     value.cards.forEach((card, index) => {
-      const normalized = `${key(card.front)}::${key(card.back)}`;
+      const normalized = key(card.front);
       if (seen.has(normalized)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -157,6 +167,14 @@ export const generatedQuizSchema = z
       seen.add(normalized);
 
       if (question.type === 'multiple_choice') {
+        const normalizedOptions = question.options.map((option) => key(option));
+        if (new Set(normalizedOptions).size !== normalizedOptions.length) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Multiple-choice options must be distinct',
+            path: ['questions', index, 'options'],
+          });
+        }
         if (question.options.length !== 4) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -216,6 +234,72 @@ export const generatedQuizSchema = z
   });
 
 export type GeneratedQuizQuestion = z.infer<typeof generatedQuizQuestionSchema>;
+
+/** Compact, source-grounded overview for AI Study Studio. */
+export const generatedSummarySchema = z
+  .object({
+    title: text(2, 100),
+    summary: text(30, 2_000),
+    keyPoints: z.array(text(5, 240)).min(3).max(8),
+    terms: z
+      .array(
+        z.object({
+          term: text(1, 80),
+          definition: text(5, 300),
+        }),
+      )
+      .max(12)
+      .default([]),
+  })
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.keyPoints.forEach((point, index) => {
+      const normalized = key(point);
+      if (seen.has(normalized)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate key point', path: ['keyPoints', index] });
+      }
+      seen.add(normalized);
+    });
+    const seenTerms = new Set<string>();
+    value.terms.forEach((item, index) => {
+      const normalized = key(item.term);
+      if (seenTerms.has(normalized)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate term', path: ['terms', index, 'term'] });
+      }
+      seenTerms.add(normalized);
+    });
+  });
+
+// ------------------------------------------------------------ study plan
+
+export const generatedStudyPlanSchema = z
+  .object({
+    title: text(2, 100),
+    overview: text(20, 500),
+    sessions: z.array(
+      z.object({
+        day: z.number().int().min(1).max(14),
+        focus: text(3, 140),
+        activities: z.array(text(3, 180)).min(1).max(4),
+        minutes: z.number().int().min(5).max(180),
+      }),
+    ).min(3).max(14),
+  })
+  .superRefine((value, ctx) => {
+    const days = new Set<number>();
+    value.sessions.forEach((session, index) => {
+      if (days.has(session.day)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate study-plan day', path: ['sessions', index, 'day'] });
+      }
+      days.add(session.day);
+      const activities = session.activities.map(key);
+      if (new Set(activities).size !== activities.length) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate activity', path: ['sessions', index, 'activities'] });
+      }
+    });
+  });
+
+export type GeneratedStudyPlan = z.infer<typeof generatedStudyPlanSchema>;
 
 // --------------------------------------------------------------- evaluate
 

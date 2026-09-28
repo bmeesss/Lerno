@@ -94,6 +94,38 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (payload as { data: T }).data;
 }
 
+/** Multipart upload helper; the browser supplies the boundary Content-Type. */
+export async function apiUpload<T>(
+  path: string,
+  body: FormData,
+  signal?: AbortSignal,
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method: 'POST',
+      headers,
+      body,
+      signal: signal ?? null,
+    });
+  } catch {
+    throw new ApiError('Could not reach the Lerno server. Check your connection.', 'NETWORK', 0);
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const err = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiError(
+      err?.message ?? `Request failed (${response.status})`,
+      err?.code ?? 'UNKNOWN',
+      response.status,
+    );
+  }
+  return (payload as { data: T }).data;
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions['query']) =>
     apiRequest<T>(path, { method: 'GET', query }),
