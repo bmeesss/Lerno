@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'AI_UNAVAILABLE'
   | 'AI_ERROR'
   | 'AI_TIMEOUT'
+  | 'AI_INVALID_CONTENT'
   | 'INTERNAL_ERROR';
 
 const statusByCode: Record<ErrorCode, number> = {
@@ -24,6 +25,7 @@ const statusByCode: Record<ErrorCode, number> = {
   AI_UNAVAILABLE: 503,
   AI_ERROR: 502,
   AI_TIMEOUT: 504,
+  AI_INVALID_CONTENT: 502,
   INTERNAL_ERROR: 500,
 };
 
@@ -55,6 +57,10 @@ export const errors = {
   /** The AI provider failed — generic message, never leaks upstream details. */
   aiError: (message = 'The AI is temporarily unavailable. Please try again in a moment.') =>
     new ApiError('AI_ERROR', message),
+  /** The AI answered, but the content failed validation. */
+  aiInvalidContent: (
+    message = 'The AI returned a response we could not use. Please try again.',
+  ) => new ApiError('AI_INVALID_CONTENT', message),
   /** The AI provider did not answer in time. */
   aiTimeout: (message = 'The AI took too long to answer. Please try again.') =>
     new ApiError('AI_TIMEOUT', message),
