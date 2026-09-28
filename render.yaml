@@ -69,6 +69,16 @@ services:
       - key: GROQ_MAX_RETRIES
         value: '1'
 
+      # Structured output + context bounds for the AI study features.
+      - key: GROQ_JSON_MODE
+        value: 'true'
+
+      - key: AI_CONTEXT_MAX_CARDS
+        value: '60'
+
+      - key: AI_CONTEXT_MAX_CHARS
+        value: '12000'
+
       # Lerno AI quota per user per window (stricter than normal API limits).
       - key: AI_RATE_LIMIT_MAX
         value: '20'

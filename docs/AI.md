@@ -28,6 +28,9 @@ from environment variables. Nothing is hardcoded per environment.
 | `AI_RATE_LIMIT_MAX`       | `20`                    | AI messages per user per window.                               |
 | `AI_RATE_LIMIT_WINDOW_MS` | `300000` (5 min)        | Window for the per-user AI quota.                              |
 | `AI_RATE_LIMIT_IP_MAX`    | `60`                    | Wider per-IP quota for the AI endpoint.                        |
+| `GROQ_JSON_MODE`          | `true`                  | Ask Groq for JSON on structured tasks (always validated).      |
+| `AI_CONTEXT_MAX_CARDS`    | `60`                    | Max cards sent to the model as set context (5–200).            |
+| `AI_CONTEXT_MAX_CHARS`    | `12000`                 | Hard ceiling for one set context (1 000–40 000).               |
 
 Empty values fall back to the defaults; out-of-range values fail fast at boot instead
 of silently misbehaving. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for where to set them.
@@ -144,6 +147,142 @@ Basic, explicit protection (not a claim of perfect safety):
    the system prompt or something that looks like an API key, it is replaced with a
    short refusal.
 
+## AI on your own study material
+
+Lerno AI can work with the sets, cards and quizzes a student already has. The
+model never gets database access: the backend loads the data through the normal
+repository (with the caller's authorization), turns it into a bounded text
+block, and only that block is sent to Groq.
+
+### Context builders (`backend/src/services/ai-context.ts`)
+
+| Function              | Used for                            | Limits                                                                                                                             |
+| --------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `buildSetContext()`   | explain, summarize, questions, quiz | de-duplicated cards, capped by `AI_CONTEXT_MAX_CARDS` and `AI_CONTEXT_MAX_CHARS`; leftovers reported as "N more cards … not shown" |
+| `buildCardContext()`  | card-level actions                  | one card only                                                                                                                      |
+| `buildQuizContext()`  | quiz generation                     | quiz-sized card/character budget                                                                                                   |
+| `buildStudyContext()` | answer evaluation and hints         | set title, question, model answer                                                                                                  |
+
+Every builder normalizes whitespace and control characters, drops duplicate
+cards, trims long questions/answers and never invents content: a set without
+cards is refused with a validation error.
+
+### Endpoints
+
+All endpoints require a logged-in user, run through the same two rate limiters
+as the chat endpoint (per user + per IP) and answer with the standard
+`{ data }` / `{ error }` envelope.
+
+| Method | Path                            | What it does                                                                                               |
+| ------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/ai/sets/:setId/explain`   | "Leg deze set uit" → `{ explanation, meta }`                                                               |
+| `POST` | `/api/ai/sets/:setId/summarize` | "Vat deze set samen" → `{ summary, meta }`                                                                 |
+| `POST` | `/api/ai/sets/:setId/questions` | practice questions (`count` 5/10/15, `difficulty`) → `{ questions, meta }`                                 |
+| `POST` | `/api/ai/sets/:setId/quiz`      | generated quiz (`types`, `count`, `difficulty`) → `{ questions, meta }`                                    |
+| `POST` | `/api/ai/cards/:cardId/action`  | card action (`explain`, `example`, `hint`, `practice`) → `{ text, action }`                                |
+| `POST` | `/api/ai/generate-set`          | flashcards from a prompt → preview, **nothing is stored**                                                  |
+| `POST` | `/api/ai/study/evaluate`        | judges one answer → `{ verdict, feedback, missing }`                                                       |
+| `POST` | `/api/ai/study/hint`            | a hint that never reveals the answer → `{ hint }`                                                          |
+| `POST` | `/api/ai/study/finish`          | session summary + progress → `{ total, correct, partial, incorrect, accuracy, topicsToReview, persisted }` |
+
+`meta` always reports what the AI actually saw: `{ setId, totalCards, contextCards, omittedCards }`.
+
+### Data isolation
+
+1. the route requires authentication
+2. the service loads the set with `canViewSet` — the exact rule the normal set
+   endpoints use: your own sets, or public sets
+3. a card id that does not belong to the given set is `404 Card not found`; a
+   set you may not see is `404 Study set not found`
+4. only the authorized, trimmed data becomes model context
+
+A manipulated or foreign id therefore behaves exactly like the existing set
+endpoints: same status codes, same messages, no data in the response.
+
+### Structured output and validation
+
+Structured tasks ask the model for JSON (`GROQ_JSON_MODE`) but never trust it:
+
+1. markdown fences and surrounding prose are stripped
+2. the first balanced JSON object is extracted (`lib/ai-json.ts`)
+3. `JSON.parse` runs inside a try/catch
+4. the result is validated with Zod (`lib/ai-schemas.ts`) — questions, cards,
+   quizzes, evaluations and hints each have their own schema
+
+Invalid output is retried once (bounded) and then answered with
+`502 AI_INVALID_CONTENT` and a friendly message. No unvalidated AI JSON ever
+reaches the browser. The schemas also reject duplicate questions/cards,
+multiple choice without exactly four options, a `correctIndex` outside the
+options, true/false without `True`/`False`, open questions without an answer,
+empty fields and over-long text.
+
+### Error handling
+
+| Code                 | Status | When                                                  |
+| -------------------- | ------ | ----------------------------------------------------- |
+| `NOT_FOUND`          | 404    | set/card not visible to the caller                    |
+| `VALIDATION_ERROR`   | 400    | invalid body, set without cards, oversized payload    |
+| `AI_INVALID_CONTENT` | 502    | the AI answer failed schema validation                |
+| `AI_TIMEOUT`         | 504    | Groq did not answer in time                           |
+| `AI_UNAVAILABLE`     | 503    | `GROQ_API_KEY` missing or rejected upstream           |
+| `RATE_LIMITED`       | 429    | per-user/per-IP quota used up (includes `retryAfter`) |
+| `AI_ERROR`           | 502    | any other upstream failure                            |
+
+No stack traces, upstream messages, keys or database details leave the backend.
+
+### AI Study Mode ("Overhoor mij")
+
+Route: `/sets/:setId/ai-study` — an extra option, the normal flashcard study
+flow is untouched.
+
+1. choose 5/10/15 questions and a level
+2. Lerno AI writes the questions from the set (validated JSON)
+3. the student answers; the model judges it as `correct`, `partial` or
+   `incorrect` with short feedback — never plain string matching
+4. "Hint" gives a nudge without the answer and goes one step further per hint
+5. at the end: totals, accuracy, "Onderwerpen om opnieuw te oefenen" and a link
+   back to the normal practice mode
+
+When a question is based on a specific card (the model reports a `cardRef`,
+validated against the set's cards) the result is recorded through the existing
+spaced-repetition review flow, so the set's schedule and the student's progress
+stay in sync. `partial` counts as "not fully known" and returns to the queue.
+Sessions themselves are not stored in a separate table — the durable outcome is
+the study progress.
+
+### Generated sets
+
+`/ai/generate-set` returns a preview only. The student reviews (and can edit or
+remove) every card, and saving goes through the normal `POST /api/sets`
+endpoint, so all existing validation applies. Nothing is written to the
+database until "Set opslaan".
+
+### Token economy per task
+
+Task prompts live in `backend/src/services/ai-prompts.ts`, each with its own
+budget — no giant prompt reused for everything:
+
+| Task        | Output tokens                  | Temperature |
+| ----------- | ------------------------------ | ----------- |
+| `explain`   | 900                            | 0.4         |
+| `summarize` | 700                            | 0.3         |
+| `questions` | 520 + 110/question (max 2 200) | 0.7         |
+| `cards`     | 600 + 110/card (max 4 000)     | 0.7         |
+| `quiz`      | 520 + 110/question (max 2 200) | 0.6         |
+| `evaluate`  | 220                            | 0.2         |
+| `hint`      | 200                            | 0.6         |
+| `card`      | 500                            | 0.5         |
+
+`GROQ_MAX_OUTPUT_TOKENS` remains the budget for free chat; set context is
+bounded by `AI_CONTEXT_MAX_CARDS` / `AI_CONTEXT_MAX_CHARS`.
+
+### Logging
+
+Every AI action logs one line with `action`, `model`, `durationMs`, `outcome`,
+token counts and safe counters (`ai.action.completed`, `ai.action.failed`,
+`ai.study.finished`). Never logged: the API key, prompts, answers or personal
+data.
+
 ## System prompt
 
 The prompt lives in `backend/src/services/ai-service.ts` (`LERNO_AI_SYSTEM_PROMPT`) and
@@ -198,19 +337,42 @@ net.
 - per answer: copy and regenerate; the header offers "New chat" to clear context
 - the view only auto-scrolls when the student is already at the bottom
 
+## Frontend, AI on your material
+
+- `frontend/src/services/aiLearningService.ts` — all AI learning calls.
+- `frontend/src/components/ai/AiSetActions.tsx` — the “Vraag Lerno AI” menu on a
+  set (leg uit, vat samen, maak oefenvragen, overhoor mij, maak quiz).
+- `frontend/src/components/ai/AiCardActions.tsx` — the compact “Vraag AI” action
+  on an individual flashcard.
+- `frontend/src/components/ai/AiQuestionsModal.tsx` — generated practice questions
+  with reveal-answer and hint.
+- `frontend/src/components/ai/AiQuizModal.tsx` — the generated quiz, rendered as a
+  real quiz (multiple choice, true/false, open answers judged by the AI).
+- `frontend/src/components/ai/AiGenerateSetModal.tsx` — prompt → preview → save.
+- `frontend/src/pages/sets/AiStudyPage.tsx` — AI Study Mode at
+  `/sets/:setId/ai-study`.
+
+Everything is optional: without `GROQ_API_KEY` the whole app keeps working and
+the AI actions simply answer “temporarily unavailable”.
+
 ## Tests
 
 ```bash
-npm run test:backend   # AI endpoint, context shaping, errors, rate limiting, config
-npm run test:frontend  # chat page, markdown parser, formula rendering, AI service
+npm run test:backend   # AI chat, set actions, questions, quiz, cards, generation, study
+npm run test:frontend  # chat page, markdown/formulas, AI set actions, quiz, study flow
 ```
 
-Backend coverage: authentication, validation (per-field limits), history trimming,
-follow-up context, prompt-injection resistance, Groq success/timeout/error/rate-limit,
-missing key, error envelope, rate limiting per user and per IP (including a concurrent
-burst), logging without secrets, and environment configuration.
+Backend coverage: free chat (validation, context, errors, rate limiting,
+logging), set actions (ownership, huge sets, context trimming, secrets),
+practice questions (valid/malformed/duplicate/out-of-range JSON), quiz
+generation (types, `correctIndex`, true/false options), card actions
+(ownership, per-card context), generated sets (preview-only, duplicates, empty
+fields, card limits), overhoor mode (correct/partial/incorrect, hints, session
+summary + progress) and route-level rate limiting.
 
-Frontend coverage: send, Enter/Shift+Enter, loading and duplicate-send protection,
-error recovery and retry, history, suggestions, copy, regenerate, new chat, long
-answers, markdown (headings, lists, tables, code, quotes, links), formulas, XSS safety
-and screen-reader attributes.
+Frontend coverage: AI set menu, explain/summarize rendering with loading and
+retry, practice questions (reveal, hint, options), quiz interaction (multiple
+choice, open answers, score), generated-set preview (edit, remove, save only on
+confirm), card actions, and the full overhoor flow from setup to result.
+
+Groq is always mocked — tests never use a real API key.

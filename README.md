@@ -12,9 +12,10 @@ with no daily limits and no premium paywall for core learning features.
 - **Practice mode** — a smart mix of due, incorrect, difficult and new cards.
 - **Quiz mode** — multiple choice, true/false and short answer, with scored results.
 - **Discovery** — search public sets by subject, level, tags and text.
-- **Lerno AI** — built-in study assistant: ask questions, get step-by-step
-  explanations adapted to your level, with bounded conversation context, safe
-  markdown/formula rendering and per-user rate limits (Groq runs server-side only).
+- **Lerno AI** — built-in study assistant: chat, but also AI that works on your
+  own material — explain a set, make practice questions or a quiz, generate a
+  full set from a description, get hints per card, and “Overhoor mij” study mode
+  (Groq runs server-side only, always with the data you can already see).
 - **Guest learning** — study public sets without an account; sign up to keep progress.
 - **Dark mode** — calm, modern, mobile-first UI with a green accent.
 

@@ -60,15 +60,19 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
   | `AI_RATE_LIMIT_WINDOW_MS`   | default `300000` (5 minutes)                        |
   | `AI_RATE_LIMIT_IP_MAX`      | AI messages per IP per window, default `60`         |
 
-  Lerno AI is optional: without `GROQ_API_KEY` the rest of the app works and the
-  AI endpoint answers a clean `503` (see [`AI.md`](AI.md)). The AI settings below
-  are all optional and fall back to the documented defaults; out-of-range values
-  stop the service at boot instead of failing at runtime.
+| `GROQ_JSON_MODE` | default `true` |
+| `AI_CONTEXT_MAX_CARDS` | AI set context card cap, default `60` |
+| `AI_CONTEXT_MAX_CHARS` | AI set context character cap, default `12000` |
 
-  In production the backend **refuses to start** without Supabase credentials —
-  development data mode is never used in production. `PUBLIC_BACKEND_URL` is
-  also mandatory and must be a bare HTTPS origin. See [MCP OAuth setup](mcp.md#authentication)
-  for Supabase dashboard consent, PKCE client and redirect registration steps.
+Lerno AI is optional: without `GROQ_API_KEY` the rest of the app works and the
+AI endpoint answers a clean `503` (see [`AI.md`](AI.md)). The AI settings below
+are all optional and fall back to the documented defaults; out-of-range values
+stop the service at boot instead of failing at runtime.
+
+In production the backend **refuses to start** without Supabase credentials —
+development data mode is never used in production. `PUBLIC_BACKEND_URL` is
+also mandatory and must be a bare HTTPS origin. See [MCP OAuth setup](mcp.md#authentication)
+for Supabase dashboard consent, PKCE client and redirect registration steps.
 
 ## 3. Frontend (Render Static Site)
 
