@@ -60,6 +60,16 @@ const envSchema = z.object({
   /** Retries inside the Groq SDK (idempotent chat calls only). */
   GROQ_MAX_RETRIES: boundedNumber(1, 0, 3, true),
   /**
+   * Reasoning effort for reasoning models (GPT-OSS on Groq).
+   *
+   * `auto` (default) uses the per-task defaults from `services/ai-reasoning.ts`:
+   * low for short explanations/hints, medium for math, complex evaluation and
+   * generation. Set a concrete value to force one level for every request — that
+   * is a measurement switch, not a quality setting. Non-reasoning models ignore
+   * it (no reasoning_effort is sent).
+   */
+  GROQ_REASONING_EFFORT: boundedEnum(['auto', 'low', 'medium', 'high'] as const, 'auto'),
+  /**
    * Ask Groq for JSON output on structured tasks. Output is always parsed
    * defensively and validated with Zod — this only helps the model comply.
    */
@@ -159,6 +169,8 @@ export const config = {
   groqTemperature: parsed.GROQ_TEMPERATURE,
   groqTimeoutMs: parsed.GROQ_TIMEOUT_MS,
   groqMaxRetries: parsed.GROQ_MAX_RETRIES,
+  /** auto = per-task reasoning defaults; low|medium|high = force one level. */
+  groqReasoningEffort: parsed.GROQ_REASONING_EFFORT,
   groqJsonMode: parsed.GROQ_JSON_MODE,
   /** Bounds for AI study-set context sent to the model. */
   aiContextMaxCards: parsed.AI_CONTEXT_MAX_CARDS,

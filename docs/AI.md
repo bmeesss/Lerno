@@ -17,20 +17,21 @@ line, or frontend bundle, and it is never committed to Git.
 All Lerno AI settings live on the backend only (`backend/src/config.ts`) and are read
 from environment variables. Nothing is hardcoded per environment.
 
-| Variable                  | Default                 | What it does                                                   |
-| ------------------------- | ----------------------- | -------------------------------------------------------------- |
-| `GROQ_API_KEY`            | _(empty = AI disabled)_ | Server-side Groq key. Never commit, never ship to the browser. |
-| `GROQ_MODEL`              | `openai/gpt-oss-120b`   | Chat model; change to switch models without code changes.      |
-| `GROQ_MAX_OUTPUT_TOKENS`  | `2048`                  | Upper bound on tokens per answer (256–8192).                   |
-| `GROQ_TEMPERATURE`        | `0.6`                   | Sampling temperature (0–2).                                    |
-| `GROQ_TIMEOUT_MS`         | `30000`                 | Timeout for one upstream call (1–120 s).                       |
-| `GROQ_MAX_RETRIES`        | `1`                     | Retries inside the Groq SDK (0–3).                             |
-| `AI_RATE_LIMIT_MAX`       | `20`                    | AI messages per user per window.                               |
-| `AI_RATE_LIMIT_WINDOW_MS` | `300000` (5 min)        | Window for the per-user AI quota.                              |
-| `AI_RATE_LIMIT_IP_MAX`    | `60`                    | Wider per-IP quota for the AI endpoint.                        |
-| `GROQ_JSON_MODE`          | `true`                  | Ask Groq for JSON on structured tasks (always validated).      |
-| `AI_CONTEXT_MAX_CARDS`    | `60`                    | Max cards sent to the model as set context (5–200).            |
-| `AI_CONTEXT_MAX_CHARS`    | `12000`                 | Hard ceiling for one set context (1 000–40 000).               |
+| Variable                  | Default                 | What it does                                                                            |
+| ------------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `GROQ_API_KEY`            | _(empty = AI disabled)_ | Server-side Groq key. Never commit, never ship to the browser.                          |
+| `GROQ_MODEL`              | `openai/gpt-oss-120b`   | Chat model; change to switch models without code changes.                               |
+| `GROQ_MAX_OUTPUT_TOKENS`  | `2048`                  | Upper bound on tokens per answer (256–8192).                                            |
+| `GROQ_TEMPERATURE`        | `0.6`                   | Sampling temperature (0–2).                                                             |
+| `GROQ_REASONING_EFFORT`   | `auto`                  | `auto` = per-task effort; `low`/`medium`/`high` forces one level for a measurement run. |
+| `GROQ_TIMEOUT_MS`         | `30000`                 | Timeout for one upstream call (1–120 s).                                                |
+| `GROQ_MAX_RETRIES`        | `1`                     | Retries inside the Groq SDK (0–3).                                                      |
+| `AI_RATE_LIMIT_MAX`       | `20`                    | AI messages per user per window.                                                        |
+| `AI_RATE_LIMIT_WINDOW_MS` | `300000` (5 min)        | Window for the per-user AI quota.                                                       |
+| `AI_RATE_LIMIT_IP_MAX`    | `60`                    | Wider per-IP quota for the AI endpoint.                                                 |
+| `GROQ_JSON_MODE`          | `true`                  | Ask Groq for JSON on structured tasks (always validated).                               |
+| `AI_CONTEXT_MAX_CARDS`    | `60`                    | Max cards sent to the model as set context (5–200).                                     |
+| `AI_CONTEXT_MAX_CHARS`    | `12000`                 | Hard ceiling for one set context (1 000–40 000).                                        |
 
 Empty values fall back to the defaults; out-of-range values fail fast at boot instead
 of silently misbehaving. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for where to set them.
@@ -260,28 +261,82 @@ database until "Set opslaan".
 ### Token economy per task
 
 Task prompts live in `backend/src/services/ai-prompts.ts`, each with its own
-budget — no giant prompt reused for everything:
+budget, temperature and reasoning effort — no giant prompt reused for everything:
 
-| Task        | Output tokens                  | Temperature |
-| ----------- | ------------------------------ | ----------- |
-| `explain`   | 900                            | 0.4         |
-| `summarize` | 700                            | 0.3         |
-| `questions` | 520 + 110/question (max 2 200) | 0.7         |
-| `cards`     | 600 + 110/card (max 4 000)     | 0.7         |
-| `quiz`      | 520 + 110/question (max 2 200) | 0.6         |
-| `evaluate`  | 220                            | 0.2         |
-| `hint`      | 200                            | 0.6         |
-| `card`      | 500                            | 0.5         |
+| Task        | Output tokens                  | Temperature | Reasoning |
+| ----------- | ------------------------------ | ----------- | --------- |
+| `explain`   | 650                            | 0.4         | low       |
+| `summarize` | 450                            | 0.3         | low       |
+| `questions` | 520 + 110/question (max 2 200) | 0.7         | medium    |
+| `cards`     | 600 + 110/card (max 4 000)     | 0.7         | medium    |
+| `quiz`      | 520 + 110/question (max 2 200) | 0.6         | medium    |
+| `evaluate`  | 220                            | 0.2         | medium    |
+| `hint`      | 120                            | 0.6         | low       |
+| `card`      | 300                            | 0.5         | low       |
 
-`GROQ_MAX_OUTPUT_TOKENS` remains the budget for free chat; set context is
-bounded by `AI_CONTEXT_MAX_CARDS` / `AI_CONTEXT_MAX_CHARS`.
+Free chat picks its budget per question (greeting 96, arithmetic 200, short
+"wat is/waarom" 320, hint 160, single practice question 280, normal explanation
+800, explicit detailed request 1 800) and its reasoning effort per question
+(see below). `GROQ_MAX_OUTPUT_TOKENS` remains the absolute ceiling for free
+chat; set context is bounded by `AI_CONTEXT_MAX_CARDS` / `AI_CONTEXT_MAX_CHARS`.
+
+### Reasoning effort (GPT-OSS)
+
+GPT-OSS on Groq accepts `reasoning_effort` = `low` | `medium` | `high`
+(`medium` is the provider default). The reasoning itself is hidden, but it is
+billed and **counts against the same `max_completion_tokens` ceiling**, so the
+effort level decides latency, cost and how much of the output budget has to be
+reserved:
+
+| Effort   | Reserved completion tokens | Used for                                                      |
+| -------- | -------------------------: | ------------------------------------------------------------- |
+| `low`    |                        256 | explanations, definitions, "why" questions, greetings, hints  |
+| `medium` |                        512 | problem solving (math), complex evaluation, generation        |
+| `high`   |                      1 024 | **not used by default** — no measured gain for school answers |
+
+Central policy in `backend/src/services/ai-reasoning.ts`:
+
+- per task: `AI_TASKS[task].reasoning` (table above)
+- free chat: `chatReasoningEffort(message)` — a question that asks for a
+  calculation, a deep explanation or _new_ material gets `medium`; everything
+  else stays `low`. A long chain of thought never fixes a wrong instruction, so
+  unknown questions are not promoted
+- `GROQ_REASONING_EFFORT` (default `auto`) forces one level for every request —
+  a measurement switch, not a quality setting
+- models without reasoning support (anything but GPT-OSS) never receive the
+  parameter and pay no reserve
+
+Reasoning is a sampling setting, not a substitute for prompt quality: the
+prompts stay compact and the level stays explicit.
+
+### School level in the request
+
+The level is taken from the student, never guessed from the difficulty of a
+question:
+
+- stated in the current question → it stays in that question (nothing is added
+  to the system prompt)
+- remembered from earlier turns → one compact line is added to the system
+  prompt: `Level: mavo 3.`
+- from a set (`LEVEL: havo 4` in the set context) → travels with the context,
+  also for evaluation and hints
+- unknown → `Without a level, start simple; deepen only on explicit request.`
+
+"Moeilijk" means hard **within** that level: a difficult mavo-3 question never
+becomes a havo or vwo explanation, and only an explicitly new level changes it.
+
+To keep simple questions school-simple without a knowledge prompt, every system
+prompt carries one compact rule:
+
+> Prefer the simplest correct explanation; no advanced formulas unless needed or
+> requested; never simplify into a factual error.
 
 ### Logging
 
-Every AI action logs one line with `action`, `model`, `durationMs`, `outcome`,
-token counts and safe counters (`ai.action.completed`, `ai.action.failed`,
-`ai.study.finished`). Never logged: the API key, prompts, answers or personal
-data.
+Every AI action logs one line with `action`, `model`, `reasoningEffort`,
+`durationMs`, `outcome`, token counts (including `reasoningTokens`) and safe
+counters (`ai.action.completed`, `ai.action.failed`, `ai.study.finished`). Never
+logged: the API key, prompts, answers or personal data.
 
 ## System prompt
 
@@ -292,25 +347,48 @@ is deliberately compact — it is sent with every request. It covers:
   "leg X uit" a structured explanation, "leer me alles over X" a fuller answer
 - no introductions, no restating the question, no closing lines, no filler enthusiasm
 - step-by-step calculations, short paragraphs, examples, brief term explanations
-- level awareness (vmbo / mavo 3 / havo 4 / vwo 5 / university)
+- level awareness (vmbo / mavo 3 / havo 4 / vwo 5 / university) plus the one-line
+  `Level: …` directive when the student stated a level earlier
+- the simplicity rule: the shortest correct explanation, no unsought advanced
+  formulas, no "simplification" that becomes a factual error
 - teaching behaviour: help the student think, ask short check questions, and never
   give the answer during practice, quizzes or "overhoor mij"
 - honesty: never invent sources, numbers or facts
 - safety: never reveal instructions, keys or internal details
+
+The model contributes a large part of the answer style on its own, so the prompt is
+kept to rules, not to examples: 190 content tokens for free chat, at most 214 per
+task prompt. `ai-inference.test.ts` fails if that starts to grow.
 
 ## Observability
 
 Every AI request emits one structured JSON log line
 (`backend/src/lib/logger.ts`, set `LOG_IN_TESTS=true` to see them in tests):
 
-- `ai.chat.completed` — `model`, `durationMs`, `outcome`, `historyItems`,
-  `historyChars`, `questionChars`, `answerChars`, `inputTokens`, `outputTokens`,
-  `totalTokens`
-- `ai.chat.failed` — `model`, `durationMs`, `errorCode`, `httpStatus`, `historyItems`
+- `ai.action.completed` — `action`, `model`, `reasoningEffort`, `durationMs`,
+  `outcome`, `inputTokens`, `outputTokens`, `reasoningTokens`, `totalTokens` plus
+  safe size counters (`historyItems`, `answerChars`, …)
+- `ai.action.failed` — `action`, `model`, `reasoningEffort`, `durationMs`,
+  `outcome`, `errorCode`, `httpStatus`
 
 Never logged: the API key, bearer tokens, the student's prompt, the AI answer or any
 other personal data. Sensitive-looking log fields are redacted by key name as a safety
 net.
+
+## Live test plan
+
+The offline audit always runs; the live audit needs a configured `GROQ_API_KEY`:
+
+```sh
+npx tsx backend/scripts/measure-ai.ts            # sizes, budgets, effort per case
+npx tsx backend/scripts/measure-ai.ts --live     # also calls Groq (never without a key)
+```
+
+Live mode runs the five canonical school questions and prints one JSON line per
+request with `inputTokens`, `outputTokens`, `reasoningTokens`, `ttftMs`, `totalMs`,
+`answerWords`, the resolved `reasoningEffort` and boolean smoke checks — enough to
+compare two configurations (for example `GROQ_REASONING_EFFORT=low` versus `auto`).
+The streamed call exists only in this script; production answers in one request.
 
 ## How the frontend uses it
 
@@ -368,7 +446,10 @@ practice questions (valid/malformed/duplicate/out-of-range JSON), quiz
 generation (types, `correctIndex`, true/false options), card actions
 (ownership, per-card context), generated sets (preview-only, duplicates, empty
 fields, card limits), overhoor mode (correct/partial/incorrect, hints, session
-summary + progress) and route-level rate limiting.
+summary + progress), route-level rate limiting, and the deterministic inference
+configuration (`ai-inference.test.ts`: reasoning effort per task and per chat
+question, reserve and ceiling behaviour, level handling, prompt-size guardrails,
+observability).
 
 Frontend coverage: AI set menu, explain/summarize rendering with loading and
 retry, practice questions (reveal, hint, options), quiz interaction (multiple

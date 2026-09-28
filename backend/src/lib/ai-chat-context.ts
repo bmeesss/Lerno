@@ -100,6 +100,18 @@ function excerpt(text: string, limit: number): string {
   return capLength(text, limit - tail - 1) + '\n' + text.slice(-tail);
 }
 
+/**
+ * The one compact level line added to the system prompt: ` Level: mavo 3.`
+ *
+ * Six words instead of a paragraph about what mavo 3 means. The level is only
+ * repeated here when the current message does not state it itself, and it is
+ * never derived from the difficulty of a question — "hard" stays inside the
+ * level the student is in.
+ */
+export function levelDirective(level: string | null): string {
+  return level ? ` Level: ${level}.` : '';
+}
+
 /** These are ceilings, not target lengths. Unknown requests keep explanation room. */
 export function chatOutputBudget(message: string): number {
   if (/^\s*(?:hallo|hoi|hey|hello|hi|bedankt|thanks)[!.\s]*$/i.test(message)) return 96;
@@ -111,7 +123,7 @@ export function chatOutputBudget(message: string): number {
     return 1800;
   if (/\b(?:hint|aanwijzing)\b/i.test(message)) return 160;
   if (
-    /\b(?:een|one)\s+(?:(?:moeilijke|makkelijke|hard|easy)\s+)?(?:oefen)?(?:vraag|question)\b/i.test(
+    /(?:\b(?:een|one)|één)\s+(?:(?:moeilijke|makkelijke|hard|easy)\s+)?(?:oefen)?(?:vraag|question)\b/i.test(
       message,
     )
   )

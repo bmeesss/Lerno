@@ -70,6 +70,10 @@ describe('level and adaptive length policy', () => {
     expect(
       chatOutputBudget('Geef een moeilijke vraag over massa en gewicht op mavo 3.'),
     ).toBeLessThanOrEqual(300);
+    // "één" carries the accent that \b does not see: it is the same question.
+    expect(chatOutputBudget('Geef één moeilijke vraag over massa en gewicht op mavo 3.')).toBe(
+      chatOutputBudget('Geef een moeilijke vraag over massa en gewicht op mavo 3.'),
+    );
     expect(chatOutputBudget('Leg fotosynthese uit op mavo 3-niveau.')).toBe(800);
     expect(chatOutputBudget('Leg fotosynthese uitgebreid uit')).toBeGreaterThan(800);
     expect(STUDY_SYSTEM_PROMPT).toContain('question only');

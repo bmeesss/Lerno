@@ -13,7 +13,8 @@
  * `ai-learning-service.ts` and share the low-level client in `ai-completion.ts`.
  */
 import { STUDY_SYSTEM_PROMPT } from './ai-prompts.js';
-import { selectChatContext, chatOutputBudget } from '../lib/ai-chat-context.js';
+import { chatReasoningEffort } from './ai-reasoning.js';
+import { selectChatContext, chatOutputBudget, levelDirective } from '../lib/ai-chat-context.js';
 import { cleanAiText } from '../lib/ai-text.js';
 import { config } from '../config.js';
 import { errors } from '../lib/errors.js';
@@ -27,6 +28,7 @@ import {
 import { sanitizeChatText } from '../lib/ai-sanitize.js';
 import { guardSecretLeak } from '../lib/ai-guard.js';
 import { requestChat } from './ai-completion.js';
+import type { ChatRequest } from './ai-completion.js';
 import type { AiChatMessage } from '../validators/ai.validators.js';
 
 export { MAX_CONTEXT_CHARS, MAX_HISTORY_ITEM_SENT_CHARS, MAX_HISTORY_MESSAGES_SENT };
@@ -44,7 +46,8 @@ export const MAX_HISTORY_SENT = MAX_HISTORY_MESSAGES_SENT;
  *
  * Kept compact on purpose: it is sent with every request, so every extra
  * sentence costs tokens on all traffic. It covers tone, adaptive answer length,
- * teaching behaviour and the anti-leak rules (see docs/AI.md).
+ * level, teaching behaviour and the anti-leak rules (see docs/AI.md); the school
+ * level itself is added as one short line per request.
  */
 export const LERNO_AI_SYSTEM_PROMPT = STUDY_SYSTEM_PROMPT;
 
@@ -65,7 +68,7 @@ export function buildConversation(
   const { messages, level } = selectChatContext(safeMessage, history);
 
   const conversation: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: LERNO_AI_SYSTEM_PROMPT + (level ? ` Level: ${level}.` : '') },
+    { role: 'system', content: LERNO_AI_SYSTEM_PROMPT + levelDirective(level) },
   ];
   for (const entry of messages) {
     conversation.push({ role: entry.role, content: entry.content });
@@ -86,25 +89,39 @@ export function guardReply(reply: string): string {
   return guardSecretLeak(reply);
 }
 
+/**
+ * The complete Groq request for one free-chat turn: context, output budget,
+ * temperature and reasoning effort. Exported so the live audit script measures
+ * exactly what production sends (docs/AI.md → live test plan).
+ */
+export function buildChatRequest(message: string, history: AiChatMessage[]): ChatRequest {
+  return {
+    action: 'chat',
+    messages: buildConversation(message, history),
+    maxOutputTokens: Math.min(config.groqMaxOutputTokens, chatOutputBudget(message)),
+    temperature: config.groqTemperature,
+    // Simple questions never need a long chain of thought; math, complex
+    // questions and generation do (see ai-reasoning.ts).
+    reasoningEffort: chatReasoningEffort(message),
+  };
+}
+
 /** Asks Lerno AI and returns only the assistant's reply text. */
 export async function askLernoAi(input: AiChatInput): Promise<string> {
-  const messages = buildConversation(input.message, input.history);
+  const request = buildChatRequest(input.message, input.history);
+  const messages = request.messages;
   const historyItems = messages.length - 2;
   const historyChars = messages
     .slice(1, -1)
     .reduce((total, message) => total + message.content.length, 0);
 
-  const result = await requestChat({
-    action: 'chat',
-    messages,
-    maxOutputTokens: Math.min(config.groqMaxOutputTokens, chatOutputBudget(input.message)),
-    temperature: config.groqTemperature,
-  });
+  const result = await requestChat(request);
 
   if (!result.text) {
     logger.warn('ai.action.failed', {
       action: 'chat',
       model: config.groqModel,
+      reasoningEffort: result.reasoningEffort,
       durationMs: result.durationMs,
       outcome: 'empty',
       errorCode: 'AI_ERROR',
@@ -118,6 +135,7 @@ export async function askLernoAi(input: AiChatInput): Promise<string> {
   logger.info('ai.action.completed', {
     action: 'chat',
     model: config.groqModel,
+    reasoningEffort: result.reasoningEffort,
     durationMs: result.durationMs,
     outcome: safeReply === result.text ? 'ok' : 'blocked',
     historyItems,
@@ -126,6 +144,7 @@ export async function askLernoAi(input: AiChatInput): Promise<string> {
     answerChars: safeReply.length,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    reasoningTokens: result.reasoningTokens,
     totalTokens: result.totalTokens,
   });
 

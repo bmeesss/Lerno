@@ -6,15 +6,23 @@
  * - one cached Groq client (connection reuse) keyed by API key
  * - missing key → clean AI_UNAVAILABLE, upstream failures → safe mapped errors
  * - a hard timeout (next to the SDK timeout) so no request hangs the API
- * - structured logging per action: action, model, duration, tokens, outcome
+ * - structured logging per action: action, model, reasoning effort, duration,
+ *   tokens, outcome
+ * - the request body is built in one place (`buildChatParams`), so the reasoning
+ *   effort, output budget and temperature are identical in production and in the
+ *   live audit script
  *
  * Never logs: the API key, the prompt, or the answer.
  */
 import Groq from 'groq-sdk';
-import type { ChatCompletionMessageParam } from 'groq-sdk/resources/chat/completions.js';
+import type {
+  ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionMessageParam,
+} from 'groq-sdk/resources/chat/completions.js';
 import { config } from '../config.js';
 import { errors, type ApiError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { REASONING_RESERVE, resolveReasoningEffort, type ReasoningEffort } from './ai-reasoning.js';
 
 export type ConversationMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
@@ -96,20 +104,56 @@ export interface ChatRequest {
   temperature?: number;
   /** Ask the model for a JSON object (best effort — output is always validated). */
   jsonMode?: boolean;
+  /**
+   * Reasoning effort for this request. Omit it and the per-task default
+   * (`AI_TASKS`) or the free-chat classifier decides; `GROQ_REASONING_EFFORT`
+   * overrides both. Ignored by models without reasoning support.
+   */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface ChatResult {
   text: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Hidden reasoning tokens billed for this answer (null when not reported). */
+  reasoningTokens: number | null;
   totalTokens: number | null;
   durationMs: number;
+  /** Effort actually sent upstream, or null for models without the parameter. */
+  reasoningEffort: ReasoningEffort | null;
 }
 
-/** Visible-answer budget plus bounded reasoning headroom for the default model. */
-export function completionBudget(request: Pick<ChatRequest, 'action' | 'maxOutputTokens'>): number {
-  const budget = request.maxOutputTokens + (/gpt-oss/.test(config.groqModel) ? 256 : 0);
+/**
+ * Visible-answer budget plus bounded reasoning headroom, sized by the effort
+ * level that will actually be requested (GPT-OSS counts hidden reasoning against
+ * the same ceiling). Free chat additionally respects
+ * `GROQ_MAX_OUTPUT_TOKENS` as an absolute ceiling.
+ */
+export function completionBudget(
+  request: Pick<ChatRequest, 'action' | 'maxOutputTokens' | 'reasoningEffort'>,
+): number {
+  const effort = resolveReasoningEffort(request);
+  const budget = request.maxOutputTokens + (effort ? REASONING_RESERVE[effort] : 0);
   return request.action === 'chat' ? Math.min(config.groqMaxOutputTokens, budget) : budget;
+}
+
+/**
+ * The exact Groq request body for one call. Kept separate from `requestChat` so
+ * the live audit script measures the very same settings production sends.
+ */
+export function buildChatParams(request: ChatRequest): ChatCompletionCreateParamsNonStreaming {
+  const reasoningEffort = resolveReasoningEffort(request);
+  return {
+    model: config.groqModel,
+    messages: request.messages as ChatCompletionMessageParam[],
+    max_completion_tokens: completionBudget(request),
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+    temperature: request.temperature ?? config.groqTemperature,
+    ...(request.jsonMode && config.groqJsonMode
+      ? { response_format: { type: 'json_object' as const } }
+      : {}),
+  };
 }
 
 /** Sends one chat completion and returns the trimmed text (never throws raw upstream errors). */
@@ -126,27 +170,17 @@ export async function requestChat(request: ChatRequest): Promise<ChatResult> {
   abortAfter.unref?.();
 
   let completion: Awaited<ReturnType<Groq['chat']['completions']['create']>>;
+  const reasoningEffort = resolveReasoningEffort(request);
   try {
-    completion = await getGroqClient(apiKey).chat.completions.create(
-      {
-        model: config.groqModel,
-        messages: request.messages as ChatCompletionMessageParam[],
-        // GPT-OSS counts hidden reasoning against the same ceiling. Reserve a
-        // little headroom so a tiny hint/greeting budget still yields visible text.
-        max_completion_tokens: completionBudget(request),
-        ...(/gpt-oss/.test(config.groqModel) ? { reasoning_effort: 'low' as const } : {}),
-        temperature: request.temperature ?? config.groqTemperature,
-        ...(request.jsonMode && config.groqJsonMode
-          ? { response_format: { type: 'json_object' as const } }
-          : {}),
-      },
-      { signal: controller.signal },
-    );
+    completion = await getGroqClient(apiKey).chat.completions.create(buildChatParams(request), {
+      signal: controller.signal,
+    });
   } catch (err) {
     const mapped = mapGroqError(err);
     logger.warn('ai.action.failed', {
       action: request.action,
       model: config.groqModel,
+      reasoningEffort,
       durationMs: Date.now() - startedAt,
       outcome: 'error',
       errorCode: mapped.code,
@@ -164,7 +198,9 @@ export async function requestChat(request: ChatRequest): Promise<ChatResult> {
     durationMs: Date.now() - startedAt,
     inputTokens: usage?.prompt_tokens ?? null,
     outputTokens: usage?.completion_tokens ?? null,
+    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? null,
     totalTokens: usage?.total_tokens ?? null,
+    reasoningEffort,
   };
 }
 
@@ -178,10 +214,12 @@ export function logAiAction(
   logger.info('ai.action.completed', {
     action,
     model: config.groqModel,
+    reasoningEffort: result.reasoningEffort,
     durationMs: result.durationMs,
     outcome,
     inputTokens: result.inputTokens,
     outputTokens: result.outputTokens,
+    reasoningTokens: result.reasoningTokens,
     totalTokens: result.totalTokens,
     answerChars: result.text.length,
     ...extra,
