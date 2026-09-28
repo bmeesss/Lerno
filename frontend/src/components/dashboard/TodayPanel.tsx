@@ -5,7 +5,13 @@ import { nextActionLink } from '../../lib/nextAction';
 import type { TodaySummary } from '../../types';
 
 /** Compact "what should I do now" panel: goal, due, streak, next action. */
-export function TodayPanel({ today }: { today: TodaySummary }) {
+export function TodayPanel({
+  today,
+  showAction = true,
+}: {
+  today: TodaySummary;
+  showAction?: boolean;
+}) {
   const next = nextActionLink(today.continueAction);
   const upcomingParts: string[] = [];
   if (today.upcoming.laterToday > 0) {
@@ -59,9 +65,11 @@ export function TodayPanel({ today }: { today: TodaySummary }) {
         {upcomingParts.length > 0 ? ` · ${upcomingParts.join(' · ')}` : ''}
       </p>
 
-      <ButtonLink to={next.to} block>
-        {next.label}
-      </ButtonLink>
+      {showAction && (
+        <ButtonLink to={next.to} block>
+          {next.label}
+        </ButtonLink>
+      )}
     </section>
   );
 }

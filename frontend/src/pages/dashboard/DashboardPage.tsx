@@ -1,32 +1,55 @@
 import { Link } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
-import { IconBook, IconLayers, IconSparkles } from '../../components/ui/Icons';
+import { StudySetCard } from '../../components/ui/StudySetCard';
+import {
+  IconArrowRight,
+  IconBook,
+  IconLayers,
+  IconPlus,
+  IconSparkles,
+} from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { TodayPanel } from '../../components/dashboard/TodayPanel';
 import { dashboardService } from '../../services/dashboardService';
-import type { DashboardData, StudySetSummary } from '../../types';
+import { nextActionLink } from '../../lib/nextAction';
+import type { DashboardData } from '../../types';
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const { data, loading, error } = useAsync<DashboardData>(() => dashboardService.get(), []);
-
+  const { data, loading, error, reload } = useAsync<DashboardData>(
+    () => dashboardService.get(),
+    [],
+  );
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
-
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', {
+      hour: 'numeric',
+      hourCycle: 'h23',
+      timeZone: user?.profile.timezone || 'UTC',
+    }).format(new Date()),
+  );
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   return (
     <>
       <div className="dash-hero">
         <div className="greeting">
-          <h1>Hi {firstName} 👋</h1>
-          <p>Here is what to study today. One short session keeps the habit going.</p>
+          <div className="eyebrow-label">Make room for a little progress</div>
+          <h1>
+            {greeting}, {firstName}
+          </h1>
+          <p>Ready for your next little breakthrough?</p>
         </div>
-        <ButtonLink to="/ai" className="dash-hero-ai">
-          <IconSparkles size={17} />
-          Ask Lerno AI
-        </ButtonLink>
+        <span className="dashboard-date">
+          {new Intl.DateTimeFormat('en', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            timeZone: user?.profile.timezone || 'UTC',
+          }).format(new Date())}
+        </span>
       </div>
-
       {loading ? (
         <LoadingRow large />
       ) : error ? (
@@ -34,7 +57,7 @@ export function DashboardPage() {
           title="Could not load your dashboard"
           description={error}
           action={
-            <Button variant="secondary" onClick={() => window.location.reload()}>
+            <Button variant="secondary" onClick={reload}>
               Try again
             </Button>
           }
@@ -46,129 +69,174 @@ export function DashboardPage() {
   );
 }
 
-/**
- * Spec order: Today (with next action) → due → continue → recent → discover.
- * All-time stats live on the Progress page; the dashboard stays action-first.
- */
 function DashboardContent({ data }: { data: DashboardData }) {
+  const next = nextActionLink(data.today.continueAction);
+  const canStudy = 'setId' in data.today.continueAction;
+  const continueTitle =
+    'setTitle' in data.today.continueAction
+      ? data.today.continueAction.setTitle
+      : data.continueSet?.title;
   return (
     <>
-      {data.today.comeback ? (
+      {data.today.comeback && (
         <div className="guest-banner">
           <p>{data.today.comeback.message}</p>
         </div>
-      ) : null}
-
-      <TodayPanel today={data.today} />
-
-      {data.dueGroups.length > 0 ? (
-        <>
-          <div className="section-title">
-            <h2>Cards due for review</h2>
-            <Link to="/review" className="muted">
-              See all
-            </Link>
+      )}
+      <div className="dashboard-overview">
+        <section className="study-feature">
+          <div className="study-feature-copy">
+            <span className="eyebrow-label">Your next step</span>
+            <h2>
+              {data.today.goalReached
+                ? 'A little effort. Real progress.'
+                : 'Keep your curiosity going.'}
+            </h2>
+            <p>
+              {continueTitle ? (
+                <>
+                  Pick up <strong>{continueTitle}</strong> and make a little more of it stick.
+                </>
+              ) : (
+                'One focused session is a good place to start. Your future self will thank you.'
+              )}
+            </p>
+            <ButtonLink to={next.to}>
+              {canStudy ? 'Continue studying' : next.label}
+              <IconArrowRight size={17} />
+            </ButtonLink>
+            {canStudy && <span className="feature-caption">{next.label}</span>}
           </div>
-          <div className="stack" style={{ gap: 10 }}>
-            {data.dueGroups.slice(0, 4).map((group) => (
-              <Link key={group.setId} to={`/sets/${group.setId}`} className="list-row">
-                <span className="list-row-icon">
-                  <IconBook size={19} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="list-row-title">{group.setTitle}</div>
-                  <div className="muted" style={{ fontSize: '0.825rem' }}>
-                    {group.subjectName ?? 'No subject'}
-                  </div>
-                </div>
-                <Badge variant="accent">{group.dueCount} due</Badge>
-              </Link>
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      <div className="section-title">
-        <h2>Continue learning</h2>
-      </div>
-      {data.continueSet ? (
-        <Link to={`/sets/${data.continueSet.id}`} className="card card-interactive continue-card">
-          <div className="continue-card-main">
-            <div className="set-card-title">{data.continueSet.title}</div>
-            <div className="muted" style={{ fontSize: '0.875rem' }}>
-              {data.continueSet.subjectName ?? 'No subject'} · {data.continueSet.cardCount} cards
+          <div className="learning-illustration" aria-hidden="true">
+            <div className="paper-card paper-back" />
+            <div className="paper-card paper-front">
+              <IconLayers size={28} />
+              <span>A little every day.</span>
+              <div className="paper-lines">
+                <i />
+                <i />
+                <i />
+              </div>
+              <span className="paper-check">
+                <IconBook size={17} /> Learn at your pace
+              </span>
             </div>
           </div>
-          <span className="btn btn-primary">Continue</span>
+        </section>
+        <TodayPanel today={data.today} showAction={false} />
+      </div>
+      <nav className="quick-actions" aria-label="Quick actions">
+        <Link to="/sets/new">
+          <span className="quick-icon">
+            <IconPlus />
+          </span>
+          <span>
+            <strong>Create a set</strong>
+            <small>Give your notes a new life</small>
+          </span>
+          <IconArrowRight size={17} />
         </Link>
-      ) : (
-        <EmptyState
-          icon={<IconLayers size={22} />}
-          title="No recent sets yet"
-          description="Create your first study set or discover a public one to get started."
-          action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}
-        />
+        <Link to="/ai">
+          <span className="quick-icon quick-icon-blue">
+            <IconSparkles />
+          </span>
+          <span>
+            <strong>Ask Lerno AI</strong>
+            <small>A fresh way to understand</small>
+          </span>
+          <IconArrowRight size={17} />
+        </Link>
+        <Link to="/review">
+          <span className="quick-icon quick-icon-warm">
+            <IconBook />
+          </span>
+          <span>
+            <strong>Start studying</strong>
+            <small>A little practice goes a long way</small>
+          </span>
+          <IconArrowRight size={17} />
+        </Link>
+      </nav>
+      <div className="dashboard-lower">
+        <section>
+          <div className="section-title">
+            <h2>Your recent sets</h2>
+            <Link to="/sets">
+              View library <IconArrowRight size={15} />
+            </Link>
+          </div>
+          {data.recentSets.length ? (
+            <div className="set-grid">
+              {data.recentSets.slice(0, 4).map((set) => (
+                <StudySetCard key={set.id} set={set} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<IconLayers />}
+              title="Your learning starts here"
+              description="Create a set from your notes or find something that sparks your curiosity."
+              action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}
+            />
+          )}
+        </section>
+        <aside className="review-panel">
+          <div className="section-title">
+            <h2>Up next</h2>
+            <Badge>{data.cardsDue} due</Badge>
+          </div>
+          {data.dueGroups.length ? (
+            <div className="review-list">
+              {data.dueGroups.slice(0, 4).map((group) => (
+                <Link key={group.setId} to={`/sets/${group.setId}/study`} className="review-item">
+                  <span className="list-row-icon">
+                    <IconBook size={18} />
+                  </span>
+                  <span className="review-item-copy">
+                    <strong>{group.setTitle}</strong>
+                    <small>
+                      {group.subjectName ?? 'Independent study'} · {group.dueCount} due
+                    </small>
+                  </span>
+                  <IconArrowRight size={16} />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="review-clear">
+              <IconBook size={28} />
+              <h3>A little breathing room</h3>
+              <p>No cards due right now. Explore a new set or revisit a favorite.</p>
+            </div>
+          )}
+          <Link className="review-all" to="/review">
+            Open your review queue <IconArrowRight size={16} />
+          </Link>
+          <div className="progress-note">
+            <IconLayers size={20} />
+            <div>
+              <strong>Progress, not perfection.</strong>
+              <p>Build a habit that works for you.</p>
+              <Link to="/progress">See your progress →</Link>
+            </div>
+          </div>
+        </aside>
+      </div>
+      {data.suggestions.length > 0 && (
+        <section>
+          <div className="section-title">
+            <h2>A little more to explore</h2>
+            <Link to="/discover">
+              Discover sets <IconArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="set-grid">
+            {data.suggestions.slice(0, 3).map((set) => (
+              <StudySetCard key={set.id} set={set} />
+            ))}
+          </div>
+        </section>
       )}
-
-      {data.recentSets.length > 0 ? (
-        <>
-          <div className="section-title">
-            <h2>Recent sets</h2>
-            <Link to="/sets" className="muted">
-              See all
-            </Link>
-          </div>
-          <div className="set-grid">
-            {data.recentSets.slice(0, 6).map((set) => (
-              <SetCard key={set.id} set={set} />
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      {data.suggestions.length > 0 ? (
-        <>
-          <div className="section-title">
-            <h2>Discover</h2>
-            <Link to="/discover" className="muted">
-              See all
-            </Link>
-          </div>
-          <div className="set-grid">
-            {data.suggestions.map((set) => (
-              <SetCard key={set.id} set={set} />
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      <div style={{ textAlign: 'center', marginTop: 28 }}>
-        <Link to="/progress" className="muted" style={{ fontSize: '0.875rem' }}>
-          See all your stats →
-        </Link>
-      </div>
     </>
-  );
-}
-
-function SetCard({ set }: { set: StudySetSummary }) {
-  return (
-    <Link to={`/sets/${set.id}`} className="card card-interactive set-card">
-      <div className="set-card-top">
-        <div className="set-card-title">{set.title}</div>
-        {set.visibility === 'public' ? (
-          <Badge variant="accent">Public</Badge>
-        ) : (
-          <Badge>Private</Badge>
-        )}
-      </div>
-      <div className="set-card-desc">{set.description || 'No description'}</div>
-      <div className="set-card-footer">
-        <span className="set-card-meta">
-          <span>{set.subjectName ?? 'No subject'}</span>
-        </span>
-        <span>{set.cardCount} cards</span>
-      </div>
-    </Link>
   );
 }
