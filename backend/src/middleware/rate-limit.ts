@@ -2,6 +2,7 @@ import rateLimit from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { config } from '../config.js';
 import { clientIp } from '../lib/http.js';
+import { FixedWindowStore } from '../lib/rate-limit-store.js';
 
 export interface LimiterOptions {
   windowMs: number;
@@ -14,21 +15,33 @@ export interface LimiterOptions {
 }
 
 /**
- * IP-keyed rate limiter answering with the standard error envelope.
- * Used for auth-sensitive and write-heavy routes (spec §15).
+ * Rate limiter answering with the standard error envelope.
+ *
+ * Uses an atomic fixed-window store so concurrent requests cannot race past the
+ * limit, and returns `Retry-After` (header + body field) so the frontend can
+ * tell the student when to try again.
  */
 export function createLimiter(options: LimiterOptions) {
   return rateLimit({
     windowMs: options.windowMs,
-    max: options.max,
+    limit: options.max,
     standardHeaders: true,
     legacyHeaders: false,
+    store: new FixedWindowStore(options.windowMs),
     keyGenerator: (req: Request) => `${options.name}:${options.keyBy?.(req) ?? clientIp(req)}`,
-    handler: (_req: Request, res: Response) => {
+    handler: (req: Request, res: Response) => {
+      const info = (req as unknown as { rateLimit?: { resetTime?: Date } }).rateLimit;
+      const reset = info?.resetTime;
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((reset ? reset.getTime() - Date.now() : options.windowMs) / 1000),
+      );
+      res.setHeader('Retry-After', String(retryAfter));
       res.status(429).json({
         error: {
           code: 'RATE_LIMITED',
           message: 'Too many requests, please slow down and try again later.',
+          retryAfter,
         },
       });
     },
@@ -54,12 +67,24 @@ export function aiLimiterKey(req: Request): string {
 }
 
 /**
- * Lerno AI chat: every request is an upstream Groq call, so the limit is
- * strict and keyed per authenticated user (fallback: IP) (spec §15).
+ * Lerno AI chat: every request is an upstream Groq call, so the limit is much
+ * stricter than for normal API endpoints and keyed per authenticated user
+ * (fallback: IP). Configurable via `AI_RATE_LIMIT_MAX` /
+ * `AI_RATE_LIMIT_WINDOW_MS`.
  */
 export const aiRateLimit = createLimiter({
-  windowMs: 5 * 60 * 1000,
-  max: 20,
+  windowMs: config.aiRateLimitWindowMs,
+  max: config.aiRateLimitMax,
   name: 'ai',
   keyBy: aiLimiterKey,
+});
+
+/**
+ * Wider per-IP guard for the AI endpoint: a single network can hold many
+ * accounts, and every request costs real upstream tokens.
+ */
+export const aiIpRateLimit = createLimiter({
+  windowMs: config.aiRateLimitWindowMs,
+  max: config.aiRateLimitIpMax,
+  name: 'ai-ip',
 });
