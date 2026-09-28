@@ -42,13 +42,14 @@
   --radius-lg: 16px;
   --radius-full: 999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+  /* Shadows — layered, subtle */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.32), 0 2px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.45), 0 4px 12px -4px rgba(0, 0, 0, 0.24);
 
   /* Layout */
-  --sidebar-width: 248px;
+  --sidebar-width: 256px;
   --topbar-height: 60px;
   --mobile-nav-height: 62px;
   --content-max: 1080px;
@@ -71,14 +72,15 @@
 
   --text: #101613;
   --text-secondary: #414c46;
-  --text-muted: #6b7770;
-  --text-inverse: #f1f5f2;
+  --text-muted: #616d66;
+  --text-inverse: #ffffff;
 
-  --accent: #17a15e;
-  --accent-hover: #128a4f;
-  --accent-active: #0f7743;
-  --accent-subtle: rgba(23, 161, 94, 0.1);
-  --accent-border: rgba(23, 161, 94, 0.35);
+  /* Darker green than dark mode: keeps white button text at WCAG AA (≥ 4.5:1). */
+  --accent: #0f7a46;
+  --accent-hover: #0d6b3d;
+  --accent-active: #0b5f35;
+  --accent-subtle: rgba(15, 122, 70, 0.1);
+  --accent-border: rgba(15, 122, 70, 0.35);
 
   --danger: #cc3b42;
   --danger-subtle: rgba(204, 59, 66, 0.1);
@@ -87,7 +89,8 @@
   --info: #2c5fa8;
   --info-subtle: rgba(44, 95, 168, 0.1);
 
-  --shadow-sm: 0 1px 2px rgba(16, 24, 20, 0.08);
-  --shadow-md: 0 8px 24px rgba(16, 24, 20, 0.1);
-  --shadow-lg: 0 16px 48px rgba(16, 24, 20, 0.14);
+  --shadow-xs: 0 1px 2px rgba(16, 24, 20, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 20, 0.07), 0 1px 2px rgba(16, 24, 20, 0.05);
+  --shadow-md: 0 6px 16px -4px rgba(16, 24, 20, 0.1), 0 2px 6px -2px rgba(16, 24, 20, 0.06);
+  --shadow-lg: 0 16px 40px -8px rgba(16, 24, 20, 0.14), 0 4px 12px -4px rgba(16, 24, 20, 0.08);
 }

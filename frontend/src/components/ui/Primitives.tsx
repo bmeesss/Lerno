@@ -18,13 +18,17 @@ export function EmptyState({
   title,
   description,
   action,
+  icon,
 }: {
   title: string;
   description: string;
   action?: ReactNode;
+  /** Optional icon shown in a soft accent circle (from the Icons set). */
+  icon?: ReactNode;
 }) {
   return (
     <div className="empty-state">
+      {icon ? <span className="empty-state-icon">{icon}</span> : null}
       <h3>{title}</h3>
       <p>{description}</p>
       {action}

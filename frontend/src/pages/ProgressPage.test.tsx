@@ -95,7 +95,7 @@ describe('ProgressPage', () => {
     expect(await screen.findByText('Quiz accuracy')).toBeInTheDocument();
     expect(await screen.findByText(/80% card accuracy/)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    expect(screen.getByText('4 / 10 cards')).toBeInTheDocument();
+    expect(screen.getByLabelText('4 / 10 cards')).toBeInTheDocument();
   });
 
   it('renders without the today strip when today is unavailable', async () => {

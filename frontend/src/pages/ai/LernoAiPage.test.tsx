@@ -138,11 +138,20 @@ describe('LernoAiPage', () => {
   it('fills the input from a suggestion chip', async () => {
     render(<LernoAiPage />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Leg fotosynthese uit op mavo 3 niveau' }),
-    );
-    expect(screen.getByLabelText('Your question for Lerno AI')).toHaveValue(
-      'Leg fotosynthese uit op mavo 3 niveau',
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Overhoor mij op …' }));
+    expect(screen.getByLabelText('Your question for Lerno AI')).toHaveValue('Overhoor mij op …');
+  });
+
+  it('shows all quick prompts as chips on the welcome state', () => {
+    render(<LernoAiPage />);
+
+    for (const label of [
+      'Leg dit simpel uit: …',
+      'Maak oefenvragen over …',
+      'Help mij deze som oplossen: …',
+      'Overhoor mij op …',
+    ]) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
   });
 });

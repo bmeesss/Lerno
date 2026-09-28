@@ -100,9 +100,11 @@ export function SubjectsPage() {
         <div className="stack" style={{ gap: 10 }}>
           {data.map((subject) => (
             <div key={subject.id} className="list-row">
-              <IconBook size={20} />
+              <span className="list-row-icon">
+                <IconBook size={19} />
+              </span>
               <Link to={`/subjects/${subject.id}`} style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>{subject.name}</div>
+                <div className="list-row-title">{subject.name}</div>
                 <div className="muted" style={{ fontSize: '0.825rem' }}>
                   {subject.setCount} set{subject.setCount === 1 ? '' : 's'}
                 </div>
