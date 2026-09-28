@@ -4,9 +4,10 @@
  */
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconBook, IconSparkles } from '../ui/Icons';
+import { IconBook, IconCheck, IconSparkles } from '../ui/Icons';
 import { aiLearningService } from '../../services/aiLearningService';
 import { AiMenu, type AiMenuItem } from './AiMenu';
+import { AiQuestionsModal } from './AiQuestionsModal';
 import { AiResultModal, friendlyAiError, type AiResultState } from './AiResultModal';
 
 type SetAction = 'explain' | 'summarize';
@@ -26,6 +27,7 @@ export function AiSetActions({ setId, signedIn, extraItems }: AiSetActionsProps)
   const [hint, setHint] = useState<string | undefined>(undefined);
   const [state, setState] = useState<AiResultState>({ status: 'idle' });
   const [action, setAction] = useState<SetAction | null>(null);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
 
   const run = useCallback(
     async (next: SetAction) => {
@@ -72,12 +74,41 @@ export function AiSetActions({ setId, signedIn, extraItems }: AiSetActionsProps)
         void run('summarize');
       },
     },
+    {
+      id: 'questions',
+      label: 'Maak oefenvragen',
+      icon: <IconCheck size={15} />,
+      onSelect: () => {
+        if (!signedIn) {
+          navigate('/login?next=' + encodeURIComponent(`/sets/${setId}`));
+          return;
+        }
+        setQuestionsOpen(true);
+      },
+    },
+    {
+      id: 'overhoor',
+      label: 'Overhoor mij',
+      icon: <IconSparkles size={15} />,
+      onSelect: () => {
+        if (!signedIn) {
+          navigate('/login?next=' + encodeURIComponent(`/sets/${setId}`));
+          return;
+        }
+        navigate(`/sets/${setId}/ai-study`);
+      },
+    },
     ...(extraItems ?? []),
   ];
 
   return (
     <>
       <AiMenu label="Vraag Lerno AI" items={items} />
+      <AiQuestionsModal
+        open={questionsOpen}
+        setId={setId}
+        onClose={() => setQuestionsOpen(false)}
+      />
       <AiResultModal
         open={open}
         title={title}

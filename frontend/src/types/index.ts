@@ -335,6 +335,8 @@ export interface AiGeneratedQuestion {
   hint: string;
   options: string[];
   correctIndex: number | null;
+  /** Set when the question was based on one specific card (enables progress). */
+  cardId?: string | null;
 }
 
 export interface AiGeneratedQuestions {
