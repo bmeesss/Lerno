@@ -217,11 +217,16 @@ export function AiStudyPage() {
 
       {phase === 'setup' ? (
         <div className="card ai-study-setup">
+          <span className="ai-setup-icon" aria-hidden="true">
+            <IconSparkles size={28} />
+          </span>
+          <h2>Maak ruimte om te oefenen</h2>
           <p className="muted">
             Lerno AI stelt vragen over <strong>{set.title}</strong> en kijkt mee met je antwoord. Je
             krijgt per vraag korte feedback.
           </p>
 
+          <div className="ai-setup-label">Hoeveel vragen wil je oefenen?</div>
           <div className="ai-control-group" role="group" aria-label="Aantal vragen">
             {COUNTS.map((value) => (
               <button
@@ -235,6 +240,7 @@ export function AiStudyPage() {
               </button>
             ))}
           </div>
+          <div className="ai-setup-label">Kies je uitdaging</div>
           <div className="ai-control-group" role="group" aria-label="Niveau">
             {DIFFICULTIES.map((option) => (
               <button

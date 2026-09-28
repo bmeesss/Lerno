@@ -6,7 +6,17 @@ import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../components/ui/Toast';
 import { ReportModal } from '../../components/moderation/ReportModal';
-import { IconEdit, IconFlag, IconHeart, IconStar, IconTrash } from '../../components/ui/Icons';
+import {
+  IconArrowRight,
+  IconBook,
+  IconEdit,
+  IconFlag,
+  IconHeart,
+  IconLayers,
+  IconQuiz,
+  IconStar,
+  IconTrash,
+} from '../../components/ui/Icons';
 import { AiSetActions } from '../../components/ai/AiSetActions';
 import { AiCardActions } from '../../components/ai/AiCardActions';
 import { ApiError } from '../../lib/api';
@@ -101,6 +111,7 @@ export function SetDetailPage() {
       <div className="set-hero">
         <div className="page-header" style={{ marginBottom: 0 }}>
           <div>
+            <div className="eyebrow-label">{data.subjectName ?? 'Your next study session'}</div>
             <h1>{data.title}</h1>
             <div className="set-meta" style={{ marginTop: 10 }}>
               {data.subjectName ? <Badge variant="accent">{data.subjectName}</Badge> : null}
@@ -125,35 +136,52 @@ export function SetDetailPage() {
           </div>
         </div>
 
+        <nav className="study-modes" aria-label="Study modes">
+          <Link to={`/sets/${data.id}/study`} className="study-mode study-mode-primary">
+            <IconLayers size={24} />
+            <span>
+              <strong>Study</strong>
+              <small>Flip through your flashcards</small>
+            </span>
+            <IconArrowRight size={18} />
+          </Link>
+          <Link to={`/sets/${data.id}/practice`} className="study-mode">
+            <IconBook size={24} />
+            <span>
+              <strong>Practice</strong>
+              <small>Build your understanding</small>
+            </span>
+            <IconArrowRight size={18} />
+          </Link>
+          <Link to={`/sets/${data.id}/quiz`} className="study-mode">
+            <IconQuiz size={24} />
+            <span>
+              <strong>Quiz</strong>
+              <small>See what’s sticking</small>
+            </span>
+            <IconArrowRight size={18} />
+          </Link>
+        </nav>
         <div className="set-actions">
-          <ButtonLink to={`/sets/${data.id}/study`} size="lg">
-            Study
-          </ButtonLink>
-          <ButtonLink to={`/sets/${data.id}/practice`} variant="secondary" size="lg">
-            Practice
-          </ButtonLink>
-          <ButtonLink to={`/sets/${data.id}/quiz`} variant="secondary" size="lg">
-            Quiz
-          </ButtonLink>
           <AiSetActions setId={data.id} signedIn={Boolean(user)} />
-          <Button variant="secondary" size="lg" onClick={() => void toggleFavorite()}>
+          <Button variant="secondary" size="sm" onClick={() => void toggleFavorite()}>
             {isFavorited ? <IconHeart size={18} /> : <IconStar size={18} />}
             {isFavorited ? 'Favorited' : 'Favorite'}
           </Button>
-          <Button variant="ghost" size="lg" onClick={() => void share()}>
+          <Button variant="ghost" size="sm" onClick={() => void share()}>
             Share
           </Button>
           {!data.isOwner ? (
-            <Button variant="ghost" size="lg" onClick={() => setReportOpen(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setReportOpen(true)}>
               <IconFlag size={18} /> Report
             </Button>
           ) : null}
           {data.isOwner ? (
             <>
-              <ButtonLink to={`/sets/${data.id}/edit`} variant="ghost" size="lg">
+              <ButtonLink to={`/sets/${data.id}/edit`} variant="ghost" size="sm">
                 <IconEdit size={18} /> Edit
               </ButtonLink>
-              <Button variant="danger" size="lg" disabled={busy} onClick={() => void onDelete()}>
+              <Button variant="danger" size="sm" disabled={busy} onClick={() => void onDelete()}>
                 <IconTrash size={18} /> Delete
               </Button>
             </>

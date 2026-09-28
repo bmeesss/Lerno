@@ -212,7 +212,7 @@ function StudyDone({
   );
   return (
     <div className="study-stage" style={{ textAlign: 'center' }}>
-      <h1 style={{ fontSize: '1.75rem' }}>Session complete 🎉</h1>
+      <h1 style={{ fontSize: '1.75rem' }}>Session complete</h1>
       <p>
         You went through {total} answer{total === 1 ? '' : 's'} — {summary.correct} correct and{' '}
         {summary.incorrect} incorrect on <strong>{set.title}</strong>.
@@ -266,7 +266,7 @@ function SessionHabit({ today }: { today: TodaySummary }) {
           {today.completedCards} / {today.target} cards today
         </span>
         <span className="muted" style={{ fontSize: '0.825rem' }}>
-          🔥 {today.streak.current} day streak
+          {today.streak.current} day streak
         </span>
       </div>
       <ProgressBar value={today.completedCards} max={today.target} />
