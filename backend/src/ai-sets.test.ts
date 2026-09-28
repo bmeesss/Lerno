@@ -1,3 +1,4 @@
+import { completionBudget } from './services/ai-completion.js';
 /**
  * Lerno AI study-set actions (POST /api/ai/sets/:setId/…).
  *
@@ -245,7 +246,9 @@ describe('POST /api/ai/sets/:setId/explain — context handling', () => {
       messages: { role: string; content: string }[];
       max_completion_tokens: number;
     };
-    expect(payload.max_completion_tokens).toBe(AI_TASKS.explain.maxOutputTokens);
+    expect(payload.max_completion_tokens).toBe(
+      completionBudget({ action: 'explain', maxOutputTokens: AI_TASKS.explain.maxOutputTokens }),
+    );
     expect(payload.messages[0]!.role).toBe('system');
     // One system prompt, one payload — no duplicated instructions.
     expect(payload.messages.filter((message) => message.role === 'system')).toHaveLength(1);
@@ -327,7 +330,12 @@ describe('POST /api/ai/sets/:setId/summarize', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.summary).toContain('1789');
     const payload = createCompletion.mock.calls[0]![0] as { max_completion_tokens: number };
-    expect(payload.max_completion_tokens).toBe(AI_TASKS.summarize.maxOutputTokens);
+    expect(payload.max_completion_tokens).toBe(
+      completionBudget({
+        action: 'summarize',
+        maxOutputTokens: AI_TASKS.summarize.maxOutputTokens,
+      }),
+    );
   });
 
   it("is not available for another user's private set", async () => {

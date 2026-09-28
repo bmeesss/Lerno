@@ -376,3 +376,7 @@ choice, open answers, score), generated-set preview (edit, remove, save only on
 confirm), card actions, and the full overhoor flow from setup to result.
 
 Groq is always mocked — tests never use a real API key.
+
+## Prompt/context optimization audit
+
+See [AI-OPTIMIZATION.md](AI-OPTIMIZATION.md) for the measured baseline, context budgets, regression checks and outstanding live verification.
