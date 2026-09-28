@@ -235,3 +235,43 @@ explicit vwo wins, no level → simple default), and prompt-size guardrails.
 environment, so `--live` exits before any provider call. Token counts, TTFT,
 latency and answer quality above remain unverified — the tables are request
 shaping, not model results.
+
+## School-quality follow-up (2026-09-28)
+
+Current offline `o200k_base` content-token measurement (not provider billing):
+
+| Task      | Tokens |
+| --------- | -----: |
+| study     |    196 |
+| explain   |    159 |
+| summarize |    140 |
+| questions |    195 |
+| cards     |    171 |
+| quiz      |    207 |
+| evaluate  |    172 |
+| hint      |    126 |
+| card      |    162 |
+
+The study prompt increased from 190 to 196 tokens (+6), by replacing existing
+wording rather than appending curriculum facts. Existing prompt and conversation
+budget test limits were not raised. Model, reasoning, completion ceilings,
+temperature, history selection and structured retry limits are unchanged.
+
+The measurement script now uses 26 school-quality probes, fixes the old 15%-of-240
+check (36, not 5/15), allows the correct unit “newton”, and actually sends the
+freshly generated history in the live follow-up case. TTFT measures the first
+visible content delta, not an empty/reasoning-only chunk. Signals never trigger
+an automatic critic call or factual rewrite in production. See [AI.md](AI.md#school-quality-policy-2026-09-28)
+for cases, limitations and commands. Test fixtures stay outside production code.
+
+The offline harness completed. Live execution was attempted but stopped with no
+configured Groq key, before any provider call. No measured improvement in factual
+accuracy or latency is claimed; mocked regression tests cannot establish that.
+
+Verification for this follow-up: `npm test` passed (530 backend + 171 frontend,
+701 total), as did `npm run lint`, `npm run typecheck`, `npm run build` and
+`git diff --check`. The measurement script and new quality suite were additionally
+typechecked directly, since the normal backend build excludes scripts/tests.
+No auth, API-contract, database, MCP, dependencies or lockfile changes were made.
+`npm audit` reports 7 pre-existing dependency advisories (5 moderate, 1 high,
+1 critical); dependency upgrades are outside this quality-only change.

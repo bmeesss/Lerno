@@ -384,7 +384,7 @@ npx tsx backend/scripts/measure-ai.ts            # sizes, budgets, effort per ca
 npx tsx backend/scripts/measure-ai.ts --live     # also calls Groq (never without a key)
 ```
 
-Live mode runs the five canonical school questions and prints one JSON line per
+Live mode runs the fixed 26-question school quality fixture plus the context/performance cases and prints one JSON line per
 request with `inputTokens`, `outputTokens`, `reasoningTokens`, `ttftMs`, `totalMs`,
 `answerWords`, the resolved `reasoningEffort` and boolean smoke checks — enough to
 compare two configurations (for example `GROQ_REASONING_EFFORT=low` versus `auto`).
@@ -461,3 +461,72 @@ Groq is always mocked — tests never use a real API key.
 ## Prompt/context optimization audit
 
 See [AI-OPTIMIZATION.md](AI-OPTIMIZATION.md) for the measured baseline, context budgets, regression checks and outstanding live verification.
+
+## School quality policy (2026-09-28)
+
+The compact prompts prefer the simplest **correct** explanation. The student's
+explicit level/year wins; “hard” means harder within that level, never an automatic
+mavo → havo → vwo promotion. A remembered level comes only from user history.
+Explicit requests for depth may go further. Requested language takes precedence
+over the language of the question (important for translation exercises).
+
+Start with the core idea, add an example only when useful. Short questions do not
+have a mandatory 100–250-word explanation target. Calculations show formula,
+substitution and result with units. Practice follows the requested count (default
+one), withholding the solution until an attempt; hints give the next small step.
+Check names, numbers, units, formulas and causality, avoid false certainty and
+precision. Simplification must not change the facts: glucose is a sugar usable as
+an energy source **or** material for other substances, and the Moon has much less
+mass than Earth (size alone does not establish mass).
+
+These are instructions, not guarantees. We deliberately do not regex-replace
+historical names or scientific statements in arbitrary answers: quotations,
+negations and comparisons make that unsafe. Deterministic factual checks run on
+fixed development probes, not as a universal production fact checker. Structured
+learning flows retain their existing JSON/Zod validation and at most one retry.
+There is **no second critic call** for ordinary answers; model, reasoning defaults,
+output budgets, context selection and authorization remain unchanged.
+
+### Regression fixture and measurement
+
+`backend/scripts/fixtures/ai-quality.ts` contains 26 school questions spanning
+math, physics, biology, history, Dutch, English and German. Probes cover the known
+mass/weight, Moon `GM/R²`, difficult-mavo, photosynthesis/oxygen-smell and
+Lodewijk XVI (not XIV) failures. Every probe has a reviewed good and bad answer
+for testing the detector, not an exact expected model response. Additional probes
+cover single-question practice, hints without solutions, units, language, length
+and basic HTML/boilerplate signals.
+
+```bash
+npm run test --workspace=backend -- src/services/ai-quality.test.ts
+npx tsx backend/scripts/measure-ai.ts
+npx tsx backend/scripts/measure-ai.ts --live
+# Optional: include ONLY static fixture questions, never student data/answers:
+npx tsx backend/scripts/measure-ai.ts --live --show-fixtures
+```
+
+Live execution requires the existing server-side Groq configuration and consumes
+provider quota: 26 streamed quality requests plus 9 requests for the eight context
+cases (one seeds the actual follow-up). Each quality record includes task, subject,
+case ID, prompt length, selected reasoning effort, token usage, first visible-token
+time, latency, answer length and boolean checks. A failed signal sets exit code 1.
+No raw answers, system prompts or keys are printed; normal production logs are
+unchanged. Fixtures are not imported into production services.
+
+**Signals are heuristic, not grading:** required concepts may miss a correct
+paraphrase, question marks are only a proxy for question count, language-specific
+phrases are not a language detector, and a response can contain an expected number
+while drawing a wrong conclusion. Inspect failures and manually review factual
+accuracy, side selection for Pythagoras, causal claims, level and naturalness in a
+controlled development session. Mocked tests prove request shaping, one-call
+plumbing and detector behavior, not live model quality.
+
+Markdown continues to render safe React elements, never raw HTML or
+`dangerouslySetInnerHTML`. Regression tests cover both `-` and `*` bullets, ordered
+lists, headings, code and readable formulas. Single-line display math now stops at
+its closing delimiter instead of swallowing the following explanation/list.
+Conservative prose cleanup also removes standalone stock openings on the same
+line; fenced code is untouched.
+
+No live quality result is claimed for this change: the local `--live` attempt
+stopped before any provider calls because `GROQ_API_KEY` was not configured.

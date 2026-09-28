@@ -1,11 +1,13 @@
 /** Offline size/CPU audit; --live additionally calls the configured Groq model.
- * Logs only numerical metrics, case IDs and boolean checks, never content/secrets.
+ * Logs metrics, IDs and boolean signals, never answers/secrets.
+ * --show-fixtures prints only the static fixture questions (development only).
  * Run from root: npx tsx backend/scripts/measure-ai.ts [--live]
  *
- * Live mode streams the five canonical school questions and reports, per request:
+ * Live mode streams the fixed curriculum regression probes and reports, per request:
  * input/output/reasoning tokens, TTFT, total latency, answer length and smoke
  * checks — exactly the fields needed to compare two configurations.
  */
+import { QUALITY_CASES, qualitySignals } from './fixtures/ai-quality.js';
 import { performance } from 'node:perf_hooks';
 import { getEncoding } from 'js-tiktoken';
 import type { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/chat/completions.js';
@@ -58,15 +60,6 @@ const cases = [
   { id: 'independent', message: 'Wat is 15% van 240?', history: long },
 ] satisfies { id: string; message: string; history: AiChatMessage[] }[];
 
-/** The five prompts from the live test plan, in order. */
-const qualityPrompts = [
-  { id: 'mavo-explanation', prompt: 'Leg fotosynthese uit op mavo 3-niveau.' },
-  { id: 'moon', prompt: 'Waarom is mijn gewicht op de maan kleiner?' },
-  { id: 'hard-mavo', prompt: 'Geef één moeilijke vraag over massa en gewicht op mavo 3.' },
-  { id: 'equation', prompt: 'Los 3x + 7 = 22 stap voor stap op.' },
-  { id: 'history-explanation', prompt: 'Leg de Franse Revolutie kort uit op mavo 3-niveau.' },
-] as const;
-
 type StreamParams = Omit<ChatCompletionCreateParamsNonStreaming, 'stream'> & { stream: true };
 
 /**
@@ -84,13 +77,14 @@ async function streamChat(request: ChatRequest) {
   let text = '';
   let usage: Record<string, unknown> | null = null;
   for await (const chunk of stream) {
-    if (ttftMs === null) ttftMs = performance.now() - startedAt;
     const raw = chunk as unknown as {
       choices?: { delta?: { content?: string | null } }[];
       usage?: Record<string, unknown> | null;
       x_groq?: { usage?: Record<string, unknown> | null };
     };
-    text += raw.choices?.[0]?.delta?.content ?? '';
+    const delta = raw.choices?.[0]?.delta?.content ?? '';
+    if (ttftMs === null && delta.length > 0) ttftMs = performance.now() - startedAt;
+    text += delta;
     usage = raw.usage ?? raw.x_groq?.usage ?? usage;
   }
   const details = (usage?.completion_tokens_details ?? {}) as { reasoning_tokens?: number };
@@ -110,10 +104,10 @@ function smokeChecks(id: string, text: string): Record<string, boolean> {
   return {
     nonempty: text.length > 0,
     noLeak: guardReply(text) === text,
-    arithmetic: !['arithmetic', 'independent', 'equation'].includes(id) || /5\b|\b15\b/.test(text),
+    arithmetic: !['arithmetic', 'independent'].includes(id) || /\b36\b/.test(text),
     noAdvancedGravity:
       !['moon', 'hard-mavo', 'long-chat'].includes(id) ||
-      !/GM|universitair|differentiaal|newton/i.test(text),
+      !/G\s*M\s*\/\s*R|universitair|differentiaal/i.test(text),
     conciseGreeting: id !== 'greeting' || text.split(/\s+/).length <= 30,
     questionWithoutAnswer: id !== 'hard-mavo' || !/\b(?:antwoord|answer)\s*:/i.test(text),
   };
@@ -133,7 +127,7 @@ console.info(
   }),
 );
 for (const example of cases) {
-  const request = buildChatRequest(example.message, example.history);
+  let request = buildChatRequest(example.message, example.history);
   const messages = request.messages;
   const metrics = {
     id: example.id,
@@ -156,6 +150,7 @@ for (const example of cases) {
       history[0]!,
       { role: 'assistant', content: cleanAiText(guardReply(previous.text)) },
     ]);
+    request = messages;
     metrics.historyTokens = messages.messages
       .slice(1, -1)
       .reduce((n, m) => n + count(m.content), 0);
@@ -164,7 +159,10 @@ for (const example of cases) {
   }
   const result = await requestChat(request);
   const text = cleanAiText(guardReply(result.text));
-  const checks = smokeChecks(example.id, text);
+  const checks = {
+    ...smokeChecks(example.id, text),
+    noLeak: guardReply(result.text) === result.text,
+  };
   console.info(
     JSON.stringify({
       ...metrics,
@@ -179,11 +177,15 @@ for (const example of cases) {
   if (Object.values(checks).some((ok) => !ok)) process.exitCode = 1;
 }
 
-// The live test plan: five real school questions, one request each.
-for (const [index, { id, prompt }] of qualityPrompts.entries()) {
+// One request per curriculum probe; never a critic/retry call.
+for (const example of QUALITY_CASES) {
+  const { id, prompt, subject } = example;
   const request = buildChatRequest(prompt, []);
   const info = {
-    id: `plan-${index + 1}-${id}`,
+    id: `quality-${id}`,
+    task: request.action,
+    subject,
+    ...(process.argv.includes('--show-fixtures') ? { prompt } : {}),
     promptChars: prompt.length,
     contentTokens: request.messages.reduce((n, m) => n + count(m.content), 0),
     outputBudget: request.maxOutputTokens,
@@ -195,7 +197,10 @@ for (const [index, { id, prompt }] of qualityPrompts.entries()) {
   }
   const result = await streamChat(request);
   const text = cleanAiText(guardReply(result.text));
-  const checks = smokeChecks(id, text);
+  const checks = {
+    ...qualitySignals(example, text),
+    noLeak: guardReply(result.text) === result.text,
+  };
   console.info(
     JSON.stringify({
       ...info,
@@ -203,7 +208,7 @@ for (const [index, { id, prompt }] of qualityPrompts.entries()) {
       outputTokens: result.outputTokens,
       reasoningTokens: result.reasoningTokens,
       totalTokens: result.totalTokens,
-      ttftMs: Math.round(result.ttftMs ?? 0),
+      ttftMs: result.ttftMs === null ? null : Math.round(result.ttftMs),
       totalMs: Math.round(result.durationMs),
       answerWords: text.split(/\s+/).length,
       // The level only travels in the system prompt when it came from history;
