@@ -13,7 +13,11 @@ import { requireAuth } from './middleware/auth.js';
 import { aiLimiterKey, createLimiter } from './middleware/rate-limit.js';
 import { validate } from './middleware/validate.js';
 import { MAX_HISTORY_SENT, buildConversation } from './services/ai-service.js';
-import { MAX_HISTORY_LENGTH, MAX_MESSAGE_LENGTH, aiChatSchema } from './validators/ai.validators.js';
+import {
+  MAX_HISTORY_LENGTH,
+  MAX_MESSAGE_LENGTH,
+  aiChatSchema,
+} from './validators/ai.validators.js';
 
 // --- Groq SDK mock: the service must never hit the real API in tests -------
 const { createCompletion } = vi.hoisted(() => ({ createCompletion: vi.fn() }));
@@ -81,7 +85,10 @@ describe('POST /api/ai/chat — validation', () => {
 
   it('rejects a missing message with 400', async () => {
     const token = await signup();
-    const res = await request(app).post('/api/ai/chat').set('Authorization', `Bearer ${token}`).send({});
+    const res = await request(app)
+      .post('/api/ai/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
@@ -284,8 +291,12 @@ describe('AI rate limiting', () => {
     createCompletion.mockResolvedValue(groqReply('ok'));
 
     const auth = { Authorization: `Bearer ${token}` };
-    expect((await request(testApp).post('/chat').set(auth).send({ message: '1' })).status).toBe(200);
-    expect((await request(testApp).post('/chat').set(auth).send({ message: '2' })).status).toBe(200);
+    expect((await request(testApp).post('/chat').set(auth).send({ message: '1' })).status).toBe(
+      200,
+    );
+    expect((await request(testApp).post('/chat').set(auth).send({ message: '2' })).status).toBe(
+      200,
+    );
 
     const blocked = await request(testApp).post('/chat').set(auth).send({ message: '3' });
     expect(blocked.status).toBe(429);

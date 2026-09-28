@@ -9,7 +9,13 @@ import { aiChatSchema } from '../validators/ai.validators.js';
 export function aiRoutes(): Router {
   const router = Router();
 
-  router.post('/chat', requireAuth, aiRateLimit, validate({ body: aiChatSchema }), aiController.chat);
+  router.post(
+    '/chat',
+    requireAuth,
+    aiRateLimit,
+    validate({ body: aiChatSchema }),
+    aiController.chat,
+  );
 
   return router;
 }
