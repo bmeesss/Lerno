@@ -56,8 +56,31 @@ services:
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
 
+      # Response budget / sampling / timeout for Lerno AI.
+      - key: GROQ_MAX_OUTPUT_TOKENS
+        value: '2048'
+
+      - key: GROQ_TEMPERATURE
+        value: '0.6'
+
+      - key: GROQ_TIMEOUT_MS
+        value: '30000'
+
+      - key: GROQ_MAX_RETRIES
+        value: '1'
+
+      # Lerno AI quota per user per window (stricter than normal API limits).
+      - key: AI_RATE_LIMIT_MAX
+        value: '20'
+
+      - key: AI_RATE_LIMIT_WINDOW_MS
+        value: '300000'
+
+      - key: AI_RATE_LIMIT_IP_MAX
+        value: '60'
+
       - key: HEALTH_CHECK_DB
-        value: "true"
+        value: 'true'
 
     buildFilter:
       paths:
