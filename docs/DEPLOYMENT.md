@@ -50,6 +50,11 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
   | `FRONTEND_URL`              | the frontend origin(s), comma-separated             |
   | `PUBLIC_BACKEND_URL`        | public backend origin (for MCP OAuth metadata)      |
   | `HEALTH_CHECK_DB`           | `true` (optional cheap `SELECT 1` probe)            |
+  | `GROQ_API_KEY`              | Groq API key for Lerno AI (optional, server only)   |
+  | `GROQ_MODEL`                | default `openai/gpt-oss-120b`                       |
+
+  Lerno AI is optional: without `GROQ_API_KEY` the rest of the app works and the
+  AI endpoint answers a clean `503` (see [`AI.md`](AI.md)).
 
   In production the backend **refuses to start** without Supabase credentials —
   development data mode is never used in production. `PUBLIC_BACKEND_URL` is
