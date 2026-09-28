@@ -17,6 +17,7 @@ import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { discoverRoutes, favoriteRoutes } from './routes/discover.routes.js';
 import { adminRoutes, reportRoutes } from './routes/report.routes.js';
 import { aiRoutes } from './routes/ai.routes.js';
+import { studyPackRoutes } from './routes/study-pack.routes.js';
 
 export interface AppDeps {
   /** Lightweight optional database probe for /api/health. */
@@ -64,6 +65,7 @@ export function createApp(deps: AppDeps = {}): Express {
   api.use('/profile', profileRoutes());
   api.use('/subjects', subjectRoutes());
   api.use('/sets', setRoutes());
+  api.use('/study-packs', studyPackRoutes());
   api.use('/study', studyRoutes());
   api.use('/reviews', reviewRoutes());
   api.use('/progress', progressRoutes());
