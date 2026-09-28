@@ -340,6 +340,7 @@ export function AiStudyPage() {
             <div>
               <span className="ai-study-score-value">{summary.correct}</span>
               <span className="muted"> / {summary.total} goed</span>
+              <span className="muted"> · {Math.round(summary.accuracy * 100)}% score</span>
             </div>
             <ProgressBar value={Math.round(summary.accuracy * 100)} />
           </div>
@@ -368,6 +369,16 @@ export function AiStudyPage() {
           {summary.persisted ? (
             <p className="muted" style={{ fontSize: '0.82rem' }}>
               Dit resultaat is verwerkt in je normale studievoortgang voor deze set.
+            </p>
+          ) : null}
+
+          {summary.topicsToReview.length > 0 ? (
+            <p className="muted" style={{ fontSize: '0.85rem' }}>
+              Wil je de lastige kaarten nog eens zien?{' '}
+              <Link to={`/sets/${set.id}/practice`} style={{ color: 'var(--accent-text)' }}>
+                Oefen deze set met je flashcards
+              </Link>
+              .
             </p>
           ) : null}
 

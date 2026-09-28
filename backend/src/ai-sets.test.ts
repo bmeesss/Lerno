@@ -405,3 +405,35 @@ describe('buildSetContext', () => {
     expect(context.text.length).toBeLessThanOrEqual(3400);
   });
 });
+
+describe('AI learning endpoints — rate limiting', () => {
+  it('applies the strict per-user AI quota to set actions', async () => {
+    const { token } = await signup();
+    const setId = await createSet(token, { title: 'Quota set' });
+    createCompletion.mockResolvedValue(reply('Antwoord.'));
+
+    // The limiters are enabled outside the test environment; flip the flag so
+    // this test exercises the real route-level configuration.
+    const mutableTestConfig = config as unknown as { isTest: boolean };
+    mutableTestConfig.isTest = false;
+    try {
+      let limited: number | null = null;
+      for (let attempt = 1; attempt <= config.aiRateLimitMax + 2; attempt += 1) {
+        const res = await request(app)
+          .post(`/api/ai/sets/${setId}/explain`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({});
+        if (res.status === 429) {
+          limited = attempt;
+          expect(res.body.error.code).toBe('RATE_LIMITED');
+          expect(res.body.error.retryAfter).toBeGreaterThan(0);
+          break;
+        }
+        expect(res.status).toBe(200);
+      }
+      expect(limited).toBe(config.aiRateLimitMax + 1);
+    } finally {
+      mutableTestConfig.isTest = true;
+    }
+  });
+});
