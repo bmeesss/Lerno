@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ButtonLink } from '../../components/ui/Button';
 import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
-import { IconPlus } from '../../components/ui/Icons';
+import { IconLayers, IconPlus } from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { studySetService } from '../../services/studySetService';
 import type { StudySetSummary } from '../../types';
@@ -31,8 +31,8 @@ export function MySetsPage() {
       ) : data && data.length > 0 ? (
         <div className="set-grid">
           {data.map((set) => (
-            <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive">
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive set-card">
+              <div className="set-card-top">
                 <div className="set-card-title">{set.title}</div>
                 {set.visibility === 'public' ? (
                   <Badge variant="accent">Public</Badge>
@@ -42,7 +42,10 @@ export function MySetsPage() {
               </div>
               <div className="set-card-desc">{set.description || 'No description'}</div>
               <div className="set-card-footer">
-                <span>{set.subjectName ?? 'No subject'}</span>
+                <span className="set-card-meta">
+                  <span>{set.subjectName ?? 'No subject'}</span>
+                  {set.level ? <span> · {set.level}</span> : null}
+                </span>
                 <span>{set.cardCount} cards</span>
               </div>
             </Link>
@@ -50,6 +53,7 @@ export function MySetsPage() {
         </div>
       ) : (
         <EmptyState
+          icon={<IconLayers size={22} />}
           title="No study sets yet"
           description="Create your first set manually, by pasting a list, or by importing a CSV."
           action={<ButtonLink to="/sets/new">Create your first set</ButtonLink>}

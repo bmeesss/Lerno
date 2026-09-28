@@ -107,7 +107,7 @@ export function DiscoverPage() {
       </form>
 
       {facets ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+        <div className="chip-row">
           {facets.levels.map((value) => (
             <button
               key={value}
@@ -157,23 +157,25 @@ export function DiscoverPage() {
           </p>
           <div className="set-grid">
             {results.items.map((set) => (
-              <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive">
-                <div className="set-card-title">{set.title}</div>
-                <div className="set-card-desc">{set.description || 'No description'}</div>
-                <div className="set-card-footer">
-                  <span>{set.authorName}</span>
-                  <span>
-                    {set.cardCount} cards
-                    {set.level ? ` · ${set.level}` : ''}
-                  </span>
+              <Link key={set.id} to={`/sets/${set.id}`} className="card card-interactive set-card">
+                <div className="set-card-top">
+                  <div className="set-card-title">{set.title}</div>
+                  {set.level ? <Badge variant="accent">{set.level}</Badge> : null}
                 </div>
+                <div className="set-card-desc">{set.description || 'No description'}</div>
                 {set.tags.length > 0 ? (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                  <div className="set-card-tags">
                     {set.tags.slice(0, 3).map((value) => (
                       <Badge key={value}>#{value}</Badge>
                     ))}
                   </div>
                 ) : null}
+                <div className="set-card-footer">
+                  <span className="set-card-meta">
+                    <span>{set.authorName}</span>
+                  </span>
+                  <span>{set.cardCount} cards</span>
+                </div>
               </Link>
             ))}
           </div>
@@ -212,6 +214,7 @@ export function DiscoverPage() {
         </>
       ) : (
         <EmptyState
+          icon={<IconSearch size={22} />}
           title="No public sets found"
           description="Try a different search or filter — or create the first set on this topic."
           action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}

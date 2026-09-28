@@ -1,5 +1,5 @@
 import { ButtonLink } from '../ui/Button';
-import { ProgressBar } from '../ui/Primitives';
+import { Badge, ProgressBar } from '../ui/Primitives';
 import { IconFlame } from '../ui/Icons';
 import { nextActionLink } from '../../lib/nextAction';
 import type { TodaySummary } from '../../types';
@@ -19,40 +19,49 @@ export function TodayPanel({ today }: { today: TodaySummary }) {
   }
 
   return (
-    <div className="card" style={{ marginBottom: 20 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginBottom: 12,
-        }}
-      >
-        <h2 style={{ fontSize: '1.1rem' }}>Today</h2>
-        <span className="muted" style={{ fontSize: '0.875rem' }}>
-          <IconFlame size={15} /> {today.streak.current} day streak
-          {today.streak.longest > today.streak.current ? ` · best ${today.streak.longest}` : ''}
-        </span>
+    <section className="card today-panel">
+      <div className="today-panel-head">
+        <h2>Today</h2>
+        <Badge variant={today.streak.current > 0 ? 'accent' : 'default'}>
+          <IconFlame size={14} /> {today.streak.current} day
+          {today.streak.current === 1 ? '' : 's'}
+        </Badge>
       </div>
 
-      <div className="subject-row-top" style={{ marginBottom: 6 }}>
-        <span style={{ fontWeight: 600 }}>
-          {today.completedCards} / {today.target} cards
-        </span>
-        <span className="muted" style={{ fontSize: '0.825rem' }}>
-          {today.goalReached ? 'Daily goal reached 🎉' : 'Daily goal'}
-        </span>
+      <div className="today-stats">
+        <div className="today-stat">
+          <span className="today-stat-label">Due now</span>
+          <span className="today-stat-value">{today.cardsDue}</span>
+          <span className="today-stat-sub">cards ready for review</span>
+        </div>
+        <div
+          className="today-stat today-stat-goal"
+          aria-label={`${today.completedCards} / ${today.target} cards`}
+        >
+          <span className="today-stat-label">Daily goal</span>
+          <span className="today-stat-value">
+            {today.completedCards}
+            <span className="today-stat-total"> / {today.target}</span>
+          </span>
+          <ProgressBar value={today.completedCards} max={today.target} />
+        </div>
+        <div className="today-stat">
+          <span className="today-stat-label">Best streak</span>
+          <span className="today-stat-value">{today.streak.longest}</span>
+          <span className="today-stat-sub">days in a row</span>
+        </div>
       </div>
-      <ProgressBar value={today.completedCards} max={today.target} />
 
-      <p className="muted" style={{ fontSize: '0.875rem', margin: '12px 0' }}>
-        {today.cardsDue} card{today.cardsDue === 1 ? '' : 's'} due now
+      <p className="today-upcoming">
+        {today.goalReached
+          ? 'Daily goal reached — nice work.'
+          : `${today.completedCards} of ${today.target} cards done`}
         {upcomingParts.length > 0 ? ` · ${upcomingParts.join(' · ')}` : ''}
       </p>
 
-      <ButtonLink to={next.to}>{next.label}</ButtonLink>
-    </div>
+      <ButtonLink to={next.to} block>
+        {next.label}
+      </ButtonLink>
+    </section>
   );
 }

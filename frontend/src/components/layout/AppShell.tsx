@@ -14,6 +14,7 @@ import {
   IconHome,
   IconLayers,
   IconShield,
+  IconSparkles,
   IconUser,
 } from '../ui/Icons';
 import { Logo } from './Logo';
@@ -26,14 +27,36 @@ interface NavItem {
   end?: boolean;
 }
 
-const desktopNav: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: <IconHome /> },
-  { to: '/subjects', label: 'My subjects', icon: <IconBook /> },
-  { to: '/sets', label: 'My sets', icon: <IconLayers /> },
-  { to: '/discover', label: 'Discover', icon: <IconCompass /> },
-  { to: '/progress', label: 'Progress', icon: <IconChart /> },
-  { to: '/favorites', label: 'Favorites', icon: <IconHeart /> },
-  { to: '/settings', label: 'Settings', icon: <IconGear /> },
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+/** Grouped sidebar navigation: study first, library second, account last. */
+const desktopNav: NavGroup[] = [
+  {
+    label: 'Study',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: <IconHome /> },
+      { to: '/ai', label: 'Lerno AI', icon: <IconSparkles /> },
+    ],
+  },
+  {
+    label: 'Library',
+    items: [
+      { to: '/subjects', label: 'My subjects', icon: <IconBook /> },
+      { to: '/sets', label: 'My sets', icon: <IconLayers /> },
+      { to: '/discover', label: 'Discover', icon: <IconCompass /> },
+      { to: '/favorites', label: 'Favorites', icon: <IconHeart /> },
+    ],
+  },
+  {
+    label: 'You',
+    items: [
+      { to: '/progress', label: 'Progress', icon: <IconChart /> },
+      { to: '/settings', label: 'Settings', icon: <IconGear /> },
+    ],
+  },
 ];
 
 const mobileNav: NavItem[] = [
@@ -63,6 +86,21 @@ function NavItems({ items, variant }: { items: NavItem[]; variant: 'desktop' | '
   );
 }
 
+function DesktopNavGroups({ groups }: { groups: NavGroup[] }) {
+  return (
+    <>
+      {groups.map((group) => (
+        <div key={group.label} className="nav-group">
+          <div className="nav-group-label" aria-hidden="true">
+            {group.label}
+          </div>
+          <NavItems items={group.items} variant="desktop" />
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function AppShell() {
   const { user, logout } = useAuth();
 
@@ -71,7 +109,7 @@ export function AppShell() {
       <aside className="sidebar">
         <Logo to="/dashboard" />
         <nav className="sidebar-nav" aria-label="Main navigation">
-          <NavItems items={desktopNav} variant="desktop" />
+          <DesktopNavGroups groups={desktopNav} />
           {user?.profile.role === 'admin' ? (
             <NavLink
               to="/admin"

@@ -187,3 +187,17 @@ export const IconQuiz = icon(
 );
 
 export const IconZap = icon(<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />);
+
+export const IconSparkles = icon(
+  <>
+    <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+    <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+  </>,
+);
+
+export const IconSend = icon(
+  <>
+    <path d="M22 2 11 13" />
+    <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+  </>,
+);

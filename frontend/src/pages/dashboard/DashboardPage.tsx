@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
-import { IconBook } from '../../components/ui/Icons';
+import { IconBook, IconLayers, IconSparkles } from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { TodayPanel } from '../../components/dashboard/TodayPanel';
@@ -16,9 +16,15 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="greeting" style={{ marginBottom: 24 }}>
-        <h1>Hi {firstName} 👋</h1>
-        <p>Here is what to study today. One short session keeps the habit going.</p>
+      <div className="dash-hero">
+        <div className="greeting">
+          <h1>Hi {firstName} 👋</h1>
+          <p>Here is what to study today. One short session keeps the habit going.</p>
+        </div>
+        <ButtonLink to="/ai" className="dash-hero-ai">
+          <IconSparkles size={17} />
+          Ask Lerno AI
+        </ButtonLink>
       </div>
 
       {loading ? (
@@ -48,7 +54,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
   return (
     <>
       {data.today.comeback ? (
-        <div className="guest-banner" style={{ marginBottom: 20 }}>
+        <div className="guest-banner">
           <p>{data.today.comeback.message}</p>
         </div>
       ) : null}
@@ -59,16 +65,18 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <>
           <div className="section-title">
             <h2>Cards due for review</h2>
-            <Link to="/review" className="muted" style={{ fontSize: '0.875rem' }}>
+            <Link to="/review" className="muted">
               See all
             </Link>
           </div>
           <div className="stack" style={{ gap: 10 }}>
             {data.dueGroups.slice(0, 4).map((group) => (
               <Link key={group.setId} to={`/sets/${group.setId}`} className="list-row">
-                <IconBook size={20} />
+                <span className="list-row-icon">
+                  <IconBook size={19} />
+                </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{group.setTitle}</div>
+                  <div className="list-row-title">{group.setTitle}</div>
                   <div className="muted" style={{ fontSize: '0.825rem' }}>
                     {group.subjectName ?? 'No subject'}
                   </div>
@@ -84,21 +92,18 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <h2>Continue learning</h2>
       </div>
       {data.continueSet ? (
-        <Link to={`/sets/${data.continueSet.id}`} className="card card-interactive">
-          <div
-            style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}
-          >
-            <div>
-              <div className="set-card-title">{data.continueSet.title}</div>
-              <div className="muted" style={{ fontSize: '0.875rem' }}>
-                {data.continueSet.subjectName ?? 'No subject'} · {data.continueSet.cardCount} cards
-              </div>
+        <Link to={`/sets/${data.continueSet.id}`} className="card card-interactive continue-card">
+          <div className="continue-card-main">
+            <div className="set-card-title">{data.continueSet.title}</div>
+            <div className="muted" style={{ fontSize: '0.875rem' }}>
+              {data.continueSet.subjectName ?? 'No subject'} · {data.continueSet.cardCount} cards
             </div>
-            <span className="btn btn-primary btn-sm">Continue</span>
           </div>
+          <span className="btn btn-primary">Continue</span>
         </Link>
       ) : (
         <EmptyState
+          icon={<IconLayers size={22} />}
           title="No recent sets yet"
           description="Create your first study set or discover a public one to get started."
           action={<ButtonLink to="/sets/new">Create a study set</ButtonLink>}
@@ -109,7 +114,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <>
           <div className="section-title">
             <h2>Recent sets</h2>
-            <Link to="/sets" className="muted" style={{ fontSize: '0.875rem' }}>
+            <Link to="/sets" className="muted">
               See all
             </Link>
           </div>
@@ -125,7 +130,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <>
           <div className="section-title">
             <h2>Discover</h2>
-            <Link to="/discover" className="muted" style={{ fontSize: '0.875rem' }}>
+            <Link to="/discover" className="muted">
               See all
             </Link>
           </div>
@@ -148,11 +153,20 @@ function DashboardContent({ data }: { data: DashboardData }) {
 
 function SetCard({ set }: { set: StudySetSummary }) {
   return (
-    <Link to={`/sets/${set.id}`} className="card card-interactive">
-      <div className="set-card-title">{set.title}</div>
+    <Link to={`/sets/${set.id}`} className="card card-interactive set-card">
+      <div className="set-card-top">
+        <div className="set-card-title">{set.title}</div>
+        {set.visibility === 'public' ? (
+          <Badge variant="accent">Public</Badge>
+        ) : (
+          <Badge>Private</Badge>
+        )}
+      </div>
       <div className="set-card-desc">{set.description || 'No description'}</div>
       <div className="set-card-footer">
-        <span>{set.subjectName ?? 'No subject'}</span>
+        <span className="set-card-meta">
+          <span>{set.subjectName ?? 'No subject'}</span>
+        </span>
         <span>{set.cardCount} cards</span>
       </div>
     </Link>

@@ -12,6 +12,8 @@ with no daily limits and no premium paywall for core learning features.
 - **Practice mode** — a smart mix of due, incorrect, difficult and new cards.
 - **Quiz mode** — multiple choice, true/false and short answer, with scored results.
 - **Discovery** — search public sets by subject, level, tags and text.
+- **Lerno AI** — built-in study assistant: ask questions, get step-by-step
+  explanations adapted to your level (Groq runs server-side only).
 - **Guest learning** — study public sets without an account; sign up to keep progress.
 - **Dark mode** — calm, modern, mobile-first UI with a green accent.
 
@@ -97,7 +99,8 @@ the environment variables are present. Never run production without Supabase con
 - **Backend** — Render Web Service: build `npm run build`, start `npm start`
   (or `node backend/dist/index.js` from the repo root with root dir set accordingly).
   Set `NODE_ENV=production`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`.
+  `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`. Optionally set `GROQ_API_KEY`
+  to enable Lerno AI (see [`docs/AI.md`](docs/AI.md)).
 - **Monitoring** — point UptimeRobot at `GET /api/health` (cheap by default; set
   `HEALTH_CHECK_DB=true` for an optional `SELECT 1` probe).
 - See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for a full checklist.

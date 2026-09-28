@@ -66,9 +66,11 @@ export function ReviewPage() {
                 <div className="stack" style={{ gap: 12 }}>
                   {subject.groups.map((group) => (
                     <div key={group.setId} className="list-row">
-                      <IconBook size={20} />
+                      <span className="list-row-icon">
+                        <IconBook size={19} />
+                      </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600 }}>{group.setTitle}</div>
+                        <div className="list-row-title">{group.setTitle}</div>
                         <div className="muted" style={{ fontSize: '0.825rem' }}>
                           {group.nextReviewAt
                             ? `Oldest due ${new Date(group.nextReviewAt).toLocaleDateString()}`
