@@ -244,7 +244,12 @@ export function AIStudioPage() {
           {!actionBusy && activeAction === 'summary' && summary ? <StudioSummaryView summary={summary} /> : null}
           {!actionBusy && activeAction === 'cards' && cards ? (
             <>
-              <StudioCardsEditor key={`${cards.title}-${cards.cards.length}`} result={cards} onSaved={setSavedSetId} />
+              <StudioCardsEditor
+                key={`${cards.title}-${cards.cards.length}`}
+                result={cards}
+                onSaved={setSavedSetId}
+                source={toStudioActionSource(source)}
+              />
               {savedSetId ? <StudioSavedSet setId={savedSetId} /> : null}
             </>
           ) : null}

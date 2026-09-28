@@ -26,11 +26,33 @@ import {
 } from '../../components/ui/Icons';
 import { ApiError } from '../../lib/api';
 import { AI_REQUEST_TIMEOUT_MS, aiService } from '../../services/aiService';
+import { studyPackService } from '../../services/studyPackService';
+import type { StudyPackSummary } from '../../types';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+/** Packs the student can ground the tutor in (answers from their own material). */
+function usePackChoices(): StudyPackSummary[] {
+  const [packs, setPacks] = useState<StudyPackSummary[]>([]);
+  useEffect(() => {
+    let active = true;
+    studyPackService
+      .list()
+      .then((loaded) => {
+        if (active) setPacks(loaded.slice(0, 3));
+      })
+      .catch(() => {
+        // The tutor works without packs; a failing pack list must stay invisible.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return packs;
 }
 
 const MAX_INPUT_LENGTH = 2000;
@@ -125,6 +147,7 @@ export function LernoAiPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const packChoices = usePackChoices();
   const conversationRef = useRef<HTMLDivElement>(null);
 
   // Refs keep the newest state available inside async handlers without
@@ -338,6 +361,18 @@ export function LernoAiPage() {
                 </button>
               ))}
             </div>
+            {packChoices.length > 0 ? (
+              <div className="ai-pack-strip">
+                <span className="pack-label">Or ask about a study pack</span>
+                <div className="pack-chip-row">
+                  {packChoices.map((pack) => (
+                    <Link key={pack.id} to={`/study-packs/${pack.id}?tab=tutor`} className="chip">
+                      {pack.title}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>

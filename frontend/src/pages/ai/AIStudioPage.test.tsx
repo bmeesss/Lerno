@@ -121,7 +121,7 @@ describe('AI Study Studio flow', () => {
     const fronts = screen.getAllByLabelText('Front');
     await user.clear(fronts[0]!);
     await user.type(fronts[0]!, 'Edited front');
-    await user.click(screen.getByRole('button', { name: 'Save as a private set' }));
+    await user.click(screen.getByRole('button', { name: 'Save as a set' }));
 
     await waitFor(() => expect(sets.create).toHaveBeenCalledTimes(1));
     expect(sets.create).toHaveBeenCalledWith(expect.objectContaining({
