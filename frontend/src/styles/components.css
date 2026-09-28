@@ -1726,3 +1726,62 @@ a.card-interactive:hover {
     padding: 6px 11px;
   }
 }
+
+/* ---------- AI generated sets ---------- */
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-generate .field > span {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ai-generate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.ai-generate-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.ai-generate-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .ai-generate-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-generate-list {
+    max-height: 38vh;
+  }
+}
