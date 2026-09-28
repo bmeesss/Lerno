@@ -6,9 +6,11 @@ import { aiIpRateLimit, aiRateLimit } from '../middleware/rate-limit.js';
 import { validate } from '../middleware/validate.js';
 import { aiChatSchema } from '../validators/ai.validators.js';
 import {
+  aiCardParamsSchema,
   aiSetParamsSchema,
   evaluateAnswerSchema,
   explainSetSchema,
+  cardActionSchema,
   finishStudySchema,
   generateQuestionsSchema,
   generateQuizSchema,
@@ -72,6 +74,14 @@ export function aiRoutes(): Router {
     ...aiGuards(),
     validate({ params: aiSetParamsSchema, body: generateQuizSchema }),
     aiLearningController.generateQuiz,
+  );
+
+  // Card-level actions ----------------------------------------------------
+  router.post(
+    '/cards/:cardId/action',
+    ...aiGuards(),
+    validate({ params: aiCardParamsSchema, body: cardActionSchema }),
+    aiLearningController.cardAction,
   );
 
   // Generation (preview only — never auto-saved) --------------------------

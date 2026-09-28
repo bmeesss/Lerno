@@ -23,6 +23,7 @@ import { guardSecretLeak } from '../lib/ai-guard.js';
 import { AI_TASKS, taskMessages, type AiTaskName } from './ai-prompts.js';
 import {
   buildCardContext,
+  buildQuizContext,
   buildSetContext,
   buildStudyContext,
   normalizeText,
@@ -39,6 +40,7 @@ import { logAiAction, requestChat, type ChatResult } from './ai-completion.js';
 import { canViewSet } from './set-service.js';
 import { studyService } from './study-service.js';
 import type {
+  CardActionBody,
   EvaluateAnswerBody,
   FinishStudyBody,
   GenerateQuestionsBody,
@@ -200,6 +202,13 @@ const DIFFICULTY_HINT: Record<string, string> = {
   hard: 'Apply or connect: combine two ideas, or transfer to a new example.',
 };
 
+const CARD_ACTION_TASK: Record<string, string> = {
+  explain: 'Explain this card clearly and briefly.',
+  example: 'Give one concrete example that makes this card easy to remember.',
+  hint: 'Give one small hint for this card. Never give the full answer.',
+  practice: 'Write one practice question based on this card, followed by its answer.',
+};
+
 const QUIZ_TYPE_HINT: Record<string, string> = {
   multiple_choice: 'multiple choice with exactly 4 options and a correctIndex',
   open: 'open questions with a short expected answer',
@@ -349,6 +358,35 @@ export const aiLearningService = {
   },
 
   /**
+   * Card-level AI actions (#8): explain, example, hint or a practice question
+   * for exactly one card. Only that card is sent as context.
+   */
+  async cardAction(
+    db: Database,
+    userId: string,
+    cardId: string,
+    body: CardActionBody,
+  ): Promise<{ text: string; action: CardActionBody['action'] }> {
+    const { set, card } = await loadStudyTarget(db, userId, { setId: body.setId, cardId });
+    if (!card) throw errors.notFound('Card not found');
+
+    const payload = [
+      `TASK: ${CARD_ACTION_TASK[body.action]}`,
+      '',
+      buildCardContext(set, card),
+      focusLine(body.focus),
+    ].join('\n');
+
+    const text = await runTextTask('card', payload, {
+      setId: set.id,
+      cardId: card.id,
+      action: body.action,
+    });
+
+    return { text, action: body.action };
+  },
+
+  /**
    * "Genereer quiz" (#7): a real quiz object (multiple choice, open,
    * true/false) generated from the set and validated with Zod, so the frontend
    * can render it as a quiz instead of parsing markdown.
@@ -359,7 +397,10 @@ export const aiLearningService = {
     setId: string,
     body: GenerateQuizBody,
   ): Promise<{ questions: GeneratedQuizQuestion[]; meta: AiSetMeta }> {
-    const loaded = await loadSetForAi(db, userId, setId);
+    const set = await loadSetForAi(db, userId, setId);
+    const cards = await db.cards.listBySet(setId);
+    const quizContext = buildQuizContext(set.set, cards);
+    const loaded = { ...set, context: quizContext.text, contextCards: quizContext.cardCount };
     const payload = [
       `TASK: Write ${body.count} quiz questions.`,
       `TYPES TO USE (only these): ${body.types.join(', ')} — ${body.types

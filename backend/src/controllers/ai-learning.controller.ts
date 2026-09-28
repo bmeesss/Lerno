@@ -8,6 +8,7 @@ import { asyncHandler, sendOk } from '../lib/http.js';
 import { errors } from '../lib/errors.js';
 import { aiLearningService } from '../services/ai-learning-service.js';
 import type {
+  CardActionBody,
   EvaluateAnswerBody,
   ExplainSetBody,
   FinishStudyBody,
@@ -62,6 +63,15 @@ export const aiLearningController = {
     const body = req.body as GenerateQuizBody;
     const result = await aiLearningService.generateQuiz(req.db, userId, setId, body);
     sendOk(res, { questions: result.questions, meta: result.meta });
+  }),
+
+  /** POST /api/ai/cards/:cardId/action — AI help for one card (#8). */
+  cardAction: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUser(req);
+    const { cardId } = req.params as { cardId: string };
+    const body = req.body as CardActionBody;
+    const result = await aiLearningService.cardAction(req.db, userId, cardId, body);
+    sendOk(res, { text: result.text, action: result.action });
   }),
 
   /** POST /api/ai/generate-set — preview only, never auto-saved (#6). */
