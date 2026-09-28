@@ -855,7 +855,7 @@ describe('AI observability', () => {
 
     expect(res.status).toBe(200);
     const lines = JSON.stringify(info.mock.calls);
-    expect(lines).toContain('ai.chat.completed');
+    expect(lines).toContain('ai.action.completed');
     expect(lines).toContain(config.groqModel);
     expect(lines).toContain('durationMs');
     // Never the key, the student's text, or the answer.
@@ -879,7 +879,7 @@ describe('AI observability', () => {
 
     expect(res.status).toBe(502);
     const lines = JSON.stringify(warn.mock.calls);
-    expect(lines).toContain('ai.chat.failed');
+    expect(lines).toContain('ai.action.failed');
     expect(lines).not.toContain('SECRET-UPSTREAM-DETAIL');
     expect(lines).not.toContain(TEST_KEY);
   });

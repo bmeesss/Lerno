@@ -305,3 +305,102 @@ export interface AdminUser {
   role: Role;
   createdAt: string;
 }
+
+/* ---------------------------- Lerno AI learning ---------------------------- */
+
+export type AiDifficulty = 'easy' | 'normal' | 'hard';
+export type AiQuizType = 'multiple_choice' | 'open' | 'true_false';
+export type AiCardAction = 'explain' | 'example' | 'hint' | 'practice';
+export type AiVerdict = 'correct' | 'partial' | 'incorrect';
+
+export interface AiContextMeta {
+  setId: string;
+  totalCards: number;
+  contextCards: number;
+  omittedCards: number;
+}
+
+export interface AiExplanation {
+  explanation: string;
+  meta: AiContextMeta;
+}
+
+/** The backend normalizes summarize to `{ explanation }` shape as well. */
+export type AiSummary = AiExplanation;
+
+export interface AiGeneratedQuestion {
+  type: 'open' | 'multiple_choice';
+  question: string;
+  answer: string;
+  hint: string;
+  options: string[];
+  correctIndex: number | null;
+}
+
+export interface AiGeneratedQuestions {
+  questions: AiGeneratedQuestion[];
+  meta?: AiContextMeta;
+}
+
+export interface AiGeneratedQuizQuestion {
+  type: AiQuizType;
+  question: string;
+  options: string[];
+  correctIndex: number | null;
+  answer: string;
+  explanation: string;
+}
+
+export interface AiGeneratedQuiz {
+  questions: AiGeneratedQuizQuestion[];
+  meta?: AiContextMeta;
+}
+
+export interface AiGeneratedSetCard {
+  front: string;
+  back: string;
+}
+
+export interface AiGeneratedSet {
+  title: string;
+  description: string;
+  cards: AiGeneratedSetCard[];
+}
+
+export interface AiCardActionResult {
+  text: string;
+  action: AiCardAction;
+}
+
+export interface AiEvaluation {
+  verdict: AiVerdict;
+  feedback: string;
+  missing: string;
+}
+
+export interface AiHint {
+  hint: string;
+}
+
+export interface AiStudyResultInput {
+  cardId?: string;
+  question: string;
+  answer: string;
+  verdict: AiVerdict;
+}
+
+export interface AiStudyFinishInput {
+  setId: string;
+  results: AiStudyResultInput[];
+}
+
+export interface AiStudySummary {
+  setId: string;
+  total: number;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  accuracy: number;
+  topicsToReview: string[];
+  persisted: boolean;
+}
