@@ -34,6 +34,7 @@ export type AiTaskName =
   | 'studio-cards'
   | 'studio-quiz'
   | 'studio-questions'
+  | 'studio-concepts'
   | 'studio-plan'
   | 'studio-chat';
 
@@ -134,6 +135,13 @@ export const AI_TASKS: Record<AiTaskName, AiTaskConfig> = {
     system: `Make the requested number of distinct, useful flashcards from the supplied source, one learnable idea per card. JSON: {"title":"...","description":"...","cards":[{"front":"...","back":"..."}]}. Front <=160 chars; back <=300; avoid duplicate concepts and trivia.`,
     maxOutputTokens: 3_600,
     temperature: 0.55,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'studio-concepts': task({
+    system: `List the key concepts a student must understand from this material, most important first. JSON: {"concepts":[{"name":"...","explanation":"...","sourceRef":1}]}. Name <=120 chars, explanation 1-3 sentences in the material's language, sourceRef = the 1-based SOURCE number it comes from. Concepts must be distinct, testable ideas - no chapter titles, no generic study advice. ${MATERIAL_RULE}`,
+    maxOutputTokens: 1_600,
+    temperature: 0.5,
     reasoning: 'medium',
     json: true,
   }),

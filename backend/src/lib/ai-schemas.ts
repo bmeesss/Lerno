@@ -270,6 +270,39 @@ export const generatedSummarySchema = z
     });
   });
 
+
+/** Key concepts extracted from study material (Study Pack foundation). */
+export const generatedConceptsSchema = z
+  .object({
+    concepts: z
+      .array(
+        z.object({
+          name: text(2, 120),
+          explanation: text(10, 600),
+          /** 1-based index of the source block this concept came from. */
+          sourceRef: z.number().int().min(1).max(20).optional(),
+        }),
+      )
+      .min(3)
+      .max(20),
+  })
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.concepts.forEach((concept, index) => {
+      const normalized = key(concept.name);
+      if (seen.has(normalized)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Duplicate concept',
+          path: ['concepts', index, 'name'],
+        });
+      }
+      seen.add(normalized);
+    });
+  });
+
+export type GeneratedConcept = z.infer<typeof generatedConceptsSchema>['concepts'][number];
+
 // ------------------------------------------------------------ study plan
 
 export const generatedStudyPlanSchema = z
