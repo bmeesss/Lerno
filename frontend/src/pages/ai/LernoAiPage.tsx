@@ -12,6 +12,7 @@
  *   state and then the full answer
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { MarkdownLite } from '../../components/ai/MarkdownLite';
 import {
   IconArrowRight,
@@ -277,6 +278,9 @@ export function LernoAiPage() {
           <h1>Lerno AI</h1>
           <p>Your personal study assistant</p>
         </div>
+        <Link to="/ai/studio" className="btn btn-secondary btn-sm ai-studio-link">
+          Open Study Studio
+        </Link>
         {hasConversation ? (
           <button
             type="button"

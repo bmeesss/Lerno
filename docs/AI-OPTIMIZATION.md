@@ -275,3 +275,31 @@ typechecked directly, since the normal backend build excludes scripts/tests.
 No auth, API-contract, database, MCP, dependencies or lockfile changes were made.
 `npm audit` reports 7 pre-existing dependency advisories (5 moderate, 1 high,
 1 critical); dependency upgrades are outside this quality-only change.
+
+## Study Studio task budgets
+
+Study Studio adds six compact task prompts on the existing Groq client: summary,
+flashcards, quiz, practice questions, a bounded study plan, and source-aware chat. This is an additional
+feature, not a replacement for the existing chat/set flows. Visible-output ceilings
+are 650 for summary, up to 3,600 for cards, 3,000 for quiz, 2,800 for practice,
+2,800 for a study plan, and 650 for chat; Groq's existing reasoning reserve and
+timeout still apply.
+
+| Studio task | Source context cap | Output ceiling |
+| ------------ | -----------------: | -------------: |
+| Summary | 14,000 chars | 650 tokens |
+| Flashcards | 12,000 chars | `min(3,600, 350 + 110 × count)` |
+| Quiz | 12,000 chars | `min(3,000, 350 + 180 × count)` |
+| Practice | 11,000 chars | `min(2,800, 350 + 150 × count)` |
+| Study plan | 10,000 chars | `min(2,800, 400 + 165 × days)` |
+| Source chat | 9,000 chars | 650 tokens |
+
+These are request ceilings, not quality or billing measurements. Source input is
+normalized and duplicate lines removed before a task-specific excerpt is built.
+Set permissions are checked on every action; pasted text/PDF extraction remains
+in the student's page session, so sources need no durable storage or process-local
+cache. PDF parsing is bounded to 15 MB, 100 pages and 50,000 extracted characters;
+scanned documents do not trigger OCR. Groq never receives filesystem, storage, or
+database handles. No live Groq quality measurement is claimed for the Studio yet;
+new route tests mock the provider and cover source isolation, invalid/duplicate
+structured output, count limits, and PDF failure cases.

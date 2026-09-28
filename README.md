@@ -16,6 +16,9 @@ with no daily limits and no premium paywall for core learning features.
   own material — explain a set, make practice questions or a quiz, generate a
   full set from a description, get hints per card, and “Overhoor mij” study mode
   (Groq runs server-side only, always with the data you can already see).
+- **AI Study Studio** — at `/ai/studio`, start with pasted notes, selectable-text PDF,
+  or an existing set; generate a summary, editable flashcards, quiz, practice
+  questions, a source-grounded study plan, or source-aware chat. Previews are not saved unless you confirm.
 - **Guest learning** — study public sets without an account; sign up to keep progress.
 - **Dark mode** — calm, modern, mobile-first UI with a green accent.
 

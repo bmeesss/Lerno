@@ -16,6 +16,7 @@ import type { z } from 'zod';
 import type { Database } from '../lib/db/repository.js';
 import type { CardRecord, StudySetRecord } from '../lib/db/types.js';
 import { errors } from '../lib/errors.js';
+import type { AiContextSource } from '../lib/ai-context-source.js';
 import { logger } from '../lib/logger.js';
 import { describeAiJsonFailure, parseAiJson, type AiJsonFailure } from '../lib/ai-json.js';
 import { cleanAiText } from '../lib/ai-text.js';
@@ -98,6 +99,8 @@ export async function loadSetForAi(
 interface RunOptions {
   /** Overrides the task's default budget (e.g. 15 questions need more room). */
   maxOutputTokens?: number;
+  /** Trusted origin of the context included in the user payload. */
+  contextSource?: AiContextSource;
 }
 
 async function runTextTask(
@@ -109,7 +112,7 @@ async function runTextTask(
   const config = AI_TASKS[task];
   const result = await requestChat({
     action: task,
-    messages: taskMessages(task, payload),
+    messages: taskMessages(task, payload, options.contextSource ?? 'none'),
     maxOutputTokens: options.maxOutputTokens ?? config.maxOutputTokens,
     temperature: config.temperature,
   });
@@ -142,7 +145,7 @@ async function runStructuredTask<S extends z.ZodTypeAny>(
   for (let attempt = 1; attempt <= config.parseAttempts; attempt += 1) {
     const result = await requestChat({
       action: task,
-      messages: taskMessages(task, payload),
+      messages: taskMessages(task, payload, options.contextSource ?? 'none'),
       maxOutputTokens: options.maxOutputTokens ?? config.maxOutputTokens,
       temperature: config.temperature,
       jsonMode: config.json,
@@ -281,11 +284,16 @@ export const aiLearningService = {
       '\n',
     );
 
-    const text = await runTextTask('explain', payload, {
-      setId,
-      totalCards: loaded.totalCards,
-      contextCards: loaded.contextCards,
-    });
+    const text = await runTextTask(
+      'explain',
+      payload,
+      {
+        setId,
+        totalCards: loaded.totalCards,
+        contextCards: loaded.contextCards,
+      },
+      { contextSource: 'set' },
+    );
 
     return {
       text,
@@ -322,7 +330,7 @@ export const aiLearningService = {
       payload,
       generatedQuestionsSchema,
       { setId, count: body.count, difficulty: body.difficulty, totalCards: loaded.totalCards },
-      { maxOutputTokens: questionsBudget(body.count) },
+      { maxOutputTokens: questionsBudget(body.count), contextSource: 'set' },
     );
 
     // Map the optional card reference onto a real card id so an overhoor
@@ -373,11 +381,16 @@ export const aiLearningService = {
       focusLine(body.focus),
     ].join('\n');
 
-    const text = await runTextTask('card', payload, {
-      setId: set.id,
-      cardId: card.id,
-      action: body.action,
-    });
+    const text = await runTextTask(
+      'card',
+      payload,
+      {
+        setId: set.id,
+        cardId: card.id,
+        action: body.action,
+      },
+      { contextSource: 'card' },
+    );
 
     return { text, action: body.action };
   },
@@ -418,7 +431,7 @@ export const aiLearningService = {
         types: body.types.join('+'),
         totalCards: loaded.totalCards,
       },
-      { maxOutputTokens: questionsBudget(body.count) },
+      { maxOutputTokens: questionsBudget(body.count), contextSource: 'set' },
     );
 
     // Keep only the requested types, and never more than requested.
@@ -456,10 +469,13 @@ export const aiLearningService = {
     const { set, card } = await loadStudyTarget(db, userId, body);
     const payload = buildEvaluationPayload(set, card, body, "Judge the student's answer.");
 
-    const { data } = await runStructuredTask('evaluate', payload, evaluationSchema, {
-      setId: set.id,
-      hasCard: Boolean(card),
-    });
+    const { data } = await runStructuredTask(
+      'evaluate',
+      payload,
+      evaluationSchema,
+      { setId: set.id, hasCard: Boolean(card) },
+      { contextSource: card ? 'card' : 'set' },
+    );
 
     return data;
   },
@@ -479,10 +495,13 @@ export const aiLearningService = {
       .filter((line) => !line.startsWith('TASK:'))
       .join('\n');
 
-    const { data } = await runStructuredTask('hint', payload, hintResponseSchema, {
-      setId: set.id,
-      hintsGiven: body.hintsGiven,
-    });
+    const { data } = await runStructuredTask(
+      'hint',
+      payload,
+      hintResponseSchema,
+      { setId: set.id, hintsGiven: body.hintsGiven },
+      { contextSource: card ? 'card' : 'set' },
+    );
 
     return data;
   },
@@ -522,7 +541,7 @@ export const aiLearningService = {
         cardCount: body.cardCount,
         hasLevel: Boolean(body.level),
       },
-      { maxOutputTokens: cardsBudget(body.cardCount) },
+      { maxOutputTokens: cardsBudget(body.cardCount), contextSource: 'chat' },
     );
 
     return {
@@ -607,11 +626,16 @@ export const aiLearningService = {
       '\n',
     );
 
-    const text = await runTextTask('summarize', payload, {
-      setId,
-      totalCards: loaded.totalCards,
-      contextCards: loaded.contextCards,
-    });
+    const text = await runTextTask(
+      'summarize',
+      payload,
+      {
+        setId,
+        totalCards: loaded.totalCards,
+        contextCards: loaded.contextCards,
+      },
+      { contextSource: 'set' },
+    );
 
     return {
       text,

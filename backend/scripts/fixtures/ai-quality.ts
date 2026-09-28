@@ -278,3 +278,144 @@ export function qualitySignals(example: QualityCase, text: string): Record<strin
       example.subject !== 'natuurkunde' || !/G\s*[*·]?\s*M\s*\/\s*R|\\frac\s*\{GM\}/i.test(text),
   };
 }
+
+export interface CurriculumQualityCase {
+  id: string;
+  prompt: string;
+  history?: { role: 'user' | 'assistant'; content: string }[];
+  contextSource: 'chat' | 'none';
+  mode: 'request-material' | 'answer';
+  communicateUncertainty?: boolean;
+  good: string;
+  bad: string;
+  required: RegExp[];
+  forbidden?: RegExp[];
+}
+
+/** Focused context-quality probes; fixed examples, never used in production. */
+export const CURRICULUM_QUALITY_CASES: CurriculumQualityCase[] = [
+  {
+    id: 'unknown-chapter',
+    prompt: 'Ik heb morgen een toets biologie over hoofdstuk 1. Wat moet ik leren?',
+    contextSource: 'none',
+    mode: 'request-material',
+    communicateUncertainty: true,
+    good: 'Dat verschilt per boek en methode. Stuur een foto of de onderwerpen; dan kan ik uitleg geven, je overhoren of oefenvragen maken.',
+    bad: 'Hoofdstuk 1 gaat over cellen, weefsels en organen. Leer die begrippen goed.',
+    required: [
+      /verschilt|hangt af/i,
+      /stuur|deel|upload/i,
+      /foto|onderwerpen|inhoudsopgave|begrippen/i,
+    ],
+    forbidden: [/hoofdstuk\s+1\s+(?:gaat over|behandelt|bestaat uit)/i],
+  },
+  {
+    id: 'general-photosynthesis',
+    prompt: 'Wat is fotosynthese?',
+    contextSource: 'none',
+    mode: 'answer',
+    good: 'Bij fotosynthese gebruikt een plant licht om water en koolstofdioxide om te zetten in glucose en zuurstof.',
+    bad: 'Stuur eerst je boek of methode, anders kan ik niet antwoorden.',
+    required: [/fotosynthese/i, /licht/i, /glucose|koolstofdioxide/i],
+    forbidden: [/stuur eerst|welk boek|welke methode/i],
+  },
+  {
+    id: 'provided-chapter-topics',
+    prompt: 'Hoofdstuk 1 gaat over fotosynthese, ademhaling en bloedsomloop. Wat moet ik kennen?',
+    contextSource: 'chat',
+    mode: 'answer',
+    good: 'Leer de kern van fotosynthese, ademhaling en bloedsomloop; ik kan je daarover overhoren.',
+    bad: 'Stuur eerst de onderwerpen van hoofdstuk 1.',
+    required: [/fotosynthese/i, /ademhaling/i, /bloedsomloop/i],
+    forbidden: [/stuur eerst|wat zijn de onderwerpen/i],
+  },
+  {
+    id: 'chat-flashcards',
+    prompt:
+      'Hier zijn mijn flashcards. Overhoor mij: Vraag: Wat is osmose? Antwoord: Verplaatsing van water door een membraan.',
+    contextSource: 'chat',
+    mode: 'answer',
+    good: 'Wat verplaatst zich bij osmose door een membraan?',
+    bad: 'Stuur eerst je flashcards, dan kan ik je overhoren.',
+    required: [/osmose/i, /membraan/i],
+    forbidden: [/stuur eerst|deel eerst/i],
+  },
+  {
+    id: 'unknown-book-chapter',
+    prompt: 'Wat staat er in hoofdstuk 4 van mijn boek?',
+    contextSource: 'none',
+    mode: 'request-material',
+    communicateUncertainty: true,
+    good: 'Dat hangt af van je boek. Stuur een foto van de inhoudsopgave of deel de hoofdstuktitel, dan help ik je.',
+    bad: 'Hoofdstuk 4 behandelt meestal erfelijkheid en DNA.',
+    required: [/hangt af|verschilt/i, /stuur|deel/i, /foto|inhoudsopgave|hoofdstuktitel/i],
+    forbidden: [/hoofdstuk\s+4\s+(?:behandelt|gaat over|is over)/i],
+  },
+  {
+    id: 'unknown-method',
+    prompt: 'Wat moet ik kennen voor BioKompas hoofdstuk 5?',
+    contextSource: 'none',
+    mode: 'request-material',
+    communicateUncertainty: true,
+    good: 'Dat verschilt per methode. Stuur de onderwerpen of een foto van de inhoudsopgave van BioKompas hoofdstuk 5.',
+    bad: 'BioKompas hoofdstuk 5 gaat over voortplanting en genetica.',
+    required: [/verschilt|hangt af/i, /stuur|deel/i, /onderwerpen|foto|inhoudsopgave/i],
+    forbidden: [/BioKompas\s+hoofdstuk\s+5\s+(?:gaat over|behandelt)/i],
+  },
+  {
+    id: 'tomorrow-no-syllabus',
+    prompt: 'Help mij leren voor morgen.',
+    contextSource: 'none',
+    mode: 'request-material',
+    good: 'Natuurlijk. Welke stof moet je kennen? Stuur je onderwerpen of een foto; dan maak ik er een planning of oefenvragen van.',
+    bad: 'Begin met cellen, leer daarna fotosynthese en sluit af met een quiz over erfelijkheid.',
+    required: [/welke stof|onderwerpen/i, /stuur|foto|deel/i],
+    forbidden: [/begin met|leer daarna/i],
+  },
+  {
+    id: 'follow-up-after-material',
+    prompt: 'Help mij leren voor morgen.',
+    history: [
+      { role: 'user', content: 'Mijn toetsstof is fotosynthese, ademhaling en bloedsomloop.' },
+    ],
+    contextSource: 'chat',
+    mode: 'answer',
+    good: 'We oefenen fotosynthese, ademhaling en bloedsomloop. Wat is de functie van glucose bij fotosynthese?',
+    bad: 'Stuur eerst de onderwerpen die je moet leren.',
+    required: [/fotosynthese/i, /ademhaling/i, /bloedsomloop/i],
+    forbidden: [/stuur eerst|welke onderwerpen/i],
+  },
+  {
+    id: 'material-provided-after-request',
+    prompt: 'De onderwerpen zijn fotosynthese, ademhaling en bloedsomloop.',
+    history: [
+      { role: 'user', content: 'Help mij leren voor morgen.' },
+      { role: 'assistant', content: 'Welke stof moet je kennen?' },
+    ],
+    contextSource: 'chat',
+    mode: 'answer',
+    good: 'We kunnen oefenen met fotosynthese, ademhaling en bloedsomloop. Wat is fotosynthese?',
+    bad: 'Stuur eerst de onderwerpen die je moet leren.',
+    required: [/fotosynthese/i, /ademhaling/i, /bloedsomloop/i],
+    forbidden: [/stuur eerst|welke onderwerpen/i],
+  },
+];
+
+export function curriculumQualitySignals(
+  example: CurriculumQualityCase,
+  text: string,
+): Record<string, boolean> {
+  const asksForMaterial = /stuur|deel|upload|foto|inhoudsopgave|onderwerpen|methode|stof/i.test(
+    text,
+  );
+  const communicatesUncertainty = /verschilt|hangt af|weet nog niet|afhankelijk/i.test(text);
+  return {
+    nonempty: text.trim().length > 0,
+    requiredContext: example.required.every((pattern) => pattern.test(text)),
+    noInventedCurriculum: !(example.forbidden ?? []).some((pattern) => pattern.test(text)),
+    requestsSourceWhenMissing: example.mode !== 'request-material' || asksForMaterial,
+    communicatesUncertaintyWhenMissing: !example.communicateUncertainty || communicatesUncertainty,
+    doesNotBlockKnownContext:
+      example.mode !== 'answer' || !/stuur eerst|welk boek|welke methode/i.test(text),
+  };
+}

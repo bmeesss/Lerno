@@ -39,6 +39,14 @@ describe('Lerno workspace navigation', () => {
     );
   });
 
+  it('exposes Study Studio as a distinct authenticated navigation destination', () => {
+    renderShell('/ai/studio');
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(nav).getByRole('link', { name: 'Study Studio' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'Lerno AI' })).not.toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Study Studio', { selector: 'strong' })).toBeInTheDocument();
+  });
+
   it('makes every page reachable from the mobile More dialog and restores focus', async () => {
     const user = userEvent.setup();
     renderShell();

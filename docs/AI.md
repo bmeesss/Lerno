@@ -464,6 +464,8 @@ See [AI-OPTIMIZATION.md](AI-OPTIMIZATION.md) for the measured baseline, context 
 
 ## School quality policy (2026-09-28)
 
+AI answers specific curriculum questions only when the relevant content is available in context. Otherwise Lerno asks the user to provide the material instead of guessing.
+
 The compact prompts prefer the simplest **correct** explanation. The student's
 explicit level/year wins; “hard” means harder within that level, never an automatic
 mavo → havo → vwo promotion. A remembered level comes only from user history.
@@ -530,3 +532,42 @@ line; fenced code is untouched.
 
 No live quality result is claimed for this change: the local `--live` attempt
 stopped before any provider calls because `GROQ_API_KEY` was not configured.
+
+## AI Study Studio
+
+The authenticated Studio lives at `/ai/studio` and uses the existing `/api/ai`
+router, Supabase-backed session, Groq client, and per-user/IP AI rate limits. It
+supports pasted text, private selectable-text PDF extraction, and sets the caller
+can already view. Actions are explicit: source summary, editable flashcards,
+interactive quiz preview, self-check practice questions, source-aware chat, and a
+source-grounded study plan with selectable duration and daily study time.
+The Studio does not send an AI request on source selection. Generated content is
+never written to the database automatically; flashcards use the existing set
+creation route only after the student chooses **Save as a private set**.
+
+Sources are session-only and intentionally have no server-side ID or durable
+record. Pasted text stays in page memory; a PDF is parsed from the authenticated
+request's in-memory upload and its extracted text is returned to that uploader's
+page session. Each subsequent task sends bounded source text again. Sets send a
+set ID only, and the backend calls the existing `loadSetForAi`/`canViewSet`
+authorization path again before every task. This avoids public file URLs,
+cross-user source tokens, database access by Groq, and process-local cache
+assumptions in multi-instance deployments. No Supabase Storage or database
+migration is required.
+
+PDF restrictions: actual PDF signature and parser validation; 15 MB maximum; at
+most 100 pages; selectable text only; up to 50,000 extracted characters. Password-
+protected, damaged, image-only and scanned PDFs receive a clear validation error.
+There is no OCR. Files are held in memory only for parsing, never written to a
+filesystem or public bucket, and are not sent to Groq until an action is chosen.
+
+Before each model call, content is cleaned, repeated lines are removed, and the
+source is capped per task: summary 14,000 characters, flashcards/quiz 12,000,
+practice 11,000, study plan 10,000, chat 9,000. Oversized content uses explicit beginning/end
+excerpts. Structured summary/cards/quiz/questions/study plans are parsed and Zod-validated,
+including duplicate questions/options and requested counts; malformed output has
+at most one bounded retry. The chat prompt distinguishes source-backed claims
+from general explanation and asks the model to say when material is insufficient.
+Practice answers are self-checked by reveal; they are not represented as an AI
+score or persisted result. This version intentionally excludes OCR, video/audio,
+YouTube, scraping, RAG/vector stores, and third-party integrations.

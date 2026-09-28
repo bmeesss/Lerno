@@ -13,8 +13,14 @@
  * `ai-learning-service.ts` and share the low-level client in `ai-completion.ts`.
  */
 import { STUDY_SYSTEM_PROMPT } from './ai-prompts.js';
+import { contextSourceDirective } from '../lib/ai-context-source.js';
 import { chatReasoningEffort } from './ai-reasoning.js';
-import { selectChatContext, chatOutputBudget, levelDirective } from '../lib/ai-chat-context.js';
+import {
+  selectChatContext,
+  chatContextSource,
+  chatOutputBudget,
+  levelDirective,
+} from '../lib/ai-chat-context.js';
 import { cleanAiText } from '../lib/ai-text.js';
 import { config } from '../config.js';
 import { errors } from '../lib/errors.js';
@@ -66,9 +72,16 @@ export function buildConversation(
     sanitizeChatText(message, MAX_USER_MESSAGE_CHARS) ||
     message.trim().slice(0, MAX_USER_MESSAGE_CHARS);
   const { messages, level } = selectChatContext(safeMessage, history);
+  const contextSource = chatContextSource(safeMessage, messages);
 
   const conversation: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: LERNO_AI_SYSTEM_PROMPT + levelDirective(level) },
+    {
+      role: 'system',
+      content:
+        LERNO_AI_SYSTEM_PROMPT +
+        levelDirective(level) +
+        (contextSource === 'none' ? '' : ` ${contextSourceDirective(contextSource)}`),
+    },
   ];
   for (const entry of messages) {
     conversation.push({ role: entry.role, content: entry.content });
