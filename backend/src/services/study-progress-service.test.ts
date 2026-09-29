@@ -4,6 +4,7 @@ import type { Database } from '../lib/db/repository.js';
 import type {
   LearningSessionResult,
   LearningSessionStat,
+  SessionConceptChange,
   StudySessionRecord,
 } from '../lib/db/types.js';
 import { seedPack } from './pack-fixtures.js';
@@ -116,9 +117,9 @@ describe('study streak', () => {
 });
 
 describe('improved concepts', () => {
-  const result = (
-    concepts: LearningSessionResult['concepts'],
-  ): { completedAt: string; result: LearningSessionResult } => ({
+  /** Only the before and after matter here; the answer counts are filled in. */
+  type Change = Pick<SessionConceptChange, 'conceptId' | 'name' | 'beforePercent' | 'afterPercent'>;
+  const result = (changes: Change[]): { completedAt: string; result: LearningSessionResult } => ({
     completedAt: NOW.toISOString(),
     result: {
       kind: 'practice',
@@ -128,7 +129,7 @@ describe('improved concepts', () => {
       partial: 0,
       incorrect: 2,
       percent: 60,
-      concepts,
+      concepts: changes.map((change) => ({ ...change, answered: 1, correct: 1, incorrect: 0 })),
       weakConcepts: [],
       next: null,
     } as unknown as LearningSessionResult,
