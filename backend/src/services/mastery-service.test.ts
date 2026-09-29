@@ -9,7 +9,7 @@ import {
   summarizeMastery,
   toMasteryUpsert,
 } from './mastery-service.js';
-import { seedPack } from './pack-fixtures.js';
+import { seedPack } from '../test-helpers/pack-fixtures.js';
 import { applyRating, applyVerdict, emptyMastery, type MasteryState } from './study-pack-rules.js';
 
 const NOW = new Date('2026-09-29T12:00:00.000Z');

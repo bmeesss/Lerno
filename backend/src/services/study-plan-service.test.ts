@@ -3,7 +3,7 @@ import { createMemoryDatabase, createMemoryState } from '../lib/db/memory.js';
 import type { Database } from '../lib/db/repository.js';
 import type { ConceptRecord } from '../lib/db/types.js';
 import { loadPackSnapshots } from './pack-data.js';
-import { seedPack, type PackSpec, type SeededPack } from './pack-fixtures.js';
+import { seedPack, type PackSpec, type SeededPack } from '../test-helpers/pack-fixtures.js';
 import {
   addMaterialTask,
   emptyContext,

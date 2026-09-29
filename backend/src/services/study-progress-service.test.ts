@@ -7,7 +7,7 @@ import type {
   SessionConceptChange,
   StudySessionRecord,
 } from '../lib/db/types.js';
-import { seedPack } from './pack-fixtures.js';
+import { seedPack } from '../test-helpers/pack-fixtures.js';
 import {
   buildStudyStreak,
   collectImprovedConcepts,
