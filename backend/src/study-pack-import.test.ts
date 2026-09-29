@@ -66,18 +66,32 @@ const MATERIAL = [
  * requested action instead of call order — exactly like the real provider.
  */
 function respondWithGeneration(
-  overrides: Partial<Record<'concepts' | 'summary' | 'flashcards' | 'practice', unknown>> = {},
+  overrides: Partial<
+    Record<'analysis' | 'concepts' | 'summary' | 'flashcards' | 'practice', unknown>
+  > = {},
 ): void {
   const answers: Record<string, unknown> = {
-    'key concepts': {
+    analysis: {
+      summary: 'Planten zetten lichtenergie om in glucose; water verplaatst zich door membranen.',
+      keyFacts: ['Fotosynthese gebruikt lichtenergie.', 'Osmose verplaatst water.'],
+      relationships: ['Chlorofyl is nodig voor fotosynthese.'],
+      examTopics: ['Fotosynthese', 'Osmose'],
+      difficulty: 'medium',
+      sections: [{ title: 'Cellen', ref: '1:p1' }],
+      conflicts: [],
+      ...(overrides.analysis as object | undefined),
+    },
+    concepts: {
       concepts: [
         {
           name: 'Fotosynthese',
           explanation: 'Planten maken glucose met lichtenergie.',
-          sourceRef: 1,
+          ref: '1:p1',
+          importance: 0.9,
+          difficulty: 'medium',
         },
-        { name: 'Chlorofyl', explanation: 'Groene stof die licht opneemt.', sourceRef: 1 },
-        { name: 'Osmose', explanation: 'Water verplaatst door een membraan.', sourceRef: 1 },
+        { name: 'Chlorofyl', explanation: 'Groene stof die licht opneemt.', ref: '1:p1' },
+        { name: 'Osmose', explanation: 'Water verplaatst door een membraan.', ref: '1:p1' },
       ],
       ...(overrides.concepts as object | undefined),
     },
@@ -85,19 +99,24 @@ function respondWithGeneration(
       title: 'Biologie H3',
       summary: 'Planten zetten lichtenergie om in glucose; water verplaatst zich door membranen.',
       keyPoints: ['Fotosynthese', 'Osmose', 'Chlorofyl'],
-      terms: [{ term: 'Chlorofyl', definition: 'Groene stof in bladgroenkorrels.' }],
+      keyFacts: ['Fotosynthese gebruikt lichtenergie.'],
       ...(overrides.summary as object | undefined),
     },
     flashcards: {
       title: 'Cellbiologie',
       description: 'Kaarten over fotosynthese en transport.',
       cards: [
-        { front: 'Wat doet chlorofyl?', back: 'Het neemt licht op.' },
-        { front: 'Wat is osmose?', back: 'Waterverplaatsing door een membraan.' },
+        { front: 'Wat doet chlorofyl?', back: 'Het neemt licht op.', ref: '1:p1', conceptRef: 2 },
+        {
+          front: 'Wat is osmose?',
+          back: 'Waterverplaatsing door een membraan.',
+          ref: '1:p1',
+          conceptRef: 3,
+        },
       ],
       ...(overrides.flashcards as object | undefined),
     },
-    'practice questions': {
+    practice: {
       questions: [
         {
           type: 'multiple_choice',
@@ -106,6 +125,8 @@ function respondWithGeneration(
           correctIndex: 0,
           answer: 'Cellulose',
           explanation: 'Cellulose is een bouwstof.',
+          ref: '1:p1',
+          conceptRef: 1,
         },
       ],
       ...(overrides.practice as object | undefined),
@@ -114,8 +135,8 @@ function respondWithGeneration(
 
   createCompletion.mockImplementation((params: { messages: { content: string }[] }) => {
     const payload = params.messages.map((message) => message.content).join('\n');
-    const action = Object.keys(answers).find((key) => payload.includes(`"action":"${key}"`));
-    return Promise.resolve(completion(JSON.stringify(action ? answers[action] : {})));
+    const task = Object.keys(answers).find((key) => payload.includes(`"task":"${key}"`));
+    return Promise.resolve(completion(JSON.stringify(task ? answers[task] : {})));
   });
 }
 
@@ -191,10 +212,11 @@ describe('material import: pasted text', () => {
     expect(status.processing).toBe(true);
     // The stages the student will actually watch, in the order they run.
     expect(status.steps.map((step: { id: string }) => step.id)).toEqual([
-      'concepts',
-      'summary',
-      'flashcards',
-      'practice',
+      'extract',
+      'normalize',
+      'analyze',
+      'generate',
+      'review',
       'plan',
     ]);
     expect(status.steps.every((step: { label: string }) => Boolean(step.label))).toBe(true);
@@ -208,6 +230,10 @@ describe('material import: pasted text', () => {
     expect(finished.counts.practiceQuestions).toBe(1);
     expect(finished.counts.hasSummary).toBe(true);
     expect(finished.counts.hasPlan).toBe(true);
+    expect(finished.counts.hasAnalysis).toBe(true);
+    // The estimated study time is computed server-side, transparently.
+    expect(finished.estimatedMinutes).toBeGreaterThan(0);
+    expect(finished.estimatedStudyTimeLabel).toMatch(/min|u/);
 
     // The pack is complete and study-ready — never an empty page.
     const detail = await request(app).get(`/api/study-packs/${packId}`).set(auth(token));
@@ -295,8 +321,7 @@ describe('material import: pasted text', () => {
     const packId = res.body.data.packId as string;
     const finished = await waitForProcessing(token, packId);
     expect(finished.status).toBe('ready');
-    // The student's own cards are never padded: flashcards are not generated.
-    expect(finished.steps.map((step: { id: string }) => step.id)).not.toContain('flashcards');
+    // The student's own cards are never padded: no flashcards are generated.
 
     const detail = await request(app).get(`/api/study-packs/${packId}`).set(auth(token));
     expect(detail.body.data.counts.flashcards).toBe(2);
@@ -320,11 +345,16 @@ describe('material import: AI availability', () => {
     expect(finished.counts.concepts).toBe(0);
     // The deterministic study plan never needs AI.
     expect(finished.counts.hasPlan).toBe(true);
-    expect(
-      finished.steps
-        .filter((step: { id: string }) => step.id !== 'plan')
-        .every((step: { state: string }) => step.state === 'skipped'),
-    ).toBe(true);
+    // Reading and cleaning material needs no AI; the AI stages are skipped
+    // honestly instead of pretending they ran.
+    const stepState = (id: string) =>
+      finished.steps.find((step: { id: string }) => step.id === id)?.state;
+    expect(stepState('extract')).toBe('done');
+    expect(stepState('normalize')).toBe('done');
+    expect(stepState('analyze')).toBe('skipped');
+    expect(stepState('generate')).toBe('skipped');
+    expect(stepState('review')).toBe('skipped');
+    expect(stepState('plan')).toBe('done');
 
     const detail = await request(app).get(`/api/study-packs/${packId}`).set(auth(token));
     expect(detail.body.data.aiAvailable).toBe(false);
@@ -345,7 +375,7 @@ describe('material import: AI availability', () => {
     expect(failed.status).toBe('failed');
     expect(failed.failure?.message).toBeTruthy();
     expect(failed.failure?.message).not.toMatch(/upstream|stack|Error:/i);
-    expect(failed.failure?.details).toContain('Stage: concepts');
+    expect(failed.failure?.details).toContain('Stage: analyze');
 
     // Nothing is lost: the pack and its source still exist and can be retried.
     const detail = await request(app).get(`/api/study-packs/${packId}`).set(auth(token));
@@ -403,20 +433,41 @@ describe('material import: AI availability', () => {
     const cardsBefore = before.body.data.counts.flashcards as number;
     const questionsBefore = before.body.data.counts.practiceQuestions as number;
 
-    // A second run proposes one new concept, one duplicate and one new card.
+    // A second run proposes new concepts (one of them a duplicate of an
+    // existing concept) and one new card.
     createCompletion.mockReset();
     respondWithGeneration({
-      concepts: [
-        { name: 'Celwand', explanation: 'Stevige laag om de plantencel.', sourceRef: 1 },
-        { name: 'Celwand', explanation: 'Stevige laag om de plantencel.', sourceRef: 1 },
-        { name: 'Bladgroenkorrel', explanation: 'Plaats waar fotosynthese gebeurt.', sourceRef: 1 },
-      ],
+      concepts: {
+        concepts: [
+          { name: 'Celwand', explanation: 'Stevige laag om de plantencel.', ref: '1:p1' },
+          {
+            name: 'Fotosynthese',
+            explanation: 'Planten maken glucose met lichtenergie.',
+            ref: '1:p1',
+          },
+          {
+            name: 'Bladgroenkorrel',
+            explanation: 'Plaats waar fotosynthese gebeurt.',
+            ref: '1:p1',
+          },
+        ],
+      },
       flashcards: {
         title: 'Extra',
         description: '',
-        cards: [{ front: 'Wat is mitose?', back: 'Deling van de celkern.' }],
+        cards: [{ front: 'Wat is mitose?', back: 'Deling van de celkern.', ref: '1:p1' }],
       },
-      practice: { questions: [] },
+      practice: {
+        questions: [
+          {
+            type: 'open',
+            question: 'Waaruit bestaat de celwand van planten?',
+            answer: 'Cellulose',
+            explanation: 'De celwand bestaat uit cellulose.',
+            ref: '1:p1',
+          },
+        ],
+      },
     });
     await request(app).post(`/api/study-packs/${packId}/process`).set(auth(token)).send({});
     await waitForProcessing(token, packId);

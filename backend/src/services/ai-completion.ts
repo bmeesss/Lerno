@@ -24,7 +24,15 @@ import { errors, type ApiError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { REASONING_RESERVE, resolveReasoningEffort, type ReasoningEffort } from './ai-reasoning.js';
 
-export type ConversationMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+/** A text part or an image part (multimodal OCR asks for an image). */
+export type ConversationContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+export type ConversationMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string | ConversationContentPart[];
+};
 
 let cachedClient: Groq | null = null;
 let cachedClientKey = '';
@@ -99,6 +107,8 @@ export function mapGroqError(error: unknown): ApiError {
 export interface ChatRequest {
   /** Short action name used in logs (explain, summary, evaluate, …). */
   action: string;
+  /** Model override (used by OCR, which needs a vision-capable model). */
+  model?: string;
   messages: ConversationMessage[];
   maxOutputTokens: number;
   temperature?: number;
@@ -114,6 +124,8 @@ export interface ChatRequest {
 
 export interface ChatResult {
   text: string;
+  /** Model that actually answered (for logs; never shown to students). */
+  model: string;
   inputTokens: number | null;
   outputTokens: number | null;
   /** Hidden reasoning tokens billed for this answer (null when not reported). */
@@ -145,7 +157,7 @@ export function completionBudget(
 export function buildChatParams(request: ChatRequest): ChatCompletionCreateParamsNonStreaming {
   const reasoningEffort = resolveReasoningEffort(request);
   return {
-    model: config.groqModel,
+    model: request.model ?? config.groqModel,
     messages: request.messages as ChatCompletionMessageParam[],
     max_completion_tokens: completionBudget(request),
     ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
@@ -159,6 +171,7 @@ export function buildChatParams(request: ChatRequest): ChatCompletionCreateParam
 /** Sends one chat completion and returns the trimmed text (never throws raw upstream errors). */
 export async function requestChat(request: ChatRequest): Promise<ChatResult> {
   const apiKey = requireGroqKey();
+  const model = request.model ?? config.groqModel;
 
   const startedAt = Date.now();
   // Belt and braces next to the SDK timeout: covers retries too.
@@ -179,7 +192,7 @@ export async function requestChat(request: ChatRequest): Promise<ChatResult> {
     const mapped = mapGroqError(err);
     logger.warn('ai.action.failed', {
       action: request.action,
-      model: config.groqModel,
+      model,
       reasoningEffort,
       durationMs: Date.now() - startedAt,
       outcome: 'error',
@@ -195,6 +208,7 @@ export async function requestChat(request: ChatRequest): Promise<ChatResult> {
   const usage = completion?.usage;
   return {
     text,
+    model,
     durationMs: Date.now() - startedAt,
     inputTokens: usage?.prompt_tokens ?? null,
     outputTokens: usage?.completion_tokens ?? null,
@@ -213,7 +227,7 @@ export function logAiAction(
 ): void {
   logger.info('ai.action.completed', {
     action,
-    model: config.groqModel,
+    model: result.model,
     reasoningEffort: result.reasoningEffort,
     durationMs: result.durationMs,
     outcome,

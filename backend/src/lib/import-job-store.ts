@@ -10,8 +10,23 @@
  *  - One active job per Study Pack; a finished job is replaced by the next run.
  */
 
-/** Real stages of turning material into a study pack. */
-export type ImportStageId = 'concepts' | 'summary' | 'flashcards' | 'practice' | 'plan';
+/**
+ * Real stages of turning material into a study pack — one pipeline for every
+ * source kind:
+ *
+ *   extract → normalize → analyze → generate → review → plan
+ *
+ * `extract`/`normalize` are honest no-ops for pasted text (the text is already
+ * there) but they still run, so a PDF, a presentation, a photo, a recording and a
+ * YouTube lesson all follow exactly the same path and report the same stages.
+ */
+export type ImportStageId =
+  | 'extract'
+  | 'normalize'
+  | 'analyze'
+  | 'generate'
+  | 'review'
+  | 'plan';
 
 export type ImportStepState = 'pending' | 'active' | 'done' | 'skipped' | 'failed';
 
@@ -30,11 +45,20 @@ export interface ImportFailure {
 }
 
 export interface ImportCounts {
+  /** Sources in the pack, and how many are ready to study from. */
+  sources: number;
+  readySources: number;
   concepts: number;
   flashcards: number;
   practiceQuestions: number;
   hasSummary: boolean;
   hasPlan: boolean;
+  /** True once the source-grounded analysis exists on the pack. */
+  hasAnalysis: boolean;
+  /** Conflicts between sources that the student must resolve. */
+  conflicts: number;
+  /** Generated items the quality pass rejected (never shown to the student). */
+  rejected: number;
 }
 
 export type ImportJobStatus = 'processing' | 'ready' | 'partial' | 'failed';
@@ -98,11 +122,16 @@ export const importJobs = {
       aiAvailable: input.aiAvailable,
       aiSkipped: false,
       counts: {
+        sources: 0,
+        readySources: 0,
         concepts: 0,
         flashcards: 0,
         practiceQuestions: 0,
         hasSummary: false,
         hasPlan: false,
+        hasAnalysis: false,
+        conflicts: 0,
+        rejected: 0,
       },
       failure: null,
       startedAt: now(),

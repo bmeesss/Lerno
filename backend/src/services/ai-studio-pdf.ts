@@ -14,11 +14,42 @@ export interface ExtractedPdfText {
   truncated: boolean;
 }
 
+/** One page of selectable text, kept separate so provenance can say "page 6". */
+export interface ExtractedPdfPage {
+  pageNumber: number;
+  text: string;
+}
+
+export interface ExtractedPdfPages {
+  pages: ExtractedPdfPage[];
+  pageCount: number;
+  extractedChars: number;
+  truncated: boolean;
+}
+
 /**
  * Extract selectable text only. The caller has already bounded the in-memory
  * upload; PDF.js receives bytes, never a filesystem path or a URL.
  */
 export async function extractPdfText(buffer: Buffer): Promise<ExtractedPdfText> {
+  const extracted = await extractPdfPages(buffer);
+  return {
+    text: extracted.pages.map((page) => page.text).join(' ').trim(),
+    pageCount: extracted.pageCount,
+    extractedChars: extracted.extractedChars,
+    truncated: extracted.truncated,
+  };
+}
+
+/**
+ * Per-page selectable text. Used by the source pipeline, which keeps the page
+ * number of every chunk so generated content can point at "page 6".
+ *
+ * Same guards as `extractPdfText` (in-memory bytes only, `%PDF-` signature,
+ * size/page/character limits) — this is not a second PDF path, just the same
+ * extraction with the page boundaries kept.
+ */
+export async function extractPdfPages(buffer: Buffer): Promise<ExtractedPdfPages> {
   if (buffer.length === 0 || buffer.length > MAX_STUDIO_PDF_BYTES) {
     throw errors.validation('Choose a PDF smaller than 15 MB.');
   }
@@ -40,35 +71,44 @@ export async function extractPdfText(buffer: Buffer): Promise<ExtractedPdfText> 
       throw errors.validation(`This PDF has ${document.numPages} pages. The limit is ${MAX_STUDIO_PDF_PAGES} pages.`);
     }
 
-    const chunks: string[] = [];
+    const pages: ExtractedPdfPage[] = [];
+    const allChunks: string[] = [];
     let totalChars = 0;
+    let stopped = false;
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const textContent = await page.getTextContent();
+      const pageChunks: string[] = [];
       for (const item of textContent.items) {
         if (!('str' in item) || !item.str) continue;
         const piece = item.str.trim();
         if (!piece) continue;
         totalChars += piece.length + 1;
-        if (totalChars <= MAX_SCAN_CHARS) chunks.push(piece);
-        if (totalChars > MAX_SCAN_CHARS) break;
+        if (totalChars <= MAX_SCAN_CHARS) {
+          pageChunks.push(piece);
+          allChunks.push(piece);
+        }
+        if (totalChars > MAX_SCAN_CHARS) {
+          stopped = true;
+          break;
+        }
       }
       page.cleanup();
-      if (totalChars > MAX_SCAN_CHARS) break;
+      pages.push({ pageNumber, text: pageChunks.join(' ') });
+      if (stopped) break;
     }
 
-    const extracted = chunks.join(' ').replace(/\s+/g, ' ').trim();
+    const extracted = allChunks.join(' ').replace(/\s+/g, ' ').trim();
     if (extracted.replace(/[\p{P}\p{S}\s]/gu, '').length < 20) {
       throw errors.validation(
         'This PDF has no readable selectable text. Scanned or image-only PDFs are not supported; paste the text instead.',
       );
     }
-    const text = extracted.slice(0, MAX_STUDIO_PDF_CHARS);
     return {
-      text,
+      pages,
       pageCount: document.numPages,
       extractedChars: Math.min(totalChars, MAX_SCAN_CHARS),
-      truncated: totalChars > text.length,
+      truncated: totalChars > MAX_STUDIO_PDF_CHARS,
     };
   } catch (error) {
     if (error instanceof ApiError) throw error;

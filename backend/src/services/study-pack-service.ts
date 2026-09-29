@@ -30,6 +30,7 @@ import type {
 import { dto } from '../lib/dto.js';
 import { errors } from '../lib/errors.js';
 import { buildSetContext } from './ai-context.js';
+import { estimateStudyTime } from './study-time.js';
 import { setService, canViewSet } from './set-service.js';
 import { subjectService } from './subject-service.js';
 import {
@@ -481,6 +482,8 @@ export const studyPackService = {
       summary: pack.summary,
       summarySourceId: pack.summarySourceId,
       summaryUpdatedAt: pack.summaryUpdatedAt,
+      /** Source-grounded analysis (difficulty, exam topics, conflicts). */
+      analysis: pack.analysis,
       /**
        * Whether Lerno AI can generate content right now. Shown as a calm
        * notice instead of an error: the pack and its material always work.
@@ -498,6 +501,17 @@ export const studyPackService = {
           : null,
       createdAt: pack.createdAt,
       updatedAt: pack.updatedAt,
+      /** Transparent, rule-based study time estimate (no AI involved). */
+      estimatedStudyTime: estimateStudyTime({
+        concepts: context.concepts.length,
+        flashcards: context.cards.length,
+        practiceQuestions: context.questions.length,
+        sourceCharacters: context.sources.reduce(
+          (total, source) => total + source.characterCount,
+          0,
+        ),
+        difficulty: pack.analysis?.difficulty ?? null,
+      }),
       counts: {
         sources: context.sources.length,
         readySources: progress.stats.readySources,
@@ -736,8 +750,29 @@ export const studyPackService = {
     packId: string,
     input:
       | { target: 'summary'; summary: string; sourceId: string | null }
-      | { target: 'concepts'; concepts: { name: string; explanation: string }[]; sourceId: string | null }
-      | { target: 'flashcards'; cards: { front: string; back: string }[]; sourceId: string | null }
+      | {
+          target: 'concepts';
+          concepts: {
+            name: string;
+            explanation: string;
+            /** Per-item provenance (multi-source packs); falls back to `sourceId`. */
+            sourceId?: string | null;
+            refLabel?: string | null;
+            importance?: number | null;
+            difficulty?: 'easy' | 'medium' | 'hard' | null;
+          }[];
+          sourceId: string | null;
+        }
+      | {
+          target: 'flashcards';
+          cards: {
+            front: string;
+            back: string;
+            sourceId?: string | null;
+            conceptId?: string | null;
+          }[];
+          sourceId: string | null;
+        }
       | {
           target: 'practice';
           questions: {
@@ -746,6 +781,8 @@ export const studyPackService = {
             correctAnswer: string;
             options: string[] | null;
             explanation: string;
+            sourceId?: string | null;
+            conceptId?: string | null;
           }[];
           sourceId: string | null;
         },
@@ -776,9 +813,12 @@ export const studyPackService = {
         fresh.map((concept, index) => ({
           name: concept.name,
           explanation: concept.explanation,
-          sourceId: input.sourceId,
+          sourceId: concept.sourceId ?? input.sourceId,
           origin: 'ai' as const,
           position: concepts.length + index,
+          refLabel: concept.refLabel ?? null,
+          importance: concept.importance ?? null,
+          difficulty: concept.difficulty ?? null,
         })),
       );
       // Link unassigned cards to the concepts they belong to (best effort).
@@ -817,8 +857,9 @@ export const studyPackService = {
           question: card.front,
           answer: card.back,
           position: existingCards.length + index,
-          sourceId: input.sourceId,
-          conceptId: matchConcept(`${card.front} ${card.back}`, concepts)?.id ?? null,
+          sourceId: card.sourceId ?? input.sourceId,
+          conceptId:
+            card.conceptId ?? matchConcept(`${card.front} ${card.back}`, concepts)?.id ?? null,
         })),
       );
       await db.quizzes.deleteQuestionsBySet(set.id);
@@ -837,8 +878,10 @@ export const studyPackService = {
       pack.id,
       input.questions.map((question, index) => ({
         conceptId:
-          matchConcept(`${question.prompt} ${question.correctAnswer}`, concepts)?.id ?? null,
-        sourceId: input.sourceId,
+          question.conceptId ??
+          matchConcept(`${question.prompt} ${question.correctAnswer}`, concepts)?.id ??
+          null,
+        sourceId: question.sourceId ?? input.sourceId,
         prompt: question.prompt,
         questionType: question.questionType,
         correctAnswer: question.correctAnswer,

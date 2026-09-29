@@ -170,8 +170,25 @@ describe('study packs: material and sources', () => {
     const res = await request(app)
       .post(`/api/study-packs/${pack.id}/sources`)
       .set(auth(token))
+      .send({ type: 'docx', title: 'Wordbestand', text: 'x'.repeat(60) });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('validates a YouTube link before it creates anything', async () => {
+    const token = await signup();
+    const pack = await createPack(token);
+    const res = await request(app)
+      .post(`/api/study-packs/${pack.id}/sources`)
+      .set(auth(token))
       .send({ type: 'youtube', title: 'Video', url: 'https://youtu.be/x' });
     expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/YouTube/i);
+    // Only the pack's own material is there; the bad link created no source.
+    const list = await request(app).get(`/api/study-packs/${pack.id}`).set(auth(token));
+    expect(list.body.data.sources.map((source: { kind: string }) => source.kind)).toEqual([
+      'text',
+    ]);
   });
 
   it('imports an existing study set without losing cards or progress', async () => {
