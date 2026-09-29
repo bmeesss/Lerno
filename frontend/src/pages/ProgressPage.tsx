@@ -4,7 +4,8 @@ import { EmptyState, LoadingRow, ProgressBar } from '../components/ui/Primitives
 import { TodayPanel } from '../components/dashboard/TodayPanel';
 import { useAsync } from '../hooks/useAsync';
 import { progressService } from '../services/progressService';
-import type { ProgressStats, TodaySummary, WeekSummary } from '../types';
+import { studyPackService } from '../services/studyPackService';
+import type { ProgressStats, StudyPackSummary, TodaySummary, WeekSummary } from '../types';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -12,6 +13,7 @@ export function ProgressPage() {
   const { data, loading, error, reload } = useAsync<ProgressStats>(() => progressService.get(), []);
   const { data: today } = useAsync<TodaySummary>(() => progressService.today(), []);
   const { data: week } = useAsync<WeekSummary>(() => progressService.week(), []);
+  const { data: packs } = useAsync<StudyPackSummary[]>(() => studyPackService.list(), []);
 
   if (loading) return <LoadingRow large />;
   if (error || !data) {
@@ -88,6 +90,59 @@ export function ProgressPage() {
         {week ? <WeekPanel week={week} /> : null}
         {today ? <TodayPanel today={today} showAction={false} /> : null}
       </div>
+
+      {packs && packs.length > 0 ? (
+        <section aria-labelledby="pack-progress-heading" className="stack" style={{ gap: 16, marginBottom: 28 }}>
+          <div className="section-title">
+            <div>
+              <h2 id="pack-progress-heading">Study Pack mastery</h2>
+              <p className="muted">Mastery is averaged across concepts, not cards opened.</p>
+            </div>
+          </div>
+          <div className="progress-highlights">
+            <section className="card stat-card">
+              <div className="stat-label">Overall mastery</div>
+              <div className="stat-value">
+                {formatPackMastery(packs)}
+              </div>
+              <div className="stat-sub">Across {packs.reduce((sum, pack) => sum + pack.concepts, 0)} concepts</div>
+            </section>
+            <section className="card stat-card">
+              <div className="stat-label">Strong concepts</div>
+              <div className="stat-value">{packs.reduce((sum, pack) => sum + pack.masteredConcepts, 0)}</div>
+              <div className="stat-sub">85% mastery or higher</div>
+            </section>
+            <section className="card stat-card">
+              <div className="stat-label">Learning / weak</div>
+              <div className="stat-value">
+                {packs.reduce((sum, pack) => sum + pack.learningConcepts + pack.weakConcepts, 0)}
+              </div>
+              <div className="stat-sub">
+                {packs.reduce((sum, pack) => sum + pack.weakConcepts, 0)} weak ·{' '}
+                {packs.reduce((sum, pack) => sum + pack.learningConcepts, 0)} learning
+              </div>
+            </section>
+          </div>
+          <div className="stack" style={{ gap: 12 }}>
+            {packs.map((pack) => (
+              <div key={pack.id} className="subject-row">
+                <div className="subject-row-top">
+                  <span style={{ fontWeight: 600 }}>{pack.title}</span>
+                  <span className="muted" style={{ fontSize: '0.825rem' }}>
+                    {pack.masteryPercent}% · {pack.masteredConcepts}/{pack.concepts} concepts mastered
+                  </span>
+                </div>
+                <ProgressBar value={pack.masteryPercent} max={100} />
+                <div className="muted" style={{ fontSize: '0.825rem', marginTop: 6 }}>
+                  {pack.weakConcepts} weak · {pack.learningConcepts} learning · {pack.dueCards} cards due ·{' '}
+                  {pack.practiceAnswers} questions answered · {pack.testsCompleted} tests completed
+                  {pack.lastStudiedAt ? ` · last studied ${formatRelative(pack.lastStudiedAt)}` : ' · not studied yet'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {data.subjectProgress.length > 0 ? (
         <>
@@ -201,6 +256,21 @@ function WeekPanel({ week }: { week: WeekSummary }) {
       </div>
     </section>
   );
+}
+
+function formatPackMastery(packs: StudyPackSummary[]): string {
+  const conceptCount = packs.reduce((sum, pack) => sum + pack.concepts, 0);
+  if (conceptCount === 0) return '—';
+  const weighted = packs.reduce((sum, pack) => sum + pack.masteryPercent * pack.concepts, 0);
+  return `${Math.round(weighted / conceptCount)}%`;
+}
+
+function formatRelative(iso: string): string {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  if (!Number.isFinite(days)) return 'recently';
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
 }
 
 function formatMinutes(minutes: number): string {

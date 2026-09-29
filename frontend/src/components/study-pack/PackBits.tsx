@@ -4,11 +4,12 @@ import type { PackSourceKind, PackSourceStatus } from '../../types';
 
 /** Small, calm building blocks shared by the Study Pack views. */
 
-export function masteryLabel(percent: number): string {
-  if (percent >= 80) return 'Strong';
-  if (percent >= 60) return 'Getting there';
-  if (percent > 0) return 'Needs work';
-  return 'Not started';
+export function masteryLabel(percent: number, attempts = 1): string {
+  if (attempts === 0) return 'New';
+  if (percent < 30) return 'Weak';
+  if (percent < 60) return 'Learning';
+  if (percent < 85) return 'Familiar';
+  return 'Mastered';
 }
 
 export function MasteryMeter({

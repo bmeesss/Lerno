@@ -70,12 +70,17 @@ export function todayTaskHref(task: StudyPackTodayTask): string {
   switch (task.type) {
     case 'review':
       return `${base}?tab=flashcards`;
+    case 'continue':
     case 'learn':
       return `${base}?tab=learn${task.conceptId ? `&concept=${task.conceptId}` : ''}`;
     case 'practice':
       return `${base}?tab=practice${task.conceptId ? `&concept=${task.conceptId}` : ''}`;
     case 'test':
       return `${base}?tab=test`;
+    case 'generate-concepts':
+      return `${base}?tab=concepts`;
+    case 'generate-practice':
+      return `${base}?tab=practice`;
   }
 }
 

@@ -13,14 +13,20 @@ import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { TodayPanel } from '../../components/dashboard/TodayPanel';
 import { dashboardService } from '../../services/dashboardService';
+import { studyPackService } from '../../services/studyPackService';
 import { nextActionLink } from '../../lib/nextAction';
-import type { DashboardData } from '../../types';
+import { todayTaskHref } from '../../lib/studyPackRoutes';
+import type { DashboardData, StudyPackToday } from '../../types';
 
 export function DashboardPage() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync<DashboardData>(
     () => dashboardService.get(),
     [],
+  );
+  const { data: adaptiveToday } = useAsync<StudyPackToday | null>(
+    () => (user ? studyPackService.today().catch(() => null) : Promise.resolve(null)),
+    [user?.id],
   );
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
   const hour = Number(
@@ -63,14 +69,21 @@ export function DashboardPage() {
           }
         />
       ) : data ? (
-        <DashboardContent data={data} />
+        <DashboardContent data={data} adaptiveToday={adaptiveToday} />
       ) : null}
     </>
   );
 }
 
-function DashboardContent({ data }: { data: DashboardData }) {
+function DashboardContent({
+  data,
+  adaptiveToday,
+}: {
+  data: DashboardData;
+  adaptiveToday?: StudyPackToday | null;
+}) {
   const next = nextActionLink(data.today.continueAction);
+  const recommendation = adaptiveToday?.recommended;
   const canStudy = 'setId' in data.today.continueAction;
   const continueTitle =
     'setTitle' in data.today.continueAction
@@ -86,26 +99,38 @@ function DashboardContent({ data }: { data: DashboardData }) {
       <div className="dashboard-overview">
         <section className="study-feature">
           <div className="study-feature-copy">
-            <span className="eyebrow-label">Your next step</span>
+            <span className="eyebrow-label">
+              {recommendation ? 'Recommended for you' : 'Your next step'}
+            </span>
             <h2>
-              {data.today.goalReached
-                ? 'A little effort. Real progress.'
-                : 'Keep your curiosity going.'}
+              {recommendation?.label ??
+                (data.today.goalReached
+                  ? 'A little effort. Real progress.'
+                  : 'Keep your curiosity going.')}
             </h2>
             <p>
-              {continueTitle ? (
-                <>
-                  Pick up <strong>{continueTitle}</strong> and make a little more of it stick.
-                </>
-              ) : (
-                'One focused session is a good place to start. Your future self will thank you.'
-              )}
+              {recommendation?.description ??
+                (continueTitle ? (
+                  <>
+                    Pick up <strong>{continueTitle}</strong> and make a little more of it stick.
+                  </>
+                ) : (
+                  'One focused session is a good place to start. Your future self will thank you.'
+                ))}
             </p>
-            <ButtonLink to={next.to}>
-              {canStudy ? 'Continue studying' : next.label}
+            <ButtonLink to={recommendation ? todayTaskHref(recommendation) : next.to}>
+              {recommendation?.type === 'practice'
+                ? 'Start practice'
+                : recommendation?.type === 'review'
+                  ? 'Review now'
+                  : recommendation?.type === 'continue'
+                    ? 'Continue session'
+                    : canStudy
+                      ? 'Continue studying'
+                      : next.label}
               <IconArrowRight size={17} />
             </ButtonLink>
-            {canStudy && <span className="feature-caption">{next.label}</span>}
+            {!recommendation && canStudy && <span className="feature-caption">{next.label}</span>}
           </div>
           <div className="learning-illustration" aria-hidden="true">
             <div className="paper-card paper-back" />

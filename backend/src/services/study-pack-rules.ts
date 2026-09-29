@@ -115,8 +115,20 @@ export function gradeAnswer(
 
 /* -------------------------------- mastery --------------------------------- */
 
-export const WEAK_MASTERY_THRESHOLD = 0.6;
-export const STRONG_MASTERY_THRESHOLD = 0.8;
+export const WEAK_MASTERY_THRESHOLD = 0.3;
+export const LEARNING_MASTERY_THRESHOLD = 0.6;
+export const STRONG_MASTERY_THRESHOLD = 0.85;
+
+export type MasteryLabel = 'New' | 'Weak' | 'Learning' | 'Familiar' | 'Mastered';
+
+/** Product-facing bands; storage remains a numeric 0..1 mastery value. */
+export function masteryLabel(state: Pick<MasteryState, 'mastery' | 'attempts'>): MasteryLabel {
+  if (state.attempts === 0) return 'New';
+  if (state.mastery < WEAK_MASTERY_THRESHOLD) return 'Weak';
+  if (state.mastery < LEARNING_MASTERY_THRESHOLD) return 'Learning';
+  if (state.mastery < STRONG_MASTERY_THRESHOLD) return 'Familiar';
+  return 'Mastered';
+}
 
 /** Self-ratings used by Learn mode (adaptive-ready, no AI needed). */
 export type ConceptRating = 'again' | 'hard' | 'good' | 'easy';
@@ -141,35 +153,89 @@ function clamp01(value: number): number {
 
 export interface MasteryState {
   mastery: number;
+  confidence: number;
   attempts: number;
   correctCount: number;
   incorrectCount: number;
   lastPracticedAt: string | null;
+  nextReviewAt: string | null;
 }
 
 export function emptyMastery(): MasteryState {
-  return { mastery: 0, attempts: 0, correctCount: 0, incorrectCount: 0, lastPracticedAt: null };
+  return {
+    mastery: 0,
+    confidence: 0.5,
+    attempts: 0,
+    correctCount: 0,
+    incorrectCount: 0,
+    lastPracticedAt: null,
+    nextReviewAt: null,
+  };
 }
 
-/** Applies one graded answer to a mastery state. */
+function clampConfidence(value: number): number {
+  return Math.min(0.99, Math.max(0.01, Math.round(value * 100) / 100));
+}
+
+function addInterval(now: Date, milliseconds: number): string {
+  return new Date(now.getTime() + milliseconds).toISOString();
+}
+
+/** A small, explainable interval ladder for concept review. */
+export function conceptReviewAt(
+  state: MasteryState,
+  result: 'correct' | 'partial' | 'incorrect',
+  now: Date,
+): string {
+  if (result === 'incorrect') return addInterval(now, 60 * 60 * 1000);
+  if (result === 'partial') return addInterval(now, 24 * 60 * 60 * 1000);
+  const days = state.mastery >= 0.85 && state.confidence >= 0.8 ? 14 :
+    state.mastery >= 0.6 ? 7 : state.mastery >= 0.3 ? 3 : 1;
+  return addInterval(now, days * 24 * 60 * 60 * 1000);
+}
+
+/** Applies one graded answer to mastery, confidence and the next due date. */
 export function applyVerdict(state: MasteryState, verdict: AnswerVerdict, now: Date): MasteryState {
-  return {
-    mastery: clamp01(state.mastery + VERDICT_DELTA[verdict]),
+  const mastery = clamp01(state.mastery + VERDICT_DELTA[verdict]);
+  const confidenceDelta = verdict === 'correct' ? 0.08 : verdict === 'partial' ? 0.02 : -0.12;
+  const confidence = clampConfidence(state.confidence + confidenceDelta);
+  const next = {
+    mastery,
+    confidence,
     attempts: state.attempts + 1,
     correctCount: state.correctCount + (verdict === 'correct' ? 1 : 0),
     incorrectCount: state.incorrectCount + (verdict === 'incorrect' ? 1 : 0),
     lastPracticedAt: now.toISOString(),
+    nextReviewAt: null as string | null,
   };
+  next.nextReviewAt = conceptReviewAt(next, verdict, now);
+  return next;
 }
 
 /** Applies one Learn-mode self-rating to a mastery state. */
 export function applyRating(state: MasteryState, rating: ConceptRating, now: Date): MasteryState {
+  const mastery = clamp01(state.mastery + RATING_DELTA[rating]);
+  const confidenceDelta: Record<ConceptRating, number> = {
+    again: -0.12,
+    hard: -0.03,
+    good: 0.06,
+    easy: 0.1,
+  };
+  const confidence = clampConfidence(state.confidence + confidenceDelta[rating]);
+  const intervalMs: Record<ConceptRating, number> = {
+    again: 60 * 60 * 1000,
+    hard: 24 * 60 * 60 * 1000,
+    good: 3 * 24 * 60 * 60 * 1000,
+    easy: 7 * 24 * 60 * 60 * 1000,
+  };
   return {
-    mastery: clamp01(state.mastery + RATING_DELTA[rating]),
+    mastery,
+    confidence,
     attempts: state.attempts + 1,
     correctCount: state.correctCount + (rating === 'good' || rating === 'easy' ? 1 : 0),
     incorrectCount: state.incorrectCount + (rating === 'again' ? 1 : 0),
     lastPracticedAt: now.toISOString(),
+    nextReviewAt: addInterval(now, intervalMs[rating]),
   };
 }
 
@@ -177,10 +243,12 @@ export function masteryFromRecord(record: ConceptMasteryRecord | null): MasteryS
   if (!record) return emptyMastery();
   return {
     mastery: record.mastery,
+    confidence: record.confidence ?? 0.5,
     attempts: record.attempts,
     correctCount: record.correctCount,
     incorrectCount: record.incorrectCount,
     lastPracticedAt: record.lastPracticedAt,
+    nextReviewAt: record.nextReviewAt ?? null,
   };
 }
 
@@ -191,6 +259,72 @@ export function isWeakConcept(state: MasteryState): boolean {
 
 export function isStrongConcept(state: MasteryState): boolean {
   return state.attempts > 0 && state.mastery >= STRONG_MASTERY_THRESHOLD;
+}
+
+export interface LearnCandidate {
+  concept: ConceptRecord;
+  state: MasteryState;
+}
+
+/** Existing rows without an interval become due after seven unseen days. */
+export function isConceptDue(state: MasteryState, now: Date = new Date()): boolean {
+  let dueAt = state.nextReviewAt ? Date.parse(state.nextReviewAt) : Number.NaN;
+  if (!Number.isFinite(dueAt) && state.lastPracticedAt) {
+    const lastPracticedAt = Date.parse(state.lastPracticedAt);
+    if (Number.isFinite(lastPracticedAt)) dueAt = lastPracticedAt + 7 * 86_400_000;
+  }
+  return Number.isFinite(dueAt) && dueAt <= now.getTime();
+}
+
+/** Priority: weak → new → due/stale → learning/familiar → mastered checks. */
+export function rankLearnCandidates(
+  candidates: LearnCandidate[],
+  excludedIds: string[] = [],
+  now: Date = new Date(),
+): LearnCandidate[] {
+  const excluded = new Set(excludedIds);
+  const priority = (candidate: LearnCandidate): number => {
+    const { state } = candidate;
+    if (state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD) return 0;
+    if (state.attempts === 0) return 1;
+    if (isConceptDue(state, now)) return 2;
+    if (state.mastery < STRONG_MASTERY_THRESHOLD) return 3;
+    return 4;
+  };
+  return candidates
+    .filter(({ concept }) => !excluded.has(concept.id))
+    .slice()
+    .sort((a, b) =>
+      priority(a) - priority(b) ||
+      (priority(a) === 0 || priority(a) === 3 || priority(a) === 4
+        ? a.state.mastery - b.state.mastery
+        : (a.state.nextReviewAt ?? '').localeCompare(b.state.nextReviewAt ?? '')) ||
+      a.concept.position - b.concept.position,
+    );
+}
+
+export interface RankedRecommendation {
+  priority: number;
+  examDaysLeft: number | null;
+  recency?: number;
+}
+
+/** Transparent urgency score: a nearer exam adds a predictable bonus. */
+export function recommendationScore(candidate: RankedRecommendation): number {
+  const days = candidate.examDaysLeft;
+  const examBonus = days === null || days < 0 ? 0
+    : days <= 2 ? 50
+      : days <= 7 ? 35
+        : days <= 14 ? 20
+          : days <= 30 ? 8 : 0;
+  return candidate.priority + examBonus;
+}
+
+export function rankRecommendations<T extends RankedRecommendation>(candidates: T[]): T[] {
+  return candidates.slice().sort((a, b) =>
+    recommendationScore(b) - recommendationScore(a) ||
+    (b.recency ?? 0) - (a.recency ?? 0),
+  );
 }
 
 /* --------------------------- concept ↔ content ---------------------------- */
@@ -303,29 +437,37 @@ export function buildStudyPlan(input: StudyPlanInput): { overview: string; sessi
     }
 
     if (day <= learningDays) {
+      const activities = [
+        input.conceptCount > 0
+          ? `Learn up to ${Math.min(3, input.conceptCount)} concepts using your mastery-first queue`
+          : null,
+        input.cardCount > 0 ? 'Study the matching flashcards' : null,
+        practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
+        day === 1 && input.dueCards > 0 ? `Review ${Math.min(8, input.dueCards)} cards due now` : null,
+        focusConcept ? `Revisit weak concept: ${focusConcept}` : null,
+      ].filter((activity): activity is string => activity !== null);
       sessions.push({
         day,
         date,
         focus: input.conceptCount > 0 ? 'Learn new concepts' : 'Learn new flashcards',
-        activities: [
-          `Learn the next concepts in ${input.title}`,
-          input.cardCount > 0 ? 'Study the matching flashcards' : 'Generate flashcards for this part',
-          focusConcept ? `Extra attention for ${focusConcept}` : 'Mark what feels unclear',
-        ],
+        activities: activities.length > 0 ? activities : [`Study ${input.title}`],
         minutes,
       });
       continue;
     }
 
+    const activities = [
+      focusConcept ? `Practice weak concept: ${focusConcept}` : null,
+      practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
+      input.dueCards > 0 ? `Review up to ${Math.min(8, input.dueCards)} due cards` : null,
+      day >= days - 2 && input.questionCount >= 3 ? 'Take a practice test and review its mistakes' : null,
+      !focusConcept && !practiceReady && input.cardCount > 0 ? 'Review flashcards to check recall' : null,
+    ].filter((activity): activity is string => activity !== null);
     sessions.push({
       day,
       date,
       focus: day % 2 === 0 ? 'Practice weak topics' : 'Spaced review',
-      activities: [
-        practiceReady ? 'Practice questions on the weakest concepts' : 'Generate practice questions',
-        'Review the cards that are due',
-        day >= days - 2 ? 'Make a short practice test' : 'Check your mastery and adjust',
-      ],
+      activities: activities.length > 0 ? activities : ['Check your current mastery and adjust the next session'],
       minutes,
     });
   }
@@ -394,13 +536,6 @@ export function recommendNextAction(stats: PackStats): RecommendedAction {
       description: 'Let Lerno find the key concepts in your material.',
     };
   }
-  if (stats.dueCards > 0) {
-    return {
-      type: 'review',
-      label: `Review ${stats.dueCards} due card${stats.dueCards === 1 ? '' : 's'}`,
-      description: 'Spaced repetition says these are ready to come back.',
-    };
-  }
   const weakest = stats.weakConcepts[0];
   if (weakest) {
     return {
@@ -409,6 +544,13 @@ export function recommendNextAction(stats: PackStats): RecommendedAction {
       description: `You're weakest on ${stats.weakConcepts.length} concept${stats.weakConcepts.length === 1 ? '' : 's'}.`,
       conceptId: weakest.id,
       conceptName: weakest.name,
+    };
+  }
+  if (stats.dueCards > 0) {
+    return {
+      type: 'review',
+      label: `Review ${stats.dueCards} due card${stats.dueCards === 1 ? '' : 's'}`,
+      description: 'Spaced repetition says these are ready to come back.',
     };
   }
   if (stats.unlearnedConcepts > 0) {

@@ -24,14 +24,14 @@ export function PackConcepts({ pack, onChanged }: { pack: StudyPackDetail; onCha
   const [form, setForm] = useState({ name: '', explanation: '' });
   const [conceptFilter, setConceptFilter] = useState<'all' | 'weak' | 'strong' | 'new'>('all');
 
-  const weakCount = pack.concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 60).length;
-  const strongCount = pack.concepts.filter((concept) => concept.masteryPercent >= 80).length;
+  const weakCount = pack.concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 30).length;
+  const strongCount = pack.concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent >= 85).length;
   const newCount = pack.concepts.filter((concept) => concept.attempts === 0).length;
 
   const concepts = [...pack.concepts]
     .filter((concept) => {
-      if (conceptFilter === 'weak') return concept.attempts > 0 && concept.masteryPercent < 60;
-      if (conceptFilter === 'strong') return concept.masteryPercent >= 80;
+      if (conceptFilter === 'weak') return concept.attempts > 0 && concept.masteryPercent < 30;
+      if (conceptFilter === 'strong') return concept.attempts > 0 && concept.masteryPercent >= 85;
       if (conceptFilter === 'new') return concept.attempts === 0;
       return true;
     })
@@ -131,7 +131,7 @@ export function PackConcepts({ pack, onChanged }: { pack: StudyPackDetail; onCha
                 ['all', `All ${pack.concepts.length}`],
                 ['weak', `Weak ${weakCount}`],
                 ['strong', `Strong ${strongCount}`],
-                ['new', `Not started ${newCount}`],
+                ['new', `New ${newCount}`],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -169,7 +169,7 @@ export function PackConcepts({ pack, onChanged }: { pack: StudyPackDetail; onCha
                   </div>
                 </dl>
                 <MasteryMeter percent={concept.masteryPercent} label="Mastery" compact />
-                <p className="muted pack-concept-status">{masteryLabel(concept.masteryPercent)}</p>
+                <p className="muted pack-concept-status">{masteryLabel(concept.masteryPercent, concept.attempts)}</p>
                 {concept.sourceTitle ? (
                   <p className="muted pack-concept-source">
                     Generated from:{' '}

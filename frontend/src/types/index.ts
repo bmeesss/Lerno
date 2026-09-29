@@ -430,6 +430,25 @@ export interface StudyPackSource {
   updatedAt: string;
 }
 
+export interface AdaptiveLearnConcept {
+  id: string;
+  name: string;
+  explanation: string;
+  position: number;
+  masteryPercent: number;
+  confidencePercent: number;
+  attempts: number;
+  lastPracticedAt: string | null;
+  cardCount: number;
+  questionCount: number;
+}
+
+export interface AdaptiveLearnNext {
+  concept: AdaptiveLearnConcept | null;
+  remaining: number;
+  reason: 'weak' | 'new' | 'due' | 'learning' | 'confirmation' | null;
+}
+
 export interface StudyPackConcept {
   id: string;
   packId: string;
@@ -483,7 +502,13 @@ export interface StudyPackSummary {
   practiceQuestions: number;
   masteryPercent: number;
   weakConcepts: number;
+  learningConcepts: number;
+  masteredConcepts: number;
   dueCards: number;
+  lastStudiedAt: string | null;
+  cardsReviewed: number;
+  practiceAnswers: number;
+  testsCompleted: number;
   summaryUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -626,6 +651,7 @@ export interface PackPracticeGrade {
   correctAnswer: string;
   explanation: string;
   concept: { id: string; name: string } | null;
+  previousMasteryPercent: number | null;
   conceptMasteryPercent: number | null;
   sourceTitle: string | null;
 }
@@ -641,6 +667,7 @@ export interface PackTestSubmission {
   results: (PackTestAnswerRecord & {
     options: string[] | null;
     verdict: 'correct' | 'partial' | 'incorrect';
+    previousMasteryPercent: number | null;
     conceptMasteryPercent: number | null;
   })[];
   strongConcepts: { id: string; name: string }[];
@@ -676,7 +703,15 @@ export interface StudyPackProgressOverview {
 }
 
 export interface StudyPackTodayTask {
-  type: 'review' | 'learn' | 'practice' | 'test' | 'add-material';
+  type:
+    | 'review'
+    | 'learn'
+    | 'practice'
+    | 'test'
+    | 'continue'
+    | 'generate-concepts'
+    | 'generate-practice'
+    | 'add-material';
   label: string;
   description: string;
   packId: string | null;
@@ -686,6 +721,7 @@ export interface StudyPackTodayTask {
 
 export interface StudyPackToday {
   date: string;
+  recommended?: StudyPackTodayTask;
   tasks: StudyPackTodayTask[];
   exams: {
     packId: string;
@@ -702,6 +738,8 @@ export interface StudyPackToday {
 
 export interface PackReviewSummary {
   cardsDue: number;
+  conceptsDue: number;
+  testsToReview: number;
   packsNeedingReview: {
     packId: string | null;
     title: string;

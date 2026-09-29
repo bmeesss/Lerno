@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button, ButtonLink } from '../ui/Button';
 import { Badge, EmptyState, ProgressBar } from '../ui/Primitives';
 import { IconArrowRight, IconBook, IconCheck } from '../ui/Icons';
@@ -6,7 +6,7 @@ import { useToast } from '../ui/Toast';
 import { ApiError } from '../../lib/api';
 import { studyPackService } from '../../services/studyPackService';
 import { MasteryMeter } from './PackBits';
-import type { StudyPackConcept, StudyPackDetail } from '../../types';
+import type { AdaptiveLearnConcept, StudyPackDetail } from '../../types';
 
 const RATINGS = [
   { id: 'again', label: 'Still learning', hint: 'Show this concept again soon' },
@@ -16,20 +16,14 @@ const RATINGS = [
 ] as const;
 
 type RatingId = (typeof RATINGS)[number]['id'];
-
 interface SessionResult {
-  concept: StudyPackConcept;
+  concept: AdaptiveLearnConcept;
   rating: RatingId;
   masteryPercent: number;
   before: number;
 }
 
-/**
- * Learn mode: one concept at a time with a self-rating.
- *
- * The rating is stored as concept mastery, which is what later adaptive
- * learning builds on — the session itself stays simple and honest.
- */
+/** A Learn session asks the server for the next concept after every rating. */
 export function PackLearn({
   pack,
   focusConceptId,
@@ -41,20 +35,12 @@ export function PackLearn({
 }) {
   const toast = useToast();
   const [started, setStarted] = useState(false);
-  const [index, setIndex] = useState(0);
+  const [current, setCurrent] = useState<AdaptiveLearnConcept | null>(null);
+  const [seen, setSeen] = useState<string[]>([]);
   const [results, setResults] = useState<SessionResult[]>([]);
   const [busy, setBusy] = useState(false);
-
-  const queue = useMemo(() => {
-    const order = [...pack.concepts].sort((a, b) => {
-      const aRank = a.attempts > 0 && a.masteryPercent < 60 ? 0 : a.attempts === 0 ? 1 : 2;
-      const bRank = b.attempts > 0 && b.masteryPercent < 60 ? 0 : b.attempts === 0 ? 1 : 2;
-      return aRank - bRank || a.masteryPercent - b.masteryPercent || a.position - b.position;
-    });
-    if (!focusConceptId) return order;
-    const focus = order.find((concept) => concept.id === focusConceptId);
-    return focus ? [focus, ...order.filter((concept) => concept.id !== focusConceptId)] : order;
-  }, [pack.concepts, focusConceptId]);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const [shownAt, setShownAt] = useState(Date.now());
 
   if (pack.concepts.length === 0) {
     return (
@@ -67,21 +53,49 @@ export function PackLearn({
     );
   }
 
-  const current = queue[index];
-  const finished = started && (!current || index >= queue.length);
+  async function fetchNext(excluded: string[], focus?: string) {
+    setLoadingNext(true);
+    try {
+      const next = await studyPackService.nextLearnConcept(pack.id, excluded, focus);
+      setCurrent(next.concept);
+      setShownAt(Date.now());
+    } catch (error) {
+      toast.show(error instanceof ApiError ? error.message : 'Could not load the next concept', 'error');
+      if (excluded.length === 0) setStarted(false);
+    } finally {
+      setLoadingNext(false);
+    }
+  }
+
+  async function start() {
+    setStarted(true);
+    setSeen([]);
+    setResults([]);
+    await fetchNext([], focusConceptId);
+  }
 
   async function rate(rating: RatingId) {
     if (!current || busy) return;
     setBusy(true);
+    const answeredConcept = current;
     const before = current.masteryPercent;
+    const responseTimeMs = Math.max(0, Date.now() - shownAt);
     try {
-      const updated = await studyPackService.rateConcept(pack.id, current.id, rating);
-      setResults((rows) => [...rows, { concept: current, rating, masteryPercent: updated.masteryPercent, before }]);
-      if (index + 1 >= queue.length) {
-        setIndex(queue.length);
-      } else {
-        setIndex((value) => value + 1);
-      }
+      const updated = await studyPackService.rateConcept(
+        pack.id,
+        answeredConcept.id,
+        rating,
+        responseTimeMs,
+      );
+      const nextSeen = [...seen, answeredConcept.id];
+      setSeen(nextSeen);
+      setResults((rows) => [
+        ...rows,
+        { concept: answeredConcept, rating, masteryPercent: updated.masteryPercent, before },
+      ]);
+      setCurrent(null);
+      await fetchNext(nextSeen);
+      onChanged();
     } catch (error) {
       toast.show(error instanceof ApiError ? error.message : 'Could not save your rating', 'error');
     } finally {
@@ -89,21 +103,23 @@ export function PackLearn({
     }
   }
 
+  const finished = started && !loadingNext && current === null;
+
   if (!started) {
-    const weak = queue.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 60).length;
-    const fresh = queue.filter((concept) => concept.attempts === 0).length;
+    const weak = pack.concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 30).length;
+    const fresh = pack.concepts.filter((concept) => concept.attempts === 0).length;
     return (
       <section className="card pack-session-intro" aria-labelledby="pack-learn-heading">
         <span className="eyebrow-label">Learn</span>
         <h2 id="pack-learn-heading">Understand the concepts, one at a time</h2>
         <p>
-          {queue.length} concept{queue.length === 1 ? '' : 's'} in this pack
-          {weak > 0 ? ` · ${weak} weaker ones first` : ''}
-          {fresh > 0 ? ` · ${fresh} not started yet` : ''}. Rate how well you know each one and Lerno
-          keeps your mastery up to date.
+          {pack.concepts.length} concept{pack.concepts.length === 1 ? '' : 's'} in this pack
+          {weak > 0 ? ` · ${weak} weak concepts first` : ''}
+          {fresh > 0 ? ` · ${fresh} new concepts` : ''}. Lerno updates mastery after each rating and
+          chooses the next concept from your latest progress.
         </p>
         <div className="pack-session-intro-actions">
-          <Button onClick={() => setStarted(true)}>
+          <Button onClick={() => void start()}>
             <IconBook size={17} /> Start learning
           </Button>
           <ButtonLink to="?tab=flashcards" variant="secondary">
@@ -114,64 +130,66 @@ export function PackLearn({
     );
   }
 
+  if (loadingNext && !current) {
+    return (
+      <section className="card pack-session-intro" aria-live="polite">
+        <span className="eyebrow-label">Learn</span>
+        <h2>Choosing your next concept…</h2>
+        <p className="muted">Using your current mastery, due reviews and recent answers.</p>
+      </section>
+    );
+  }
+
   if (finished) {
-    const known = results.filter((row) => row.rating === 'good' || row.rating === 'easy').length;
-    const needsWork = results.filter((row) => row.rating === 'again' || row.rating === 'hard');
+    const improved = results.filter((row) => row.masteryPercent > row.before).length;
+    const needsWork = results.filter((row) => row.masteryPercent < 30 || row.rating === 'again');
+    const firstPractice = needsWork.find((row) => row.concept.questionCount > 0);
     return (
       <section className="card pack-session-summary" aria-labelledby="pack-learn-done">
         <span className="eyebrow-label">Session complete</span>
-        <h2 id="pack-learn-done">
-          {known} of {results.length} concepts feel solid
-        </h2>
+        <h2 id="pack-learn-done">You reviewed {results.length} concept{results.length === 1 ? '' : 's'}</h2>
         <div className="pack-session-stats">
           <div>
             <span className="pack-stat-value">{results.length}</span>
             <span className="pack-stat-label">concepts reviewed</span>
           </div>
           <div>
-            <span className="pack-stat-value">{known}</span>
-            <span className="pack-stat-label">known well</span>
+            <span className="pack-stat-value">{improved}</span>
+            <span className="pack-stat-label">mastery improved</span>
           </div>
           <div>
             <span className="pack-stat-value">{needsWork.length}</span>
-            <span className="pack-stat-label">need another pass</span>
+            <span className="pack-stat-label">still need practice</span>
           </div>
         </div>
-
+        {results.length > 0 ? (
+          <p className="muted">
+            {results.at(-1)!.concept.name}: {results.at(-1)!.before}% → {results.at(-1)!.masteryPercent}% mastery.
+          </p>
+        ) : null}
         {needsWork.length > 0 ? (
           <div className="pack-session-focus">
-            <span className="pack-label">Do this next</span>
+            <span className="pack-label">Why this is next</span>
             <ul className="pack-list">
               {needsWork.slice(0, 4).map((row) => (
                 <li key={row.concept.id}>
-                  <strong>{row.concept.name}</strong> — practice the questions behind this concept
+                  <strong>{row.concept.name}</strong> — your rating shows this concept needs another pass.
                 </li>
               ))}
             </ul>
           </div>
         ) : (
-          <p className="muted">
-            Nice work. Practice and a practice test will confirm what actually stuck.
-          </p>
+          <p className="muted">Nice work. A short practice session can confirm what stuck.</p>
         )}
-
         <div className="pack-session-intro-actions">
-          {needsWork[0] ? (
-            <ButtonLink to={`?tab=practice&concept=${needsWork[0].concept.id}`}>
-              Practice weak concepts <IconArrowRight size={17} />
+          {firstPractice ? (
+            <ButtonLink to={`?tab=practice&concept=${firstPractice.concept.id}`}>
+              Practice {firstPractice.concept.name} <IconArrowRight size={17} />
             </ButtonLink>
           ) : (
             <ButtonLink to="?tab=test">Take a practice test</ButtonLink>
           )}
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setResults([]);
-              setIndex(0);
-              setStarted(false);
-              onChanged();
-            }}
-          >
+          <Button variant="secondary" onClick={() => void start()}>
             Another round
           </Button>
         </div>
@@ -179,15 +197,16 @@ export function PackLearn({
     );
   }
 
+  if (!current) return null;
+
   return (
     <section className="pack-session" aria-labelledby="pack-learn-concept">
       <div className="pack-session-progress">
-        <ProgressBar value={index + 1} max={queue.length} />
+        <ProgressBar value={seen.length + 1} max={pack.concepts.length} />
         <span className="muted">
-          Concept {index + 1} of {queue.length}
+          Concept {seen.length + 1} of {pack.concepts.length} · selected for you
         </span>
       </div>
-
       <article className="card pack-learn-card">
         <div className="pack-learn-head">
           <h2 id="pack-learn-concept">{current.name}</h2>
@@ -197,10 +216,9 @@ export function PackLearn({
         <div className="pack-learn-facts">
           <Badge>{current.cardCount} flashcards</Badge>
           <Badge>{current.questionCount} practice questions</Badge>
-          {current.sourceTitle ? <Badge>{current.sourceTitle}</Badge> : null}
+          <Badge>{current.attempts === 0 ? 'New' : `${current.confidencePercent}% confidence`}</Badge>
         </div>
       </article>
-
       <fieldset className="pack-rating-row">
         <legend>How well do you know this?</legend>
         {RATINGS.map((rating) => (
@@ -209,16 +227,15 @@ export function PackLearn({
             type="button"
             className={`pack-rating pack-rating-${rating.id}`}
             onClick={() => void rate(rating.id)}
-            disabled={busy}
+            disabled={busy || loadingNext}
           >
             <strong>{rating.label}</strong>
             <small>{rating.hint}</small>
           </button>
         ))}
       </fieldset>
-
       {results.length > 0 ? (
-        <p className="muted pack-last-rating">
+        <p className="muted pack-last-rating" aria-live="polite">
           <IconCheck size={15} /> {results.at(-1)!.concept.name} → {results.at(-1)!.masteryPercent}% mastery
         </p>
       ) : null}

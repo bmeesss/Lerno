@@ -2,12 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dashboardService } from '../../services/dashboardService';
-import type { DashboardData, StudySetSummary } from '../../types';
+import { studyPackService } from '../../services/studyPackService';
+import type { DashboardData, StudyPackToday, StudySetSummary } from '../../types';
 import { DashboardPage } from './DashboardPage';
 
 vi.mock('../../services/dashboardService', () => ({
   dashboardService: { get: vi.fn() },
 }));
+vi.mock('../../services/studyPackService', () => ({ studyPackService: { today: vi.fn() } }));
 
 const { mockAuth } = vi.hoisted(() => ({
   mockAuth: { user: null as unknown },
@@ -17,6 +19,7 @@ vi.mock('../../hooks/useAuth', () => ({
 }));
 
 const getMock = vi.mocked(dashboardService.get);
+const todayMock = vi.mocked(studyPackService.today);
 
 function set(overrides: Partial<StudySetSummary> = {}): StudySetSummary {
   return {
@@ -83,9 +86,38 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.user = { id: 'u1', profile: { displayName: 'Sam Student' } };
   getMock.mockResolvedValue(DATA);
+  todayMock.mockRejectedValue(new Error('Adaptive recommendation unavailable'));
 });
 
 describe('DashboardPage', () => {
+  it('uses the shared adaptive recommendation and its reason on the dashboard', async () => {
+    const recommendation = {
+      type: 'practice' as const,
+      label: 'Practice Osmosis',
+      description: 'You answered 3 questions incorrectly recently.',
+      packId: 'pack-1',
+      conceptId: 'concept-1',
+      conceptName: 'Osmosis',
+    };
+    const adaptive: StudyPackToday = {
+      date: '2026-09-29',
+      recommended: recommendation,
+      tasks: [recommendation],
+      exams: [],
+      totalDue: 0,
+      packs: [],
+    };
+    todayMock.mockResolvedValue(adaptive);
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Practice Osmosis' })).toBeInTheDocument();
+    expect(screen.getByText('You answered 3 questions incorrectly recently.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /start practice/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=practice&concept=concept-1',
+    );
+  });
+
   it('prioritizes a study action and today, then library and review', async () => {
     renderPage();
     const headings = await screen.findAllByRole('heading', { level: 2 });

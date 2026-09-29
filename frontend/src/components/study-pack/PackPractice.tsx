@@ -43,6 +43,7 @@ export function PackPractice({
   const [feedback, setFeedback] = useState<PackPracticeGrade | null>(null);
   const [busy, setBusy] = useState(false);
   const [answers, setAnswers] = useState<Answered[]>([]);
+  const [questionShownAt, setQuestionShownAt] = useState(Date.now());
   const [conceptFilter, setConceptFilter] = useState<string | undefined>(focusConceptId);
   const [preview, setPreview] = useState<PackPreview | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -63,6 +64,7 @@ export function PackPractice({
       setAnswer('');
       setFeedback(null);
       setAnswers([]);
+      setQuestionShownAt(Date.now());
     } catch (error) {
       toast.show(error instanceof ApiError ? error.message : 'Could not start practice', 'error');
     } finally {
@@ -75,7 +77,12 @@ export function PackPractice({
     if (!question || busy) return;
     setBusy(true);
     try {
-      const grade = await studyPackService.gradePractice(pack.id, question.id, answer);
+      const grade = await studyPackService.gradePractice(
+        pack.id,
+        question.id,
+        answer,
+        Math.max(0, Date.now() - questionShownAt),
+      );
       setFeedback(grade);
       setAnswers((rows) => [...rows, { question, grade, answer }]);
       onChanged();
@@ -89,6 +96,7 @@ export function PackPractice({
   function next() {
     setFeedback(null);
     setAnswer('');
+    setQuestionShownAt(Date.now());
     setIndex((value) => value + 1);
   }
 
@@ -200,11 +208,26 @@ export function PackPractice({
   if (done) {
     const correct = answers.filter((row) => row.grade.verdict === 'correct').length;
     const partial = answers.filter((row) => row.grade.verdict === 'partial').length;
-    const weakGraded = answers.filter((row) => row.grade.verdict !== 'correct' && row.grade.concept);
-    const weakConceptNames = [
-      ...new Set(weakGraded.map((row) => row.grade.concept?.name ?? '').filter(Boolean)),
-    ];
-    const firstWeakId = weakGraded[0]?.grade.concept?.id;
+    const masteryByConcept = new Map<
+      string,
+      { id: string; name: string; before: number; after: number }
+    >();
+    for (const row of answers) {
+      const concept = row.grade.concept;
+      if (!concept || row.grade.conceptMasteryPercent === null) continue;
+      const existing = masteryByConcept.get(concept.id);
+      masteryByConcept.set(concept.id, {
+        id: concept.id,
+        name: concept.name,
+        before: existing?.before ?? row.grade.previousMasteryPercent ?? row.grade.conceptMasteryPercent,
+        after: row.grade.conceptMasteryPercent,
+      });
+    }
+    const conceptOutcomes = [...masteryByConcept.values()];
+    const improved = conceptOutcomes.filter((concept) => concept.after > concept.before);
+    const weakConcepts = conceptOutcomes.filter((concept) => concept.after < 30);
+    const weakConceptNames = weakConcepts.map((concept) => concept.name);
+    const firstWeakId = weakConcepts[0]?.id;
 
     return (
       <section className="card pack-session-summary" aria-labelledby="pack-practice-done">
@@ -228,24 +251,35 @@ export function PackPractice({
           </div>
         </div>
 
+        {improved.length > 0 ? (
+          <p className="muted">
+            Mastery improved for {improved.length} concept{improved.length === 1 ? '' : 's'}.
+            {improved[0] ? ` ${improved[0].name}: ${improved[0].before}% → ${improved[0].after}%.` : ''}
+          </p>
+        ) : null}
         {weakConceptNames.length > 0 ? (
           <div className="pack-session-focus">
-            <span className="pack-label">Weakest right now</span>
+            <span className="pack-label">Still needs practice</span>
             <ul className="pack-list">
-              {weakConceptNames.slice(0, 5).map((name) => (
-                <li key={name}>{name}</li>
+              {weakConcepts.slice(0, 5).map((concept) => (
+                <li key={concept.id}>
+                  {concept.name} — {concept.after}% mastery
+                </li>
               ))}
             </ul>
-            <p className="muted">These concepts go into Review and come back in your next practice session.</p>
+            <p className="muted">
+              {answers.filter((row) => row.grade.verdict !== 'correct').length} answers need another pass;
+              these concepts are therefore back at the top of your practice queue.
+            </p>
           </div>
         ) : (
-          <p className="muted">Every answer was correct — try a practice test to confirm under pressure.</p>
+          <p className="muted">No concept remains below 30% mastery. A practice test can confirm what stuck.</p>
         )}
 
         <div className="pack-session-intro-actions">
           {firstWeakId ? (
             <ButtonLink to={`?tab=practice&concept=${firstWeakId}`}>
-              Practise weak concepts <IconArrowRight size={17} />
+              Practice {weakConcepts[0]!.name} again <IconArrowRight size={17} />
             </ButtonLink>
           ) : (
             <ButtonLink to="?tab=test">Take a practice test</ButtonLink>

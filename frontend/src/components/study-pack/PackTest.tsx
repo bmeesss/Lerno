@@ -5,6 +5,7 @@ import { IconArrowRight, IconLightbulb, IconQuiz, IconSparkles, IconZap } from '
 import { useToast } from '../ui/Toast';
 import { ApiError } from '../../lib/api';
 import { studyPackService } from '../../services/studyPackService';
+import { recommendedHref } from '../../lib/studyPackRoutes';
 import { VerdictPill } from './PackBits';
 import { PreviewEditor } from './PreviewEditor';
 import type { PackPreview, PackTestRun, PackTestSubmission, StudyPackDetail } from '../../types';
@@ -115,6 +116,26 @@ export function PackTest({ pack, onChanged }: { pack: StudyPackDetail; onChanged
 
   if (result) {
     const accuracy = result.accuracy;
+    const masteryByConcept = new Map<
+      string,
+      { name: string; before: number; after: number }
+    >();
+    for (const row of result.results) {
+      if (
+        !row.conceptId ||
+        row.conceptMasteryPercent === null ||
+        row.previousMasteryPercent === null
+      ) continue;
+      const existing = masteryByConcept.get(row.conceptId);
+      masteryByConcept.set(row.conceptId, {
+        name: row.conceptName ?? existing?.name ?? 'Concept',
+        before: existing?.before ?? row.previousMasteryPercent,
+        after: row.conceptMasteryPercent,
+      });
+    }
+    const improvedConcepts = [...masteryByConcept.values()].filter(
+      (concept) => concept.after > concept.before,
+    );
     return (
       <section className="stack" style={{ gap: 20 }} aria-labelledby="pack-test-result">
         <div className="card pack-result-hero">
@@ -136,14 +157,21 @@ export function PackTest({ pack, onChanged }: { pack: StudyPackDetail; onChanged
               <span className="pack-stat-label">incorrect</span>
             </div>
           </div>
+          {improvedConcepts.length > 0 ? (
+            <p className="muted">
+              Mastery improved on {improvedConcepts.length} concept{improvedConcepts.length === 1 ? '' : 's'}.
+              {improvedConcepts[0]
+                ? ` ${improvedConcepts[0].name}: ${improvedConcepts[0].before}% → ${improvedConcepts[0].after}%.`
+                : ''}
+            </p>
+          ) : null}
+          <p className="muted">
+            <strong>Recommended next:</strong> {result.recommended.label}. {result.recommended.description}
+          </p>
           <div className="pack-session-intro-actions">
-            {result.weakConcepts[0] ? (
-              <ButtonLink to={`?tab=practice&concept=${result.weakConcepts[0].id}`}>
-                Practice weak concepts <IconArrowRight size={17} />
-              </ButtonLink>
-            ) : (
-              <ButtonLink to="?tab=progress">View progress</ButtonLink>
-            )}
+            <ButtonLink to={recommendedHref(pack, result.recommended)}>
+              Start recommended action <IconArrowRight size={17} />
+            </ButtonLink>
             <Button
               variant="secondary"
               onClick={() => {

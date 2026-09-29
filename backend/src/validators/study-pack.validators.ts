@@ -190,9 +190,20 @@ export const practiceQueueQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
+export const learnNextQuerySchema = z.object({
+  exclude: z.preprocess(
+    (value) => (typeof value === 'string' ? value.split(',').filter(Boolean) : value),
+    z.array(z.string().uuid()).max(300),
+  ).optional(),
+  focusConceptId: z.string().uuid().optional(),
+});
+
+const responseTimeSchema = z.number().int().min(0).max(3_600_000).optional();
+
 export const practiceAttemptSchema = z.object({
   questionId: z.string().uuid('Invalid question id'),
   answer: z.string().max(4000).default(''),
+  responseTimeMs: responseTimeSchema,
 });
 
 export const createTestSchema = z.object({
@@ -205,6 +216,7 @@ export const submitTestSchema = z.object({
       z.object({
         questionId: z.string().uuid('Invalid question id'),
         answer: z.string().max(4000).default(''),
+        responseTimeMs: responseTimeSchema,
       }),
     )
     .max(50)
@@ -213,6 +225,7 @@ export const submitTestSchema = z.object({
 
 export const rateConceptSchema = z.object({
   rating: z.enum(['again', 'hard', 'good', 'easy']),
+  responseTimeMs: responseTimeSchema,
 });
 
 export const createPlanSchema = z.object({

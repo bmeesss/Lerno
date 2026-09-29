@@ -170,7 +170,7 @@ export function PackOverview({ pack, onChanged }: { pack: StudyPackDetail; onCha
                   </div>
                   <div className="pack-concept-mastery">
                     <MasteryMeter percent={concept.masteryPercent} compact />
-                    <span className="muted">{masteryLabel(concept.masteryPercent)}</span>
+                    <span className="muted">{masteryLabel(concept.masteryPercent, concept.attempts)}</span>
                   </div>
                 </li>
               ))}

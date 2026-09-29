@@ -22,6 +22,7 @@ import {
   createTestSchema,
   generateSchema,
   importPackSchema,
+  learnNextQuerySchema,
   packParamsSchema,
   packSourceParamsSchema,
   practiceAttemptSchema,
@@ -182,6 +183,15 @@ export function studyPackRoutes(): Router {
     ...aiGuards(),
     validate({ params: packParamsSchema, body: tutorSchema }),
     studyPackController.tutor,
+  );
+
+  // Learn is server-ranked on every step so mastery updates affect the next
+  // concept immediately; `exclude` only prevents repeats within this session.
+  router.get(
+    '/:packId/learn/next',
+    requireAuth,
+    validate({ params: packParamsSchema, query: learnNextQuerySchema }),
+    studyPackController.learnNext,
   );
 
   // Practice -----------------------------------------------------------------

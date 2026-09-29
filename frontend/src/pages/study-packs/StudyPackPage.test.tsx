@@ -137,7 +137,7 @@ const PACK: StudyPackDetail = {
       sourceTitle: null,
       origin: 'ai',
       position: 1,
-      masteryPercent: 32,
+      masteryPercent: 22,
       attempts: 2,
       cardCount: 3,
       questionCount: 3,

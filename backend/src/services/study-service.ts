@@ -8,6 +8,7 @@ import { dto } from '../lib/dto.js';
 import { errors } from '../lib/errors.js';
 import { canViewSet } from './set-service.js';
 import { isDifficult, scheduleReview } from './scheduling-service.js';
+import { applyVerdict, masteryFromRecord } from './study-pack-rules.js';
 
 export interface PracticeCard {
   card: ReturnType<typeof dto.card>;
@@ -119,9 +120,14 @@ export const studyService = {
   async review(
     db: Database,
     userId: string,
-    input: { setId: string; cardId: string; result: 'correct' | 'incorrect' },
+    input: {
+      setId: string;
+      cardId: string;
+      result: 'correct' | 'incorrect';
+      responseTimeMs?: number;
+    },
   ) {
-    await requireVisibleSet(db, userId, input.setId);
+    const set = await requireVisibleSet(db, userId, input.setId);
 
     const card = await db.cards.get(input.cardId);
     if (!card || card.setId !== input.setId) throw errors.notFound('Card not found');
@@ -146,6 +152,40 @@ export const studyService = {
       nextReviewAt: scheduled.nextReviewAt,
       correctCount: scheduled.correctCount,
       incorrectCount: scheduled.incorrectCount,
+    });
+
+    const concept = card.conceptId ? await db.concepts.get(card.conceptId) : null;
+    const pack = concept ? await db.packs.get(concept.packId) : await db.packs.getByLegacySetId(set.id);
+    if (concept && pack && concept.packId === pack.id) {
+      const priorMastery = await db.conceptMastery.get(userId, concept.id);
+      const nextMastery = applyVerdict(
+        masteryFromRecord(priorMastery),
+        input.result === 'correct' ? 'correct' : 'incorrect',
+        new Date(),
+      );
+      await db.conceptMastery.upsert({
+        userId,
+        conceptId: concept.id,
+        mastery: nextMastery.mastery,
+        confidence: nextMastery.confidence,
+        attempts: nextMastery.attempts,
+        correctCount: nextMastery.correctCount,
+        incorrectCount: nextMastery.incorrectCount,
+        lastPracticedAt: nextMastery.lastPracticedAt,
+        nextReviewAt: nextMastery.nextReviewAt,
+      });
+    }
+    const wasDue = Boolean(existing?.nextReviewAt && existing.nextReviewAt <= new Date().toISOString());
+    const learningConceptId = concept && pack && concept.packId === pack.id ? concept.id : null;
+    await db.learningEvents.create({
+      userId,
+      packId: pack?.id ?? null,
+      conceptId: learningConceptId,
+      cardId: card.id,
+      eventType: wasDue ? 'review' : 'flashcard',
+      isCorrect: input.result === 'correct',
+      responseTimeMs: input.responseTimeMs ?? null,
+      metadata: { result: input.result },
     });
 
     return { progress: dto.progress(progress), requeued: scheduled.requeued };
