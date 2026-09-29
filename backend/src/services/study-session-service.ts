@@ -764,18 +764,18 @@ export const studySessionService = {
     const count = plan.items.length;
     const focusLabel = (() => {
       if (input.type === 'test') return 'No hints or explanations until you finish';
-      if (focus) return `Focus on ${focus.name}`;
+      if (focus) return `Focus: ${focus.name}`;
       const reasons = [...plan.reasons.values()];
       if (input.type === 'learn') {
         return reasons.some((r) => r === 'weak' || r === 'new')
-          ? 'Weak and new concepts first'
-          : 'Confirm what you already know';
+          ? 'Focus: weak and new concepts'
+          : 'Focus: confirming what you know';
       }
-      if (input.type === 'review') return 'Concepts that are due for review';
-      if (reasons.includes('weak')) return 'Focus on weak concepts';
-      if (reasons.includes('mistake')) return 'Focus on recent mistakes';
-      if (reasons.includes('due')) return 'Focus on concepts that are due';
-      return 'Mixed practice';
+      if (input.type === 'review') return 'Focus: concepts due for review';
+      if (reasons.includes('weak')) return 'Focus: weak concepts';
+      if (reasons.includes('mistake')) return 'Focus: recent mistakes';
+      if (reasons.includes('due')) return 'Focus: concepts that are due';
+      return 'Focus: a mix of concepts';
     })();
 
     const open = await findOpenSession(db, userId, pack.id, {

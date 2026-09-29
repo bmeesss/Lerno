@@ -424,7 +424,7 @@ describe('adaptive selection', () => {
       count: 10,
       minutes: 12,
       canStart: true,
-      focus: { label: 'Focus on weak concepts' },
+      focus: { label: 'Focus: weak concepts' },
       resume: null,
     });
     expect(res.body.data.concepts.map((c: { name: string }) => c.name)).toContain('Osmosis');
