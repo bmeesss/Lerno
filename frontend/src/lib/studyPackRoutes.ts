@@ -64,7 +64,8 @@ export function recommendedHref(
 
 /** Same mapping for the My Study "today" tasks. */
 export function todayTaskHref(task: StudyPackTodayTask): string {
-  if (task.type === 'add-material' || !task.packId) return '/ai/studio';
+  // "Add material" is the product's primary action: the import experience.
+  if (task.type === 'add-material' || !task.packId) return '/study-packs/new';
   const base = `/study-packs/${task.packId}`;
   switch (task.type) {
     case 'review':

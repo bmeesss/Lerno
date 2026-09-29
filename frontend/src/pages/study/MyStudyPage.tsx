@@ -23,7 +23,7 @@ import { subjectService } from '../../services/subjectService';
 import { useAuth } from '../../hooks/useAuth';
 import { nextActionLink } from '../../lib/nextAction';
 import { examCountdownLabel, formatExamDate, todayTaskHref } from '../../lib/studyPackRoutes';
-import { MasteryMeter } from '../../components/study-pack/PackBits';
+import { MasteryMeter, formatActivity } from '../../components/study-pack/PackBits';
 import type { DashboardData, DueGroup, StudyPackToday, StudySetSummary, Subject } from '../../types';
 
 interface MyStudyData {
@@ -79,6 +79,22 @@ export function MyStudyPage() {
   const tasks = packToday?.tasks ?? [];
   const packs = packToday?.packs ?? [];
   const exams = packToday?.exams ?? [];
+  // Real activity only: a pack counts as started when the student practised,
+  // reviewed or mastered something — never from a timer or a placeholder.
+  const finishedPacks = packs.filter(
+    (pack) => pack.masteryPercent > 0 || pack.dueCards > 0 || pack.weakConcepts > 0,
+  );
+  const untouchedPacks = packs
+    .filter((pack) => !finishedPacks.includes(pack))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const continuePack = finishedPacks[0] ?? untouchedPacks[0] ?? null;
+  const startedPack = Boolean(continuePack && finishedPacks.includes(continuePack));
+  // "Recently added" is about the material itself; the newest pack already has
+  // its own card above, so it is not repeated here.
+  const recentlyAdded = packs
+    .filter((pack) => pack.id !== continuePack?.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 4);
 
   return (
     <div className="stack" style={{ gap: 28 }}>
@@ -88,10 +104,57 @@ export function MyStudyPage() {
           <h1>Study smarter, {firstName}</h1>
           <p>Your study packs, reviews and next actions in one place.</p>
         </div>
-        <ButtonLink to="/ai/studio">
+        <ButtonLink to="/study-packs/new">
           <IconSparkles size={17} /> Add study material
         </ButtonLink>
       </div>
+
+      {continuePack ? (
+        <section aria-labelledby="my-study-continue">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-continue">
+                {startedPack ? 'Continue studying' : 'Your newest study pack'}
+              </h2>
+              <p className="muted">
+                {startedPack
+                  ? 'Pick up where you left off — Lerno knows what you have mastered.'
+                  : 'You have not started this one yet. Learn the first concepts now.'}
+              </p>
+            </div>
+            <Link to="/study-packs">
+              All study packs <IconArrowRight size={15} />
+            </Link>
+          </div>
+          <article className="card my-study-continue">
+            <div className="my-study-continue-copy">
+              <span className="eyebrow-label">
+                {continuePack.subjectName ?? 'Study pack'}
+                {continuePack.level ? ` · ${continuePack.level}` : ''}
+              </span>
+              <h3>{continuePack.title}</h3>
+              <p className="muted">
+                {continuePack.masteryPercent}% mastered · {continuePack.concepts} concepts ·{' '}
+                {continuePack.flashcards} cards · {continuePack.practiceQuestions} questions
+              </p>
+              <MasteryMeter percent={continuePack.masteryPercent} compact />
+            </div>
+            <div className="my-study-continue-actions">
+              <Link to={`/study-packs/${continuePack.id}?tab=learn`} className="btn btn-primary">
+                <IconZap size={17} />{' '}
+                {startedPack ? 'Continue learning →' : 'Start learning →'}
+              </Link>
+              <span className="muted my-study-continue-activity">
+                {continuePack.dueCards > 0
+                  ? `${continuePack.dueCards} cards due for review`
+                  : startedPack
+                    ? `${continuePack.weakConcepts} weak concept${continuePack.weakConcepts === 1 ? '' : 's'} to work on`
+                    : 'Nothing studied yet'}
+              </span>
+            </div>
+          </article>
+        </section>
+      ) : null}
 
       <section className="dashboard-overview">
         <div className="study-feature">
@@ -210,7 +273,7 @@ export function MyStudyPage() {
         </section>
       ) : null}
 
-      {packs.length > 0 ? (
+      {finishedPacks.length > 0 ? (
         <section aria-labelledby="my-study-packs">
           <div className="section-title">
             <div>
@@ -222,7 +285,7 @@ export function MyStudyPage() {
             </Link>
           </div>
           <div className="set-grid">
-            {packs.slice(0, 3).map((pack) => (
+            {finishedPacks.slice(0, 3).map((pack) => (
               <article key={pack.id} className="card card-interactive pack-list-card">
                 <div className="pack-list-head">
                   <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
@@ -243,6 +306,47 @@ export function MyStudyPage() {
                     {pack.weakConcepts > 0
                       ? `${pack.weakConcepts} weak concept${pack.weakConcepts === 1 ? '' : 's'}`
                       : 'Up to date'}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {recentlyAdded.length > 0 ? (
+        <section aria-labelledby="my-study-recent">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-recent">Recently added</h2>
+              <p className="muted">The material you brought in most recently.</p>
+            </div>
+            <Link to="/study-packs">
+              View all <IconArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="set-grid">
+            {recentlyAdded.map((pack) => (
+              <article key={pack.id} className="card card-interactive pack-list-card">
+                <div className="pack-list-head">
+                  <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
+                  <Badge>{pack.masteryPercent}% mastered</Badge>
+                </div>
+                <h3 className="pack-list-title">
+                  <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
+                </h3>
+                <p className="muted pack-list-meta">
+                  {pack.sources} source{pack.sources === 1 ? '' : 's'} · {pack.concepts} concepts ·{' '}
+                  {pack.flashcards} cards · {pack.practiceQuestions} questions
+                </p>
+                <MasteryMeter percent={pack.masteryPercent} compact />
+                <div className="pack-list-actions">
+                  <Link to={`/study-packs/${pack.id}?tab=learn`} className="btn btn-sm btn-secondary">
+                    <IconZap size={16} /> {pack.masteryPercent > 0 ? 'Continue' : 'Start learning'}
+                  </Link>
+                  <span className="muted pack-list-open">
+                    Added {new Date(pack.createdAt).toLocaleDateString()} ·{' '}
+                    {formatActivity(pack.updatedAt)}
                   </span>
                 </div>
               </article>
@@ -288,8 +392,8 @@ export function MyStudyPage() {
             action={
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
                 <ButtonLink to="/study-packs">Open study packs</ButtonLink>
-                <ButtonLink to="/ai/studio" variant="secondary">
-                  Add material
+                <ButtonLink to="/study-packs/new" variant="secondary">
+                  Add study material
                 </ButtonLink>
               </div>
             }
@@ -313,7 +417,7 @@ export function MyStudyPage() {
             {recentSets.slice(0, 6).map((set) => (
               <StudySetCard key={set.id} set={set} />
             ))}
-            <Link to="/ai/studio" className="card card-interactive" style={{ minHeight: 190 }}>
+            <Link to="/study-packs/new" className="card card-interactive" style={{ minHeight: 190 }}>
               <div className="stack" style={{ gap: 10, height: '100%', justifyContent: 'center', alignItems: 'flex-start' }}>
                 <span className="quick-icon quick-icon-blue">
                   <IconPlus />
@@ -326,15 +430,15 @@ export function MyStudyPage() {
         ) : (
           <EmptyState
             icon={<IconCards />}
-            title="Your first study pack starts here"
-            description="Import your notes or create a pack manually. Lerno will keep the learning flow in one place."
+            title="Start your first Study Pack"
+            description="Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system."
             action={
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <ButtonLink to="/ai/studio">
+                <ButtonLink to="/study-packs/new">
                   <IconSparkles size={17} /> Add study material
                 </ButtonLink>
                 <ButtonLink to="/sets/new" variant="secondary">
-                  Create manually
+                  Create a set manually
                 </ButtonLink>
               </div>
             }

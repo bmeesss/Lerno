@@ -23,6 +23,12 @@ export function PackFlashcards({ pack, onChanged }: { pack: StudyPackDetail; onC
     [pack.legacySetId, pack.counts.flashcards],
   );
 
+  /** Source title behind a generated card, for provenance ("Source: …"). */
+  function sourceTitleFor(card: Card): string | null {
+    if (!card.sourceId) return null;
+    return pack.sources.find((source) => source.id === card.sourceId)?.title ?? null;
+  }
+
   async function generate() {
     if (busy) return;
     setBusy(true);
@@ -112,6 +118,11 @@ export function PackFlashcards({ pack, onChanged }: { pack: StudyPackDetail; onC
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
                   #{index + 1}
                 </span>
+                {sourceTitleFor(card) ? (
+                  <span className="muted pack-provenance" style={{ fontSize: '0.8rem' }}>
+                    Generated from: {sourceTitleFor(card)}
+                  </span>
+                ) : null}
               </div>
             </li>
           ))}

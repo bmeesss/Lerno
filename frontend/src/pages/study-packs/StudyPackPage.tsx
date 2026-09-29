@@ -11,6 +11,7 @@ import { PACK_TABS, packTabHref, parsePackTab } from '../../lib/studyPackRoutes'
 import { studyPackService } from '../../services/studyPackService';
 import { PackHero } from '../../components/study-pack/PackHero';
 import { PackOverview } from '../../components/study-pack/PackOverview';
+import { PackGettingStarted, isFreshPack } from '../../components/study-pack/PackGettingStarted';
 import { PackLearn } from '../../components/study-pack/PackLearn';
 import { PackConcepts } from '../../components/study-pack/PackConcepts';
 import { PackFlashcards } from '../../components/study-pack/PackFlashcards';
@@ -134,7 +135,12 @@ export function StudyPackPage() {
       </div>
 
       <div className="pack-tab-content">
-        {tab === 'overview' ? <PackOverview pack={pack} onChanged={reload} /> : null}
+        {tab === 'overview' ? (
+          <div className="stack" style={{ gap: 24 }}>
+            {isFreshPack(pack) ? <PackGettingStarted pack={pack} /> : null}
+            <PackOverview pack={pack} onChanged={reload} />
+          </div>
+        ) : null}
 
         {tab === 'learn' ? (
           <PackLearn pack={pack} focusConceptId={conceptParam} onChanged={reload} />

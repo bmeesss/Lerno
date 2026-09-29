@@ -171,7 +171,12 @@ export function PackConcepts({ pack, onChanged }: { pack: StudyPackDetail; onCha
                 <MasteryMeter percent={concept.masteryPercent} label="Mastery" compact />
                 <p className="muted pack-concept-status">{masteryLabel(concept.masteryPercent)}</p>
                 {concept.sourceTitle ? (
-                  <p className="muted pack-concept-source">From: {concept.sourceTitle}</p>
+                  <p className="muted pack-concept-source">
+                    Generated from:{' '}
+                    <Link to="?tab=sources" className="pack-provenance-link">
+                      {concept.sourceTitle}
+                    </Link>
+                  </p>
                 ) : null}
                 <div className="pack-concept-actions">
                   <ButtonLink to={`?tab=practice&concept=${concept.id}`} size="sm" variant="secondary">

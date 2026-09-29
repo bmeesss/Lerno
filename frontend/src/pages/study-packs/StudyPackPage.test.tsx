@@ -150,6 +150,30 @@ const PACK: StudyPackDetail = {
   recentAttempts: [],
 };
 
+/** A pack straight out of the import: material in, nothing studied yet. */
+const FRESH: StudyPackDetail = {
+  ...PACK,
+  counts: { ...PACK.counts, tests: 0 },
+  progress: {
+    ...PACK.progress,
+    masteryPercent: 0,
+    dueCards: 0,
+    studiedCards: 0,
+    practiceAnswers: 0,
+    testAttempts: 0,
+    bestTestScorePercent: null,
+    weakConcepts: [],
+    strongConcepts: [],
+  },
+  recommended: {
+    type: 'learn',
+    label: 'Start learning Biologie H3',
+    description: 'Learn the first concepts from your material.',
+    conceptId: 'concept-1',
+    conceptName: 'Celkern',
+  },
+};
+
 function renderPage(path = '/study-packs/pack-1') {
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -210,6 +234,57 @@ describe('StudyPackPage', () => {
 
     expect((await screen.findAllByText('Study pack not found')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /back to study packs/i })).toBeInTheDocument();
+  });
+
+  it('welcomes a freshly created pack with real counts and one clear start', async () => {
+    getMock.mockResolvedValue(FRESH);
+    renderPage();
+
+    const welcome = await screen.findByText('Your Study Pack is ready');
+    const panel = welcome.closest('section')!;
+    expect(within(panel).getByRole('heading', { name: 'Biologie H3' })).toBeInTheDocument();
+    expect(within(panel).getByText('6')).toBeInTheDocument();
+    expect(within(panel).getByText('2')).toBeInTheDocument();
+    expect(within(panel).getByText('12')).toBeInTheDocument();
+    expect(within(panel).getByText('5')).toBeInTheDocument();
+
+    const start = within(panel).getByRole('link', { name: /start learn/i });
+    expect(start).toHaveAttribute('href', '/study-packs/pack-1?tab=learn&concept=concept-1');
+    expect(within(panel).getByRole('link', { name: /review material/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=overview#pack-overview',
+    );
+    expect(within(panel).getByRole('link', { name: /view concepts/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=concepts',
+    );
+    expect(within(panel).getByRole('link', { name: /practice/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=practice',
+    );
+    expect(within(panel).getByRole('link', { name: /take a test/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=test',
+    );
+  });
+
+  it('tells the student when AI is unavailable without blocking the pack', async () => {
+    getMock.mockResolvedValue({ ...FRESH, aiAvailable: false });
+    renderPage();
+
+    expect(await screen.findByText('AI generation unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/Your material is saved/)).toBeInTheDocument();
+  });
+
+  it('shows where generated content came from, traceable to its source', async () => {
+    renderPage('/study-packs/pack-1?tab=concepts');
+
+    const provenance = await screen.findByText(/Generated from:/);
+    expect(provenance).toHaveTextContent('Biologie H3.pdf');
+    expect(within(provenance).getByRole('link', { name: 'Biologie H3.pdf' })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=sources',
+    );
   });
 
   it('keeps the progress tab honest without any activity', async () => {
