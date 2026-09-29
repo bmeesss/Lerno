@@ -371,7 +371,8 @@ export const studyProgressService = {
         label: sessionLabel(session, packById.get(session.packId)!.title),
         type: session.type,
         completedAt: session.completedAt,
-        percent: session.result?.percent ?? null,
+        // A score means right and wrong answers. Learn is self-rated, so it has none to show.
+        percent: session.type === 'learn' ? null : (session.result?.percent ?? null),
         answered: session.answeredCount,
       }));
 

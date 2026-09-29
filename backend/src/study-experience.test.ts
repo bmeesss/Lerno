@@ -16,6 +16,7 @@ import {
   completeSession,
   createPack,
   memoryDb,
+  rateItem,
   setMastery,
   signup,
   startSession,
@@ -536,6 +537,45 @@ describe('subject overview', () => {
     const cellsRow = overview.packs.find((pack: { title: string }) => pack.title === 'Cells');
     expect(cellsRow.weakConcepts[0]).toMatchObject({ name: 'Osmosis', masteryPercent: 15 });
     expect(overview.next).toMatchObject({ packTitle: 'Cells', sessionType: 'practice' });
+  });
+
+  it('lists recent activity, with a score only for sessions that have right and wrong answers', async () => {
+    const student = await signup(app);
+    const subject = (
+      await request(app).post('/api/subjects').set(auth(student.token)).send({ name: 'Biology' })
+    ).body.data;
+    const pack = await createPack(app, student, { title: 'Cells', subjectId: subject.id });
+    await finishPractice(student, pack, 3);
+    const learn = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 2,
+      restart: true,
+    });
+    for (const item of learn.session.items)
+      await rateItem(app, student, learn.session.id, item.id, 'good');
+    await completeSession(app, student, learn.session.id);
+
+    const res = await request(app)
+      .get(`/api/subjects/${subject.id}/overview`)
+      .set(auth(student.token));
+    const activity = res.body.data.recentActivity as {
+      type: string;
+      percent: number | null;
+      answered: number;
+      label: string;
+    }[];
+    expect(activity.map((entry) => entry.type).sort()).toEqual(['learn', 'practice']);
+    expect(activity.find((entry) => entry.type === 'practice')).toMatchObject({
+      percent: 100,
+      answered: 3,
+      label: 'Cells Practice',
+    });
+    // Self-rating is not a score: showing "0%" for a learn session would be wrong.
+    expect(activity.find((entry) => entry.type === 'learn')).toMatchObject({
+      percent: null,
+      label: 'Cells Learn',
+    });
   });
 
   it('is private to the subject owner', async () => {
