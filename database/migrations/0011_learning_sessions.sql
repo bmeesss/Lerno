@@ -106,12 +106,16 @@ create index if not exists mastery_snapshots_user_day_idx
   on public.mastery_snapshots (user_id, day desc);
 
 -- Row-level security: sessions, items and snapshots are private to the student.
+-- Policies are dropped and recreated so the whole file can be run again safely
+-- (create policy has no "if not exists").
 -- Inserting also requires that the pack is visible to the student, exactly like
 -- the pack tables (defense in depth: the backend re-checks ownership too).
 
 alter table public.learning_sessions enable row level security;
+drop policy if exists "learning_sessions_own_select" on public.learning_sessions;
 create policy "learning_sessions_own_select" on public.learning_sessions
   for select using (user_id = auth.uid());
+drop policy if exists "learning_sessions_own_write" on public.learning_sessions;
 create policy "learning_sessions_own_write" on public.learning_sessions
   for all using (user_id = auth.uid())
   with check (
@@ -124,8 +128,10 @@ create policy "learning_sessions_own_write" on public.learning_sessions
   );
 
 alter table public.learning_session_items enable row level security;
+drop policy if exists "learning_session_items_own_select" on public.learning_session_items;
 create policy "learning_session_items_own_select" on public.learning_session_items
   for select using (user_id = auth.uid());
+drop policy if exists "learning_session_items_own_write" on public.learning_session_items;
 create policy "learning_session_items_own_write" on public.learning_session_items
   for all using (user_id = auth.uid())
   with check (
@@ -137,8 +143,10 @@ create policy "learning_session_items_own_write" on public.learning_session_item
   );
 
 alter table public.mastery_snapshots enable row level security;
+drop policy if exists "mastery_snapshots_own_select" on public.mastery_snapshots;
 create policy "mastery_snapshots_own_select" on public.mastery_snapshots
   for select using (user_id = auth.uid());
+drop policy if exists "mastery_snapshots_own_write" on public.mastery_snapshots;
 create policy "mastery_snapshots_own_write" on public.mastery_snapshots
   for all using (user_id = auth.uid())
   with check (

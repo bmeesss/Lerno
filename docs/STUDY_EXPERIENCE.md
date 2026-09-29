@@ -180,7 +180,9 @@ npm run typecheck && npm run lint && npm run test && npm run build
 
 Backend: session create/resume/complete, adaptive selection, weak-first priority, duplicate
 avoidance, test analysis, plan generation, exam priority, multi-pack ranking, snapshots and
-ownership (`study-sessions.test.ts`, `study-experience.test.ts`, the service tests). Frontend:
+ownership (`study-sessions.test.ts`, `study-experience.test.ts`, the service tests), plus a
+static guard that keeps migration 0011 additive, re-runnable, private to each student and in
+step with the Supabase repository (`lib/db/migration-0011.test.ts`). Frontend:
 the learn, practice and test runners, results, review mistakes, My Study, resume, subject and
 progress pages, empty and error states, the AI Tutor drawer, route helpers and the CSS/a11y
 basics.
