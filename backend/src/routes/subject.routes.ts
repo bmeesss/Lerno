@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { subjectController } from '../controllers/subject.controller.js';
+import { studySessionController } from '../controllers/study-session.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import { writeRateLimit } from '../middleware/rate-limit.js';
 import { validate } from '../middleware/validate.js';
@@ -19,6 +20,11 @@ export function subjectRoutes(): Router {
     writeRateLimit,
     validate({ body: createSubjectSchema }),
     subjectController.create,
+  );
+  router.get(
+    '/:subjectId/overview',
+    validate({ params: subjectParamsSchema }),
+    studySessionController.subjectOverview,
   );
   router.patch(
     '/:subjectId',

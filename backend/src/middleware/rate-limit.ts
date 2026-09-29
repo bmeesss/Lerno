@@ -55,6 +55,17 @@ export const authRateLimit = createLimiter({ windowMs: 15 * 60 * 1000, max: 30, 
 /** Write-heavy routes (create/update/delete): moderate. */
 export const writeRateLimit = createLimiter({ windowMs: 10 * 60 * 1000, max: 120, name: 'write' });
 
+/**
+ * Study sessions: every answer is a small write, so a normal session (10–25
+ * answers) must never trip the limit. Keyed per student, not per network.
+ */
+export const studySessionRateLimit = createLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
+  name: 'study-session',
+  keyBy: (req) => req.auth?.id ?? clientIp(req),
+});
+
 /** Public read + report endpoints: basic abuse protection (spec §15). */
 export const publicRateLimit = createLimiter({ windowMs: 5 * 60 * 1000, max: 240, name: 'public' });
 
