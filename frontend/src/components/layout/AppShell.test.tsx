@@ -87,6 +87,21 @@ describe('Lerno workspace navigation', () => {
     },
   );
 
+  it('keeps a study session focused: no sidebar, no tab bar, one way back to My Study', () => {
+    renderShell('/study/sessions/6c2f0b1e');
+    expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My Study' })).toHaveAttribute('href', '/study');
+    expect(screen.getByText('Study session')).toBeInTheDocument();
+    expect(screen.getByText('Focus session')).toBeInTheDocument();
+  });
+
+  it('keeps the normal navigation on My Study itself', () => {
+    renderShell('/study');
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeInTheDocument();
+  });
+
   it('submits a library search to the existing Discover route', async () => {
     const user = userEvent.setup();
     renderShell();
