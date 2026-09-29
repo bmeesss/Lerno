@@ -1,0 +1,548 @@
+/* The study planner surfaces: My Study (Today), Subject and Progress.
+   Calm and factual — one primary action per page, no decorative charts, nothing
+   that looks like a game. Only tokens from tokens.css are used. */
+
+/* ------------------------------ exam banner -------------------------------- */
+
+.exam-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--warm-bg);
+  color: var(--warm-text);
+}
+
+.exam-banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.exam-banner-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.exam-banner-copy strong {
+  font-size: 1rem;
+}
+
+.exam-banner-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 559px) {
+  .exam-banner {
+    flex-wrap: wrap;
+  }
+
+  .exam-banner-copy {
+    flex-basis: calc(100% - 44px);
+  }
+}
+
+/* ---------------------------------- today ---------------------------------- */
+
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+}
+
+.today-head h2 {
+  margin: 0;
+}
+
+.today-lede {
+  margin: var(--space-1) 0 0;
+}
+
+.today-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.today-streak {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.today-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border-color: var(--accent-border);
+  background: var(--feature-bg);
+  color: var(--feature-text);
+}
+
+.today-hero h3 {
+  margin: 0;
+  font-size: clamp(1.3rem, 3.4vw, 1.65rem);
+  letter-spacing: -0.02em;
+  color: var(--feature-text);
+}
+
+.today-hero .eyebrow-label {
+  color: var(--feature-text);
+}
+
+.today-hero-reason {
+  margin: 0;
+  font-size: 1.02rem;
+  color: var(--text);
+}
+
+.today-hero-meta {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.today-hero .btn {
+  margin-top: var(--space-3);
+}
+
+.today-resume-others {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--accent-border);
+  list-style: none;
+}
+
+.today-resume-others li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text);
+}
+
+.today-resume-others .muted {
+  color: var(--text-secondary);
+}
+
+.today-plan h3 {
+  margin-bottom: var(--space-3);
+}
+
+.today-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.today-step {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.today-step-number {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.today-step-body strong {
+  overflow-wrap: anywhere;
+}
+
+.today-step-body .muted {
+  font-size: 0.875rem;
+}
+
+.today-step-meta {
+  font-size: 0.8rem;
+}
+
+.today-step .btn {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 44px;
+}
+
+.today-empty {
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .today-step {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .today-step .btn {
+    grid-column: auto;
+    width: auto;
+  }
+
+  .today-hero .btn {
+    min-width: 220px;
+  }
+}
+
+@media (max-width: 639px) {
+  .today-hero .btn {
+    width: 100%;
+  }
+}
+
+/* ------------------------------ by subject ------------------------------- */
+
+.subject-today-list,
+.subject-pack-list,
+.subject-exam-list,
+.subject-activity-list,
+.progress-pack-list,
+.progress-improved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subject-today {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.subject-today-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.subject-today-copy h3 {
+  margin: 0;
+}
+
+.subject-today-copy h3 a {
+  text-decoration: none;
+}
+
+.subject-today-copy h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.subject-today-copy p {
+  margin: 0;
+}
+
+.subject-today-next {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.subject-today-meta,
+.subject-today-facts {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 559px) {
+  .subject-today {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .subject-today .btn {
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 900px) {
+  .subject-today-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------- subject --------------------------------- */
+
+.subject-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.subject-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.subject-summary-head h2 {
+  margin: 0 0 var(--space-1);
+}
+
+.subject-summary-head p {
+  margin: 0;
+}
+
+.subject-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.subject-facts > div {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.subject-facts dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.subject-facts dd {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.subject-pack,
+.progress-pack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.subject-pack-head,
+.progress-pack-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.subject-pack-head h3,
+.progress-pack-head h3 {
+  margin: 0;
+}
+
+.subject-pack-head h3 a,
+.progress-pack-head h3 a {
+  text-decoration: none;
+}
+
+.subject-pack-head h3 a:hover,
+.progress-pack-head h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.subject-pack-badges,
+.progress-pack-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.subject-pack-meta {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.subject-pack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.subject-pack-actions .btn {
+  min-height: 44px;
+}
+
+.subject-exam,
+.subject-activity,
+.progress-improved li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.subject-exam a,
+.subject-activity a {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (min-width: 720px) {
+  .subject-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------- progress -------------------------------- */
+
+.study-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.study-stats .stat-card .stat-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-improved-change {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-text);
+}
+
+.progress-pack-mastery {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.progress-pack-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.progress-pack-trend p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.trend-sparkline {
+  width: 168px;
+  height: 48px;
+}
+
+.trend-baseline {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.trend-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trend-dot {
+  fill: var(--accent);
+}
+
+.progress-pack-concepts {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.progress-pack-concepts p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.session-concept-chip.is-static {
+  cursor: default;
+}
+
+.progress-pack-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.progress-pack-facts dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.progress-pack-facts dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+  color: var(--text);
+}
+
+@media (min-width: 720px) {
+  .progress-pack-mastery {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .progress-pack-concepts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .progress-pack-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

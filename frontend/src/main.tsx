@@ -11,6 +11,7 @@ import './styles/layout.css';
 import './styles/ai-studio.css';
 import './styles/study-pack.css';
 import './styles/study-session.css';
+import './styles/study-planner.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element #root not found');
