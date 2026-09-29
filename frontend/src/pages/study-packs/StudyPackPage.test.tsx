@@ -1,9 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../../components/ui/Toast';
 import { studyPackService } from '../../services/studyPackService';
+import { studySessionService } from '../../services/studySessionService';
 import { subjectService } from '../../services/subjectService';
+import { preview, testModes } from '../../test-fixtures/study';
 import type { StudyPackDetail } from '../../types';
 import { StudyPackPage } from './StudyPackPage';
 
@@ -30,6 +33,10 @@ vi.mock('../../services/subjectService', () => ({
   subjectService: { list: vi.fn(), create: vi.fn() },
 }));
 
+vi.mock('../../services/studySessionService', () => ({
+  studySessionService: { preview: vi.fn(), start: vi.fn() },
+}));
+
 vi.mock('../../services/studySetService', () => ({
   studySetService: {
     get: vi.fn().mockResolvedValue({ id: 'set-1', cards: [] }),
@@ -47,6 +54,8 @@ vi.mock('../../hooks/useAuth', () => ({
 
 const getMock = vi.mocked(studyPackService.get);
 const subjectsMock = vi.mocked(subjectService.list);
+const previewMock = vi.mocked(studySessionService.preview);
+const tutorMock = vi.mocked(studyPackService.tutor);
 
 const PACK: StudyPackDetail = {
   id: 'pack-1',
@@ -304,6 +313,73 @@ describe('StudyPackPage', () => {
       'href',
       '/study-packs/pack-1?tab=sources',
     );
+  });
+
+  describe('study session tabs', () => {
+    beforeEach(() => {
+      previewMock.mockResolvedValue(preview());
+    });
+
+    it('opens Practice as the pre-start screen of an adaptive session, focused on the linked concept', async () => {
+      renderPage('/study-packs/pack-1?tab=practice&concept=concept-2');
+      expect(await screen.findByRole('heading', { name: 'Practice Biology' })).toBeInTheDocument();
+      expect(previewMock).toHaveBeenCalledWith({
+        packId: 'pack-1',
+        type: 'practice',
+        mode: undefined,
+        conceptId: 'concept-2',
+      });
+      expect(screen.getByRole('button', { name: /start practice/i })).toBeInTheDocument();
+    });
+
+    it('opens Learn as the pre-start screen of a learn session', async () => {
+      previewMock.mockResolvedValue(preview({ type: 'learn', title: 'Learn Biology', count: 2 }));
+      renderPage('/study-packs/pack-1?tab=learn');
+      expect(await screen.findByRole('heading', { name: 'Learn Biology' })).toBeInTheDocument();
+      expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'learn' }));
+    });
+
+    it('opens Test on the exam simulation when the link asks for it', async () => {
+      previewMock.mockResolvedValue(preview({ type: 'test', mode: 'exam', modes: testModes() }));
+      renderPage('/study-packs/pack-1?tab=test&mode=exam');
+      expect(await screen.findByRole('radio', { name: /exam simulation/i })).toBeChecked();
+      expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'test', mode: 'exam' }));
+    });
+
+    it('ignores an unknown test mode and uses the default length', async () => {
+      previewMock.mockResolvedValue(preview({ type: 'test', modes: testModes() }));
+      renderPage('/study-packs/pack-1?tab=test&mode=bogus');
+      expect(await screen.findByRole('radio', { name: /10 questions/ })).toBeChecked();
+    });
+
+    it('starts a review of due concepts from Practice with mode=review', async () => {
+      previewMock.mockResolvedValue(preview({ type: 'review', title: 'Review Biology' }));
+      renderPage('/study-packs/pack-1?tab=practice&mode=review');
+      expect(await screen.findByRole('heading', { name: 'Review Biology' })).toBeInTheDocument();
+      expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'review' }));
+    });
+
+    it('opens the AI Tutor for a concept and sends the concept as context', async () => {
+      tutorMock.mockResolvedValue({ reply: 'Celdeling.', basedOnMaterial: true, citations: [] });
+      const user = userEvent.setup();
+      renderPage('/study-packs/pack-1?tab=tutor&concept=concept-2');
+      expect(await screen.findByRole('heading', { name: 'AI Tutor · Mitose' })).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Ask the AI Tutor'), 'Wat is mitose?');
+      await user.click(screen.getByRole('button', { name: /send/i }));
+      expect(tutorMock).toHaveBeenCalledWith('pack-1', 'Wat is mitose?', [], { conceptId: 'concept-2' });
+      expect(await screen.findByText('Based on your material')).toBeInTheDocument();
+    });
+
+    it('offers small contextual help on every concept', async () => {
+      renderPage('/study-packs/pack-1?tab=concepts');
+      const card = (await screen.findByRole('heading', { name: 'Mitose' })).closest('li')!;
+      const help = within(card).getByRole('group', { name: 'Help with this concept' });
+      expect(within(help).getByRole('button', { name: 'Ask AI Tutor' })).toBeInTheDocument();
+      expect(within(help).getByRole('button', { name: 'Explain this' })).toBeInTheDocument();
+      expect(within(help).getByRole('button', { name: 'Show source' })).toBeInTheDocument();
+      // The card already has its own Practice button: no second "Practice this" next to it.
+      expect(within(card).getAllByRole('link', { name: /practice/i })).toHaveLength(1);
+    });
   });
 
   it('keeps the progress tab honest without any activity', async () => {

@@ -9,6 +9,7 @@ import { ApiError } from '../../lib/api';
 import { studyPackService } from '../../services/studyPackService';
 import { MasteryMeter, masteryLabel } from './PackBits';
 import { PreviewEditor } from './PreviewEditor';
+import { ContextActions } from '../study-session/ContextActions';
 import type { PackPreview, StudyPackConcept, StudyPackDetail } from '../../types';
 
 /**
@@ -206,6 +207,13 @@ export function PackConcepts({ pack, onChanged }: { pack: StudyPackDetail; onCha
                     </>
                   ) : null}
                 </div>
+                <ContextActions
+                  packId={pack.id}
+                  conceptId={concept.id}
+                  conceptName={concept.name}
+                  tutorAvailable={pack.isOwner}
+                  showPractice={false}
+                />
               </li>
             ))}
           </ul>

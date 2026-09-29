@@ -7,7 +7,13 @@ import { useToast } from '../../components/ui/Toast';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../hooks/useAuth';
 import { ApiError } from '../../lib/api';
-import { PACK_TABS, packTabHref, parsePackTab } from '../../lib/studyPackRoutes';
+import {
+  PACK_TABS,
+  isReviewMode,
+  packTabHref,
+  parsePackTab,
+  parseTestMode,
+} from '../../lib/studyPackRoutes';
 import { studyPackService } from '../../services/studyPackService';
 import { PackHero } from '../../components/study-pack/PackHero';
 import { PackOverview } from '../../components/study-pack/PackOverview';
@@ -151,16 +157,23 @@ export function StudyPackPage() {
         {tab === 'flashcards' ? <PackFlashcards pack={pack} onChanged={reload} /> : null}
 
         {tab === 'practice' ? (
-          <PackPractice pack={pack} focusConceptId={conceptParam} onChanged={reload} />
+          <PackPractice
+            pack={pack}
+            focusConceptId={conceptParam}
+            review={isReviewMode(searchParams.get('mode'))}
+            onChanged={reload}
+          />
         ) : null}
 
-        {tab === 'test' ? <PackTest pack={pack} onChanged={reload} /> : null}
+        {tab === 'test' ? (
+          <PackTest pack={pack} mode={parseTestMode(searchParams.get('mode'))} onChanged={reload} />
+        ) : null}
 
         {tab === 'progress' ? <PackProgress pack={pack} onChanged={reload} /> : null}
 
         {tab === 'sources' ? <PackSources pack={pack} onChanged={reload} /> : null}
 
-        {tab === 'tutor' ? <PackTutor pack={pack} /> : null}
+        {tab === 'tutor' ? <PackTutor pack={pack} focusConceptId={conceptParam} /> : null}
       </div>
 
       {pack.isOwner ? (
