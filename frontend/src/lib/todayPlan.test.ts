@@ -25,7 +25,10 @@ describe('normalizeToday', () => {
           budgetMinutes: 30,
           minutes: 27,
           adjustedForExam: true,
-          steps: [step({ order: 1 }), step({ order: 2, type: 'review', label: 'Review 8 cards · Biology' })],
+          steps: [
+            step({ order: 1 }),
+            step({ order: 2, type: 'review', label: 'Review 8 cards · Biology' }),
+          ],
         },
         resume: [resumeCard()],
         streak: { current: 3, longest: 5, lastActiveDay: '2026-09-29', todayDone: true },
@@ -42,9 +45,25 @@ describe('normalizeToday', () => {
   });
 
   it('still works for an older response that only has tasks and exams', () => {
-    const { plan: _plan, primary: _primary, exam: _exam, resume: _resume, streak: _streak, subjects: _subjects, ...legacy } = today({
+    const {
+      plan: _plan,
+      primary: _primary,
+      exam: _exam,
+      resume: _resume,
+      streak: _streak,
+      subjects: _subjects,
+      ...legacy
+    } = today({
       exams: [
-        { packId: 'pack-1', title: 'Biologie H3', examDate: '2026-10-08', daysLeft: 9, masteryPercent: 40, weakConcepts: 2, dueCards: 8 },
+        {
+          packId: 'pack-1',
+          title: 'Biologie H3',
+          examDate: '2026-10-08',
+          daysLeft: 9,
+          masteryPercent: 40,
+          weakConcepts: 2,
+          dueCards: 8,
+        },
       ],
     });
     const normalized = normalizeToday(legacy);
@@ -64,12 +83,32 @@ describe('normalizeToday', () => {
     const legacy = { ...base, plan: undefined, exam: undefined };
     const tomorrow = normalizeToday({
       ...legacy,
-      exams: [{ packId: 'p', title: 'Maths', examDate: '2026-09-30', daysLeft: 1, masteryPercent: 0, weakConcepts: 0, dueCards: 0 }],
+      exams: [
+        {
+          packId: 'p',
+          title: 'Maths',
+          examDate: '2026-09-30',
+          daysLeft: 1,
+          masteryPercent: 0,
+          weakConcepts: 0,
+          dueCards: 0,
+        },
+      ],
     });
     expect(tomorrow.exam?.message).toBe('Maths exam is tomorrow');
     const past = normalizeToday({
       ...legacy,
-      exams: [{ packId: 'p', title: 'Maths', examDate: '2026-09-20', daysLeft: -9, masteryPercent: 0, weakConcepts: 0, dueCards: 0 }],
+      exams: [
+        {
+          packId: 'p',
+          title: 'Maths',
+          examDate: '2026-09-20',
+          daysLeft: -9,
+          masteryPercent: 0,
+          weakConcepts: 0,
+          dueCards: 0,
+        },
+      ],
     });
     expect(past.exam).toBeNull();
   });
@@ -90,13 +129,17 @@ describe('normalizeToday', () => {
 
 describe('plan step copy', () => {
   it('drops the pack title the engine appends, because the page shows it separately', () => {
-    expect(stepTitle({ label: 'Review 8 cards · Biology', packTitle: 'Biology' })).toBe('Review 8 cards');
+    expect(stepTitle({ label: 'Review 8 cards · Biology', packTitle: 'Biology' })).toBe(
+      'Review 8 cards',
+    );
     expect(stepTitle({ label: 'Practice Osmosis', packTitle: 'Biology' })).toBe('Practice Osmosis');
     expect(stepTitle({ label: 'Add study material', packTitle: null })).toBe('Add study material');
   });
 
   it('says how much a step contains', () => {
-    expect(stepAmount({ type: 'practice', sessionType: 'practice', count: 10 })).toBe('10 questions');
+    expect(stepAmount({ type: 'practice', sessionType: 'practice', count: 10 })).toBe(
+      '10 questions',
+    );
     expect(stepAmount({ type: 'review', sessionType: null, count: 8 })).toBe('8 cards');
     expect(stepAmount({ type: 'review', sessionType: 'review', count: 1 })).toBe('1 concept');
     expect(stepAmount({ type: 'learn', sessionType: 'learn', count: 3 })).toBe('3 concepts');
@@ -113,9 +156,9 @@ describe('plan step copy', () => {
   });
 
   it('prefers the short reason and falls back to the long description', () => {
-    expect(stepReason({ reasonText: 'You missed 3 recent questions.', description: 'Long text.' })).toBe(
-      'You missed 3 recent questions.',
-    );
+    expect(
+      stepReason({ reasonText: 'You missed 3 recent questions.', description: 'Long text.' }),
+    ).toBe('You missed 3 recent questions.');
     expect(stepReason({ reasonText: undefined, description: 'Long text.' })).toBe('Long text.');
   });
 

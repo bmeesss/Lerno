@@ -22,11 +22,7 @@ import type {
 } from '../lib/db/types.js';
 import { dto } from '../lib/dto.js';
 import { DEFAULT_TIMEZONE } from '../lib/timezone.js';
-import {
-  examDaysLeft,
-  loadPackSnapshots,
-  type PackSummarySnapshot,
-} from './pack-data.js';
+import { examDaysLeft, loadPackSnapshots, type PackSummarySnapshot } from './pack-data.js';
 import {
   collectRecentMistakes,
   packCandidates,
@@ -171,9 +167,7 @@ export function nearestExam(
 ): ExamBanner | null {
   const upcoming = packs
     .flatMap((pack) =>
-      pack.examDate
-        ? [{ pack, daysLeft: daysUntil(pack.examDate, now, timeZone) }]
-        : [],
+      pack.examDate ? [{ pack, daysLeft: daysUntil(pack.examDate, now, timeZone) }] : [],
     )
     .filter((entry) => entry.daysLeft >= 0)
     .sort((a, b) => a.daysLeft - b.daysLeft || a.pack.title.localeCompare(b.pack.title))[0];
@@ -184,8 +178,7 @@ export function nearestExam(
     examDate: upcoming.pack.examDate!,
     daysLeft: upcoming.daysLeft,
     message: examMessage(upcoming.pack.title, upcoming.daysLeft),
-    note:
-      upcoming.daysLeft <= EXAM_ADJUSTMENT_DAYS ? 'Your plan is adjusted for the exam.' : null,
+    note: upcoming.daysLeft <= EXAM_ADJUSTMENT_DAYS ? 'Your plan is adjusted for the exam.' : null,
   };
 }
 
@@ -286,9 +279,11 @@ export interface PlanInput {
 export function toPlanTask(task: RecommendationTask): StudyPlanTask | null {
   const sessionType = task.sessionType;
   const type: StudyPlanTask['type'] | null =
-    task.type === 'generate-concepts' || task.type === 'generate-practice' || task.type === 'add-material'
+    task.type === 'generate-concepts' ||
+    task.type === 'generate-practice' ||
+    task.type === 'add-material'
       ? null
-      : sessionType ?? (task.type === 'review' || task.type === 'continue' ? 'cards' : task.type);
+      : (sessionType ?? (task.type === 'review' || task.type === 'continue' ? 'cards' : task.type));
   if (!type) return null;
   return {
     type,
@@ -326,7 +321,10 @@ function activitiesOf(tasks: StudyPlanTask[], extra: string[] = []): string[] {
  * weakest concepts with spaced flashcard reviews and a checkpoint test; the last
  * day before the exam is an exam simulation plus a final review.
  */
-export function planStudyDays(input: PlanInput): { overview: string; sessions: StudyPlanSession[] } {
+export function planStudyDays(input: PlanInput): {
+  overview: string;
+  sessions: StudyPlanSession[];
+} {
   const days = Math.max(1, Math.min(PLAN_MAX_DAYS, Math.round(input.days)));
   const budget = Math.max(10, Math.min(180, Math.round(input.budgetMinutes)));
   const examDay = input.examDaysLeft === 0;
@@ -341,24 +339,24 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
     states: input.states,
     limit: input.concepts.length + 1,
     now: input.now,
-  }).filter((entry) => entry.reason === 'weak' || entry.reason === 'new' || entry.reason === 'learning');
-  const byTier = (reason: string) => queue.filter((entry) => entry.reason === reason).map((entry) => entry.concept);
+  }).filter(
+    (entry) => entry.reason === 'weak' || entry.reason === 'new' || entry.reason === 'learning',
+  );
+  const byTier = (reason: string) =>
+    queue.filter((entry) => entry.reason === reason).map((entry) => entry.concept);
   const fresh = byTier('new');
   if (input.examDaysLeft !== null) {
-    fresh.sort(
-      (a, b) => (b.importance ?? -1) - (a.importance ?? -1) || a.position - b.position,
-    );
+    fresh.sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1) || a.position - b.position);
   }
   const weakest = byTier('weak');
   const ordered = [...weakest, ...fresh, ...byTier('learning')];
 
   /* Day 1: the live tasks (fit to a lighter budget after a break). */
   const dayOneBudget = comeback ? Math.round(budget * 0.8) : budget;
-  const liveTasks = input.liveTasks
-    .flatMap((task) => {
-      const planTask = toPlanTask(task);
-      return planTask ? [planTask] : [];
-    });
+  const liveTasks = input.liveTasks.flatMap((task) => {
+    const planTask = toPlanTask(task);
+    return planTask ? [planTask] : [];
+  });
   const dayOne = fitToBudget(liveTasks, dayOneBudget);
   const learnedToday = dayOne
     .filter((task) => task.type === 'learn')
@@ -366,7 +364,9 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
   const remaining = ordered.slice(learnedToday);
   const learnedIds = new Set<string>([
     ...ordered.slice(0, learnedToday).map((concept) => concept.id),
-    ...input.concepts.filter((concept) => stateOf(concept).attempts > 0).map((concept) => concept.id),
+    ...input.concepts
+      .filter((concept) => stateOf(concept).attempts > 0)
+      .map((concept) => concept.id),
   ]);
 
   const sessions: StudyPlanSession[] = [];
@@ -396,9 +396,14 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
   };
   const cardsTask = (count: number): StudyPlanTask | null =>
     input.cardCount > 0
-      ? { type: 'cards', label: 'Review the flashcards that are due', minutes: cardMinutes(count), count }
+      ? {
+          type: 'cards',
+          label: 'Review the flashcards that are due',
+          minutes: cardMinutes(count),
+          count,
+        }
       : null;
-  const compact = <T,>(items: (T | null)[]): T[] => items.filter((item): item is T => item !== null);
+  const compact = <T>(items: (T | null)[]): T[] => items.filter((item): item is T => item !== null);
 
   const isSingleDay = days === 1;
   const finalExtra = ['Review every mistake from the test'];
@@ -407,7 +412,12 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
   if (isSingleDay) {
     const sim = examDay ? null : simulation();
     const tasks = fitToBudget(compact([...dayOne, sim]), Math.round(budget * 1.5));
-    push(1, tasks.length > 0 ? tasks : compact([cardsTask(10)]), !examDay, examDay ? [] : finalExtra);
+    push(
+      1,
+      tasks.length > 0 ? tasks : compact([cardsTask(10)]),
+      !examDay,
+      examDay ? [] : finalExtra,
+    );
   } else {
     push(1, dayOne.length > 0 ? dayOne : compact([cardsTask(10)]), false);
   }
@@ -415,7 +425,10 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
   /* The days in between. */
   const middleDays = days >= 3 ? days - 2 : 0;
   const learnWindow = Math.max(1, Math.ceil(middleDays * 0.6));
-  const perDay = Math.min(MAX_LEARN_PER_DAY, Math.max(1, Math.ceil(remaining.length / learnWindow)));
+  const perDay = Math.min(
+    MAX_LEARN_PER_DAY,
+    Math.max(1, Math.ceil(remaining.length / learnWindow)),
+  );
   const learnDays = Math.min(middleDays, Math.ceil(remaining.length / perDay));
   const uncovered = Math.max(0, remaining.length - learnDays * perDay);
   const practiceOrder = (concept: ConceptRecord) =>
@@ -475,7 +488,8 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
       const cards = cardsTask(10);
       if (cards) tasks.push(cards);
     }
-    for (const concept of remaining.slice(index * perDay, (index + 1) * perDay)) learnedIds.add(concept.id);
+    for (const concept of remaining.slice(index * perDay, (index + 1) * perDay))
+      learnedIds.add(concept.id);
 
     const fitted = fitToBudget(tasks, budget);
     push(day, fitted.length > 0 ? fitted : compact([cardsTask(10)]), false);
@@ -495,7 +509,10 @@ export function planStudyDays(input: PlanInput): { overview: string; sessions: S
     input.cardCount > 0 ? `${input.cardCount} flashcards to learn.` : null,
     input.dueCards > 0 ? `${input.dueCards} cards are already due for review.` : null,
     weakest.length > 0
-      ? `Weakest right now: ${weakest.slice(0, 3).map((concept) => concept.name).join(', ')}.`
+      ? `Weakest right now: ${weakest
+          .slice(0, 3)
+          .map((concept) => concept.name)
+          .join(', ')}.`
       : null,
     fresh.length > 0
       ? `${fresh.length} new ${fresh.length === 1 ? 'concept' : 'concepts'} to learn.`
@@ -566,7 +583,10 @@ async function storePlan(
   const questionCountByConcept = new Map<string, number>();
   for (const question of context.questions) {
     if (question.conceptId) {
-      questionCountByConcept.set(question.conceptId, (questionCountByConcept.get(question.conceptId) ?? 0) + 1);
+      questionCountByConcept.set(
+        question.conceptId,
+        (questionCountByConcept.get(question.conceptId) ?? 0) + 1,
+      );
     }
   }
   const plan = planStudyDays({
@@ -717,7 +737,13 @@ export const studyPlanService = {
     const packs = await db.packs.listByOwner(userId);
     const snapshots = await loadPackSnapshots(db, userId, packs, now, timeZone);
     const summaries = snapshots.map((snapshot) => snapshot.summary);
-    const { ctx, flashcardSessions, openSessions } = await loadContext(db, userId, snapshots, now, timeZone);
+    const { ctx, flashcardSessions, openSessions } = await loadContext(
+      db,
+      userId,
+      snapshots,
+      now,
+      timeZone,
+    );
 
     const exams = (await db.packs.listUpcomingExams(userId, day)).map((pack) => {
       const summary = summaries.find((entry) => entry.id === pack.id);
@@ -768,4 +794,3 @@ export const studyPlanService = {
     };
   },
 };
-

@@ -7,7 +7,11 @@ const TEXT =
 
 describe('example finder', () => {
   it('splits sentences', () => {
-    expect(splitSentences('One thing. Another thing! A third?')).toEqual(['One thing.', 'Another thing!', 'A third?']);
+    expect(splitSentences('One thing. Another thing! A third?')).toEqual([
+      'One thing.',
+      'Another thing!',
+      'A third?',
+    ]);
   });
 
   it('finds a sentence that gives an example of the concept', () => {
@@ -19,9 +23,13 @@ describe('example finder', () => {
     expect(findExampleSentence('Osmosis', 'Osmosis is a process. It is important.')).toBeNull();
   });
 
-  it('prefers the concept\'s own source, then any source', () => {
+  it("prefers the concept's own source, then any source", () => {
     const sources = [
-      { id: 's1', title: 'Other notes', content: 'Osmosis, for example, keeps a plant cell firm when water enters the vacuole.' },
+      {
+        id: 's1',
+        title: 'Other notes',
+        content: 'Osmosis, for example, keeps a plant cell firm when water enters the vacuole.',
+      },
       { id: 's2', title: 'Biology H3', content: TEXT },
     ];
     const own = findConceptExample({ id: 'c1', name: 'Osmosis', sourceId: 's2' }, sources, []);
@@ -35,6 +43,8 @@ describe('example finder', () => {
     const card = { conceptId: 'c1', question: 'What moves in osmosis?', answer: 'Water' };
     const fallback = findConceptExample({ id: 'c1', name: 'Osmosis', sourceId: null }, [], [card]);
     expect(fallback).toMatchObject({ kind: 'flashcard', text: 'What moves in osmosis? — Water' });
-    expect(findConceptExample({ id: 'c2', name: 'Mitosis', sourceId: null }, [], [card])).toBeNull();
+    expect(
+      findConceptExample({ id: 'c2', name: 'Mitosis', sourceId: null }, [], [card]),
+    ).toBeNull();
   });
 });

@@ -28,7 +28,9 @@ export function SubjectsToday({ subjects }: { subjects: SubjectToday[] }) {
       <div className="section-title">
         <div>
           <h2 id="my-study-subjects">By subject</h2>
-          <p className="muted">What matters most in each subject today, chosen from your own progress.</p>
+          <p className="muted">
+            What matters most in each subject today, chosen from your own progress.
+          </p>
         </div>
       </div>
       <ul className="subject-today-list" role="list">
@@ -48,7 +50,9 @@ export function SubjectsToday({ subjects }: { subjects: SubjectToday[] }) {
                 {next ? (
                   <>
                     <p className="subject-today-next">{stepTitle(next)}</p>
-                    <p className="muted subject-today-meta">{stepMeta(next, { showPack: subject.packs > 1 })}</p>
+                    <p className="muted subject-today-meta">
+                      {stepMeta(next, { showPack: subject.packs > 1 })}
+                    </p>
                   </>
                 ) : (
                   <p className="muted">Nothing planned today.</p>

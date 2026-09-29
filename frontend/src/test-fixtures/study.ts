@@ -43,7 +43,11 @@ export function questionItem(
   };
 }
 
-export function conceptItem(id: string, name: string, overrides: Partial<SessionItem> = {}): SessionItem {
+export function conceptItem(
+  id: string,
+  name: string,
+  overrides: Partial<SessionItem> = {},
+): SessionItem {
   return {
     id,
     position: 0,
@@ -122,7 +126,15 @@ export function result(overrides: Partial<SessionResult> = {}): SessionResult {
     percent: 67,
     durationSeconds: 420,
     concepts: [
-      { conceptId: 'c1', name: 'Osmosis', beforePercent: 42, afterPercent: 61, answered: 3, correct: 2, incorrect: 1 },
+      {
+        conceptId: 'c1',
+        name: 'Osmosis',
+        beforePercent: 42,
+        afterPercent: 61,
+        answered: 3,
+        correct: 2,
+        incorrect: 1,
+      },
     ],
     stillWeak: [
       { conceptId: 'c2', name: 'Diffusion', masteryPercent: 18 },
@@ -131,10 +143,28 @@ export function result(overrides: Partial<SessionResult> = {}): SessionResult {
     packWeakCount: 2,
     packMasteryPercent: 48,
     knownWell: [
-      { conceptId: 'c1', name: 'Osmosis', correct: 2, partial: 0, incorrect: 0, total: 2, percent: 100, masteryPercent: 61 },
+      {
+        conceptId: 'c1',
+        name: 'Osmosis',
+        correct: 2,
+        partial: 0,
+        incorrect: 0,
+        total: 2,
+        percent: 100,
+        masteryPercent: 61,
+      },
     ],
     needsPractice: [
-      { conceptId: 'c2', name: 'Diffusion', correct: 0, partial: 0, incorrect: 1, total: 1, percent: 0, masteryPercent: 18 },
+      {
+        conceptId: 'c2',
+        name: 'Diffusion',
+        correct: 0,
+        partial: 0,
+        incorrect: 1,
+        total: 1,
+        percent: 0,
+        masteryPercent: 18,
+      },
     ],
     mistakeCount: 1,
     next: {
@@ -177,9 +207,30 @@ export function preview(overrides: Partial<SessionPreview> = {}): SessionPreview
 
 export function testModes(available = true): NonNullable<SessionPreview['modes']> {
   return [
-    { mode: 'quick10', label: '10 questions', description: 'A quick check of 10 questions.', count: 10, minutes: 12, available },
-    { mode: 'quick20', label: '20 questions', description: 'A quick check of 20 questions.', count: 20, minutes: 24, available },
-    { mode: 'exam', label: 'Exam simulation', description: 'The whole pack, up to 25 questions, without hints.', count: 24, minutes: 29, available },
+    {
+      mode: 'quick10',
+      label: '10 questions',
+      description: 'A quick check of 10 questions.',
+      count: 10,
+      minutes: 12,
+      available,
+    },
+    {
+      mode: 'quick20',
+      label: '20 questions',
+      description: 'A quick check of 20 questions.',
+      count: 20,
+      minutes: 24,
+      available,
+    },
+    {
+      mode: 'exam',
+      label: 'Exam simulation',
+      description: 'The whole pack, up to 25 questions, without hints.',
+      count: 24,
+      minutes: 29,
+      available,
+    },
   ];
 }
 
@@ -230,7 +281,9 @@ export function mistakes(overrides: Partial<SessionMistakes> = {}): SessionMista
   };
 }
 
-export function step(overrides: Partial<TodayStep> & { order?: number } = {}): TodayStep & { order: number } {
+export function step(
+  overrides: Partial<TodayStep> & { order?: number } = {},
+): TodayStep & { order: number } {
   return {
     type: 'practice',
     label: 'Practice Osmosis',
@@ -323,7 +376,14 @@ export function today(overrides: Partial<StudyPackToday> = {}): StudyPackToday {
     tasks: [first, second, third],
     exams: [],
     totalDue: 8,
-    packs: [packSummary({ masteryPercent: 40, dueCards: 8, weakConcepts: 2, lastStudiedAt: '2026-09-28T09:00:00.000Z' })],
+    packs: [
+      packSummary({
+        masteryPercent: 40,
+        dueCards: 8,
+        weakConcepts: 2,
+        lastStudiedAt: '2026-09-28T09:00:00.000Z',
+      }),
+    ],
     plan: { budgetMinutes: 25, minutes: 25, steps: [first, second, third], adjustedForExam: false },
     primary: first,
     exam: null,
@@ -334,7 +394,9 @@ export function today(overrides: Partial<StudyPackToday> = {}): StudyPackToday {
   };
 }
 
-export function studyProgress(overrides: Partial<StudyProgressOverview> = {}): StudyProgressOverview {
+export function studyProgress(
+  overrides: Partial<StudyProgressOverview> = {},
+): StudyProgressOverview {
   return {
     today: '2026-09-29',
     timeZone: 'Europe/Amsterdam',
@@ -352,7 +414,13 @@ export function studyProgress(overrides: Partial<StudyProgressOverview> = {}): S
       sessionsCompleted: 14,
       recentImprovement: { changePercent: 8, windowDays: 7, packs: 2 },
       improvedConcepts: [
-        { conceptId: 'c1', name: 'Osmosis', beforePercent: 42, afterPercent: 61, changePercent: 19 },
+        {
+          conceptId: 'c1',
+          name: 'Osmosis',
+          beforePercent: 42,
+          afterPercent: 61,
+          changePercent: 19,
+        },
       ],
     },
     trendMinDays: 3,

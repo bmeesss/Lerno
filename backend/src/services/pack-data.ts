@@ -71,7 +71,10 @@ export interface PackContextData {
   set: StudySetRecord | null;
 }
 
-export async function loadPackContext(db: Database, pack: StudyPackRecord): Promise<PackContextData> {
+export async function loadPackContext(
+  db: Database,
+  pack: StudyPackRecord,
+): Promise<PackContextData> {
   const [sources, concepts, questions, set] = await Promise.all([
     db.packSources.listByPack(pack.id),
     db.concepts.listByPack(pack.id),
@@ -104,7 +107,9 @@ export async function loadPackProgress(
     loadedRows = rows;
   } else if (userId) {
     const [progress, masteryRows, attempts, testAttempts, sessions] = await Promise.all([
-      set ? db.progress.listByUserAndSet(userId, set.id) : Promise.resolve([] as CardProgressRecord[]),
+      set
+        ? db.progress.listByUserAndSet(userId, set.id)
+        : Promise.resolve([] as CardProgressRecord[]),
       db.conceptMastery.listByUserAndPack(userId, pack.id),
       db.practiceAttempts.listByUserAndPack(userId, pack.id),
       db.testAttempts.listByUserAndPack(userId, pack.id),
@@ -115,7 +120,9 @@ export async function loadPackProgress(
       masteryRows,
       attempts,
       testAttempts,
-      sessionActivity: sessions.filter((session) => session.answeredCount > 0).map((session) => session.lastActivityAt),
+      sessionActivity: sessions
+        .filter((session) => session.answeredCount > 0)
+        .map((session) => session.lastActivityAt),
     };
   } else {
     loadedRows = { progress: [], masteryRows: [], attempts: [], testAttempts: [] };
@@ -126,7 +133,12 @@ export async function loadPackProgress(
 
   const conceptStates = concepts.map((concept) => {
     const state = masteryFromRecord(masteryByConcept.get(concept.id) ?? null);
-    return { concept, state, weak: isWeakConcept(state), strong: state.mastery >= STRONG_MASTERY_THRESHOLD && state.attempts > 0 };
+    return {
+      concept,
+      state,
+      weak: isWeakConcept(state),
+      strong: state.mastery >= STRONG_MASTERY_THRESHOLD && state.attempts > 0,
+    };
   });
 
   const weakConcepts = conceptStates
@@ -237,7 +249,8 @@ export function summarizePack(
     masteryPercent: progress.masteryPercent,
     weakConcepts: progress.stats.weakConcepts.length,
     learningConcepts: progress.conceptStates.filter(
-      (entry) => entry.state.attempts > 0 && entry.state.mastery >= 0.3 && entry.state.mastery < 0.85,
+      (entry) =>
+        entry.state.attempts > 0 && entry.state.mastery >= 0.3 && entry.state.mastery < 0.85,
     ).length,
     masteredConcepts: progress.conceptStates.filter(
       (entry) => entry.state.attempts > 0 && entry.state.mastery >= 0.85,
@@ -272,7 +285,9 @@ export async function loadPackSnapshots(
 ): Promise<PackSummarySnapshot[]> {
   if (packs.length === 0) return [];
   const packIds = packs.map((pack) => pack.id);
-  const setIds = [...new Set(packs.flatMap((pack) => pack.legacySetId ? [pack.legacySetId] : []))];
+  const setIds = [
+    ...new Set(packs.flatMap((pack) => (pack.legacySetId ? [pack.legacySetId] : []))),
+  ];
   const [
     sources,
     concepts,
@@ -311,34 +326,41 @@ export async function loadPackSnapshots(
     (stat) => stat.packId,
   );
 
-  return Promise.all(packs.map(async (pack) => {
-    const set = pack.legacySetId ? (setById.get(pack.legacySetId) ?? null) : null;
-    const packCards = set ? (cardsBySet.get(set.id) ?? []) : [];
-    const context: PackContextData = {
-      pack,
-      sources: sourcesByPack.get(pack.id) ?? [],
-      concepts: conceptsByPack.get(pack.id) ?? [],
-      questions: questionsByPack.get(pack.id) ?? [],
-      cards: packCards,
-      set,
-    };
-    const conceptIds = new Set(context.concepts.map((concept) => concept.id));
-    const rows: PackLearningRows = {
-      progress: packCards.flatMap((card) => {
-        const row = progressByCard.get(card.id);
-        return row ? [row] : [];
-      }),
-      masteryRows: [...conceptIds].flatMap((conceptId) => {
-        const row = masteryByConcept.get(conceptId);
-        return row ? [row] : [];
-      }),
-      attempts: attemptsByPack.get(pack.id) ?? [],
-      testAttempts: testsByPack.get(pack.id) ?? [],
-      sessionActivity: (sessionsByPack.get(pack.id) ?? []).map((stat) => stat.lastActivityAt),
-    };
-    const progress = await loadPackProgress(db, userId, context, rows);
-    return { pack, context, progress, summary: summarizePack(pack, context, progress, now, timeZone) };
-  }));
+  return Promise.all(
+    packs.map(async (pack) => {
+      const set = pack.legacySetId ? (setById.get(pack.legacySetId) ?? null) : null;
+      const packCards = set ? (cardsBySet.get(set.id) ?? []) : [];
+      const context: PackContextData = {
+        pack,
+        sources: sourcesByPack.get(pack.id) ?? [],
+        concepts: conceptsByPack.get(pack.id) ?? [],
+        questions: questionsByPack.get(pack.id) ?? [],
+        cards: packCards,
+        set,
+      };
+      const conceptIds = new Set(context.concepts.map((concept) => concept.id));
+      const rows: PackLearningRows = {
+        progress: packCards.flatMap((card) => {
+          const row = progressByCard.get(card.id);
+          return row ? [row] : [];
+        }),
+        masteryRows: [...conceptIds].flatMap((conceptId) => {
+          const row = masteryByConcept.get(conceptId);
+          return row ? [row] : [];
+        }),
+        attempts: attemptsByPack.get(pack.id) ?? [],
+        testAttempts: testsByPack.get(pack.id) ?? [],
+        sessionActivity: (sessionsByPack.get(pack.id) ?? []).map((stat) => stat.lastActivityAt),
+      };
+      const progress = await loadPackProgress(db, userId, context, rows);
+      return {
+        pack,
+        context,
+        progress,
+        summary: summarizePack(pack, context, progress, now, timeZone),
+      };
+    }),
+  );
 }
 
 /** Summary DTOs for a list of packs (one pass per collection). */

@@ -80,13 +80,17 @@ describe('My Study — today', () => {
   it('opens with how long today is, the recommended next step and why', async () => {
     renderPage();
 
-    const section = (await screen.findByRole('heading', { level: 2, name: 'Today' })).closest('section')!;
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Today' })).closest(
+      'section',
+    )!;
     expect(within(section).getByText('You have 25 minutes planned.')).toBeInTheDocument();
     expect(within(section).getByText('25 min recommended')).toBeInTheDocument();
 
     expect(within(section).getByText('Recommended next')).toBeInTheDocument();
     expect(within(section).getByRole('heading', { name: 'Practice Osmosis' })).toBeInTheDocument();
-    expect(within(section).getAllByText('You missed 3 recent questions.').length).toBeGreaterThan(0);
+    expect(within(section).getAllByText('You missed 3 recent questions.').length).toBeGreaterThan(
+      0,
+    );
   });
 
   it('has exactly one primary action, matching the recommended step', async () => {
@@ -107,18 +111,16 @@ describe('My Study — today', () => {
 
     expect(within(items[0]!).getByText('Practice Osmosis')).toBeInTheDocument();
     expect(within(items[0]!).getByText('1')).toBeInTheDocument();
-    expect(within(items[0]!).getByRole('link', { name: 'Start practice: Practice Osmosis' })).toHaveAttribute(
-      'href',
-      '/study-packs/pack-1?tab=practice&concept=c1',
-    );
+    expect(
+      within(items[0]!).getByRole('link', { name: 'Start practice: Practice Osmosis' }),
+    ).toHaveAttribute('href', '/study-packs/pack-1?tab=practice&concept=c1');
 
     // The pack title the engine appends to the label is shown separately.
     expect(within(items[1]!).getByText('Review 8 cards')).toBeInTheDocument();
     expect(within(items[1]!).getByText('8 cards are due today.')).toBeInTheDocument();
-    expect(within(items[1]!).getByRole('link', { name: 'Review cards: Review 8 cards' })).toHaveAttribute(
-      'href',
-      '/study-packs/pack-1?tab=flashcards',
-    );
+    expect(
+      within(items[1]!).getByRole('link', { name: 'Review cards: Review 8 cards' }),
+    ).toHaveAttribute('href', '/study-packs/pack-1?tab=flashcards');
 
     expect(within(items[2]!).getByText('Prepare for a test')).toBeInTheDocument();
     expect(within(items[2]!).getByRole('link', { name: /Start test/ })).toHaveAttribute(
@@ -144,7 +146,10 @@ describe('My Study — today', () => {
     const banner = await screen.findByRole('region', { name: 'Upcoming exam' });
     expect(within(banner).getByText('Biology exam in 9 days')).toBeInTheDocument();
     expect(within(banner).getByText('Your plan is adjusted for the exam.')).toBeInTheDocument();
-    expect(within(banner).getByRole('link', { name: /view pack/i })).toHaveAttribute('href', '/study-packs/pack-1');
+    expect(within(banner).getByRole('link', { name: /view pack/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1',
+    );
   });
 
   it('shows no exam banner without an exam', async () => {
@@ -157,10 +162,15 @@ describe('My Study — today', () => {
     todayMock.mockResolvedValue(today({ resume: [resumeCard()] }));
     const { container } = renderPage();
 
-    const hero = (await screen.findByRole('heading', { name: 'Biology Practice' })).closest('article')!;
+    const hero = (await screen.findByRole('heading', { name: 'Biology Practice' })).closest(
+      'article',
+    )!;
     expect(within(hero).getByText('Continue where you left off')).toBeInTheDocument();
     expect(within(hero).getByText('Question 6 of 10')).toBeInTheDocument();
-    expect(within(hero).getByRole('link', { name: /^continue/i })).toHaveAttribute('href', '/study/sessions/s1');
+    expect(within(hero).getByRole('link', { name: /^continue/i })).toHaveAttribute(
+      'href',
+      '/study/sessions/s1',
+    );
     expect(screen.queryByText('Recommended next')).not.toBeInTheDocument();
     expect(primaryActions(container)).toHaveLength(1);
   });
@@ -168,30 +178,47 @@ describe('My Study — today', () => {
   it('lists other unfinished sessions as quiet secondary actions', async () => {
     todayMock.mockResolvedValue(
       today({
-        resume: [resumeCard(), resumeCard({ sessionId: 's2', label: 'Maths Learn', positionLabel: 'Concept 2 of 5' })],
+        resume: [
+          resumeCard(),
+          resumeCard({ sessionId: 's2', label: 'Maths Learn', positionLabel: 'Concept 2 of 5' }),
+        ],
       }),
     );
     const { container } = renderPage();
     const others = await screen.findByRole('list', { name: 'Other unfinished sessions' });
     expect(within(others).getByText('Maths Learn')).toBeInTheDocument();
-    expect(within(others).getByRole('link', { name: 'Continue Maths Learn' })).toHaveAttribute('href', '/study/sessions/s2');
+    expect(within(others).getByRole('link', { name: 'Continue Maths Learn' })).toHaveAttribute(
+      'href',
+      '/study/sessions/s2',
+    );
     expect(primaryActions(container)).toHaveLength(1);
   });
 
   it('shows a light streak only when there is one', async () => {
-    todayMock.mockResolvedValue(today({ streak: { current: 3, longest: 5, lastActiveDay: '2026-09-28', todayDone: false } }));
+    todayMock.mockResolvedValue(
+      today({ streak: { current: 3, longest: 5, lastActiveDay: '2026-09-28', todayDone: false } }),
+    );
     const { unmount } = renderPage();
     expect(await screen.findByText('3 day study streak')).toBeInTheDocument();
     unmount();
 
-    todayMock.mockResolvedValue(today({ streak: { current: 0, longest: 0, lastActiveDay: null, todayDone: false } }));
+    todayMock.mockResolvedValue(
+      today({ streak: { current: 0, longest: 0, lastActiveDay: null, todayDone: false } }),
+    );
     renderPage();
     await screen.findByRole('heading', { name: 'Practice Osmosis' });
     expect(screen.queryByText(/day study streak/)).not.toBeInTheDocument();
   });
 
   it('says so when nothing needs attention, instead of inventing a plan', async () => {
-    todayMock.mockResolvedValue(today({ plan: { budgetMinutes: 25, minutes: 0, steps: [], adjustedForExam: false }, tasks: [], primary: null, recommended: undefined }));
+    todayMock.mockResolvedValue(
+      today({
+        plan: { budgetMinutes: 25, minutes: 0, steps: [], adjustedForExam: false },
+        tasks: [],
+        primary: null,
+        recommended: undefined,
+      }),
+    );
     renderPage();
     expect(await screen.findByText('Nothing is planned yet.')).toBeInTheDocument();
     expect(screen.getByText(/Nothing needs your attention right now/)).toBeInTheDocument();
@@ -210,7 +237,15 @@ describe('My Study — several subjects', () => {
     examDaysLeft: null,
     minutes: 10,
     steps: [],
-    next: step({ label: `Practice ${name}`, packId: `pack-${name}`, packTitle: name, subjectName: name, conceptId: null, conceptName: null, count: 10 }),
+    next: step({
+      label: `Practice ${name}`,
+      packId: `pack-${name}`,
+      packTitle: name,
+      subjectName: name,
+      conceptId: null,
+      conceptName: null,
+      count: 10,
+    }),
     ...overrides,
   });
 
@@ -226,14 +261,21 @@ describe('My Study — several subjects', () => {
     );
     renderPage();
 
-    const section = (await screen.findByRole('heading', { name: 'By subject' })).closest('section')!;
-    const headings = within(section).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
+    const section = (await screen.findByRole('heading', { name: 'By subject' })).closest(
+      'section',
+    )!;
+    const headings = within(section)
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent);
     // Not alphabetical and not a fixed subject order: exactly what the server ranked.
     expect(headings).toEqual(['Wiskunde', 'Biologie', 'Engels']);
     const first = within(section).getAllByRole('listitem')[0]!;
     expect(within(first).getByText('14 due', { exact: false })).toBeInTheDocument();
     expect(within(first).getByText(/Exam in 4 days/)).toBeInTheDocument();
-    expect(within(first).getByRole('link', { name: 'Wiskunde' })).toHaveAttribute('href', '/subjects/sub-Wiskunde');
+    expect(within(first).getByRole('link', { name: 'Wiskunde' })).toHaveAttribute(
+      'href',
+      '/subjects/sub-Wiskunde',
+    );
     expect(within(first).getByRole('link', { name: 'Start practice: Wiskunde' })).toHaveAttribute(
       'href',
       '/study-packs/pack-Wiskunde?tab=practice',
@@ -270,7 +312,9 @@ describe('My Study — older servers and failures', () => {
     const { container } = renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Practice Osmosis' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Start practice: Practice Osmosis' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Start practice: Practice Osmosis' }),
+    ).toBeInTheDocument();
     expect(primaryActions(container)).toHaveLength(1);
     // The minutes come from the task itself.
     expect(screen.getByText('You have 4 minutes planned.')).toBeInTheDocument();
@@ -283,7 +327,9 @@ describe('My Study — older servers and failures', () => {
     renderPage();
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('We could not load your plan for today. Your progress is safe.');
+    expect(alert).toHaveTextContent(
+      'We could not load your plan for today. Your progress is safe.',
+    );
     expect(screen.getByRole('heading', { name: 'My study material' })).toBeInTheDocument();
     await user.click(within(alert).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(todayMock).toHaveBeenCalledTimes(2));
@@ -295,19 +341,29 @@ describe('My Study — older servers and failures', () => {
     dashboardMock.mockRejectedValueOnce(new Error('Server down'));
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Could not load My Study' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Could not load My Study' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Server down')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Practice Osmosis' })).toBeInTheDocument();
   });
 
   it('falls back to the long-standing next action when the planner has nothing', async () => {
-    todayMock.mockResolvedValue({ date: '2026-09-29', tasks: [], exams: [], totalDue: 0, packs: [packSummary()] });
+    todayMock.mockResolvedValue({
+      date: '2026-09-29',
+      tasks: [],
+      exams: [],
+      totalDue: 0,
+      packs: [packSummary()],
+    });
     dueGroupsMock.mockResolvedValue([
       { setId: 'set-1', setTitle: 'Cells', subjectName: 'Biologie', dueCount: 6 } as never,
     ]);
     renderPage();
-    expect(await screen.findByText('6 cards are ready for review across your study packs.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('6 cards are ready for review across your study packs.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /start studying/i })).toBeInTheDocument();
   });
 });
@@ -317,7 +373,9 @@ describe('My Study — packs, material and first run', () => {
     todayMock.mockResolvedValue(today({ packs: [packSummary()] }));
     const { container } = renderPage();
 
-    const section = (await screen.findByRole('heading', { name: 'Your study packs' })).closest('section')!;
+    const section = (await screen.findByRole('heading', { name: 'Your study packs' })).closest(
+      'section',
+    )!;
     const card = within(section).getByRole('heading', { name: 'Biology H3' }).closest('article')!;
     expect(within(card).getByText(/0% mastered/)).toBeInTheDocument();
     expect(within(card).getByText('Nothing studied yet')).toBeInTheDocument();
@@ -330,12 +388,23 @@ describe('My Study — packs, material and first run', () => {
   it('continues the pack the student already worked on, with its exam countdown', async () => {
     todayMock.mockResolvedValue(
       today({
-        packs: [packSummary({ masteryPercent: 40, dueCards: 3, weakConcepts: 2, lastStudiedAt: '2026-09-28T10:00:00.000Z', examDaysLeft: 9 })],
+        packs: [
+          packSummary({
+            masteryPercent: 40,
+            dueCards: 3,
+            weakConcepts: 2,
+            lastStudiedAt: '2026-09-28T10:00:00.000Z',
+            examDaysLeft: 9,
+          }),
+        ],
       }),
     );
     renderPage();
     const card = (await screen.findByRole('heading', { name: 'Biology H3' })).closest('article')!;
-    expect(within(card).getByRole('link', { name: 'Continue learning' })).toHaveAttribute('href', '/study-packs/pack-1?tab=learn');
+    expect(within(card).getByRole('link', { name: 'Continue learning' })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=learn',
+    );
     expect(within(card).getByText('3 due')).toBeInTheDocument();
     expect(within(card).getByText('Exam in 9 days')).toBeInTheDocument();
   });
@@ -349,10 +418,17 @@ describe('My Study — packs, material and first run', () => {
   });
 
   it('shows due flashcards from sets in the review queue, and hides the queue when nothing is due', async () => {
-    dueGroupsMock.mockResolvedValue([{ setId: 'set-1', setTitle: 'Cells', subjectName: null, dueCount: 6 } as never]);
+    dueGroupsMock.mockResolvedValue([
+      { setId: 'set-1', setTitle: 'Cells', subjectName: null, dueCount: 6 } as never,
+    ]);
     const { unmount } = renderPage();
-    const queue = (await screen.findByRole('heading', { name: 'Review queue' })).closest('section')!;
-    expect(within(queue).getByRole('link', { name: /Cells/ })).toHaveAttribute('href', '/sets/set-1/study');
+    const queue = (await screen.findByRole('heading', { name: 'Review queue' })).closest(
+      'section',
+    )!;
+    expect(within(queue).getByRole('link', { name: /Cells/ })).toHaveAttribute(
+      'href',
+      '/sets/set-1/study',
+    );
     expect(within(queue).getByText('6 due')).toBeInTheDocument();
     unmount();
 
@@ -363,12 +439,16 @@ describe('My Study — packs, material and first run', () => {
   });
 
   it('first run sells the first study pack instead of showing an empty plan', async () => {
-    todayMock.mockResolvedValue(today({ packs: [], tasks: [], plan: undefined, primary: null, recommended: undefined }));
+    todayMock.mockResolvedValue(
+      today({ packs: [], tasks: [], plan: undefined, primary: null, recommended: undefined }),
+    );
     const { container } = renderPage();
 
     expect(await screen.findByText('Start your first Study Pack')).toBeInTheDocument();
     expect(
-      screen.getByText('Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system.'),
+      screen.getByText(
+        'Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system.',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument();
     expect(screen.queryByText(/No study sets found/i)).not.toBeInTheDocument();

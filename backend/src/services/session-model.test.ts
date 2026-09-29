@@ -100,7 +100,9 @@ describe('labels and progress', () => {
 
   it('describes the position: "Question 6 of 10", concepts for Learn', () => {
     expect(positionLabel(session({ currentPosition: 5 }))).toBe('Question 6 of 10');
-    expect(positionLabel(session({ type: 'learn', currentPosition: 1, itemCount: 4 }))).toBe('Concept 2 of 4');
+    expect(positionLabel(session({ type: 'learn', currentPosition: 1, itemCount: 4 }))).toBe(
+      'Concept 2 of 4',
+    );
     // Never beyond the last item.
     expect(currentPositionNumber(session({ currentPosition: 99 }))).toBe(10);
   });
@@ -134,7 +136,12 @@ describe('labels and progress', () => {
         { position: 2, status: 'pending' },
       ]),
     ).toBe(2);
-    expect(firstOpenPosition([{ position: 0, status: 'answered' }, { position: 1, status: 'answered' }])).toBe(1);
+    expect(
+      firstOpenPosition([
+        { position: 0, status: 'answered' },
+        { position: 1, status: 'answered' },
+      ]),
+    ).toBe(1);
   });
 
   it('estimates minutes from the shared per-item constants', () => {

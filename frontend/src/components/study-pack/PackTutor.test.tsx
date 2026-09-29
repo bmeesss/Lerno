@@ -32,7 +32,11 @@ function renderTutor(detail: StudyPackDetail = PACK, focusConceptId?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  tutorMock.mockResolvedValue({ reply: 'An answer from your notes.', basedOnMaterial: true, citations: [] });
+  tutorMock.mockResolvedValue({
+    reply: 'An answer from your notes.',
+    basedOnMaterial: true,
+    citations: [],
+  });
 });
 
 describe('PackTutor', () => {
@@ -49,8 +53,12 @@ describe('PackTutor', () => {
 
   it('suggests questions about the weakest concept when nothing is in focus', () => {
     renderTutor();
-    expect(screen.getByRole('button', { name: 'Explain Osmosis in simple words' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Why do I keep getting Diffusion wrong?' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Explain Osmosis in simple words' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Why do I keep getting Diffusion wrong?' }),
+    ).toBeInTheDocument();
   });
 
   it('knows the concept when it is opened from one, and sends it as context', async () => {
@@ -58,7 +66,9 @@ describe('PackTutor', () => {
     renderTutor(PACK, 'c2');
     expect(screen.getByRole('heading', { name: 'AI Tutor · Diffusion' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Give me an example of Diffusion' }));
-    expect(tutorMock).toHaveBeenCalledWith('pack-1', 'Give me an example of Diffusion', [], { conceptId: 'c2' });
+    expect(tutorMock).toHaveBeenCalledWith('pack-1', 'Give me an example of Diffusion', [], {
+      conceptId: 'c2',
+    });
   });
 
   it('asks for a readable source first instead of pretending', () => {

@@ -51,7 +51,11 @@ export function TutorDrawer({
   }, [open]);
 
   return (
-    <Modal open={open} title={conceptName ? `AI Tutor · ${conceptName}` : 'AI Tutor'} onClose={onClose}>
+    <Modal
+      open={open}
+      title={conceptName ? `AI Tutor · ${conceptName}` : 'AI Tutor'}
+      onClose={onClose}
+    >
       <div className="tutor-drawer">
         <p className="muted tutor-drawer-note">
           {conceptName

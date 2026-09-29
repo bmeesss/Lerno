@@ -3,7 +3,9 @@ import { VerdictPill } from '../study-pack/PackBits';
 import type { SessionItem } from '../../types';
 
 /** Where an answer comes from, in the student's words ("Biology.md · section 2"). */
-export function sourceLine(source: { title: string | null; ref: string | null } | null): string | null {
+export function sourceLine(
+  source: { title: string | null; ref: string | null } | null,
+): string | null {
   if (!source || (!source.title && !source.ref)) return null;
   return [source.title, source.ref].filter(Boolean).join(' · ');
 }
@@ -56,7 +58,10 @@ export const FeedbackPanel = forwardRef<HTMLDivElement, { item: SessionItem; act
             <span className="session-feedback-label">Concept</span>
             {item.conceptName}
             {moved ? (
-              <span className="session-mastery-change" aria-label={`Mastery ${moved.before}% to ${moved.after}%`}>
+              <span
+                className="session-mastery-change"
+                aria-label={`Mastery ${moved.before}% to ${moved.after}%`}
+              >
                 {moved.before}% → {moved.after}%
               </span>
             ) : null}

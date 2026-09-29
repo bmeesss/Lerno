@@ -29,10 +29,26 @@ const STATS: ProgressStats = {
   longestStreak: 5,
   lastActiveDay: '2026-09-26',
   subjectProgress: [
-    { subjectId: 'sub-1', subjectName: 'Biology', totalCards: 10, learnedCards: 6, dueCards: 2, accuracy: 0.8 },
+    {
+      subjectId: 'sub-1',
+      subjectName: 'Biology',
+      totalCards: 10,
+      learnedCards: 6,
+      dueCards: 2,
+      accuracy: 0.8,
+    },
   ],
   setProgress: [
-    { subjectId: null, subjectName: 'Biology', setId: 'set-1', setTitle: 'Cells', totalCards: 10, learnedCards: 6, dueCards: 2, accuracy: 0.8 },
+    {
+      subjectId: null,
+      subjectName: 'Biology',
+      setId: 'set-1',
+      setTitle: 'Cells',
+      totalCards: 10,
+      learnedCards: 6,
+      dueCards: 2,
+      accuracy: 0.8,
+    },
   ],
 };
 
@@ -81,7 +97,8 @@ describe('ProgressPage — overview', () => {
     renderPage();
     await screen.findByRole('heading', { level: 1, name: 'Progress' });
 
-    const stat = (label: string) => screen.getByText(label, { selector: '.stat-label' }).parentElement!;
+    const stat = (label: string) =>
+      screen.getByText(label, { selector: '.stat-label' }).parentElement!;
     expect(stat('Overall mastery')).toHaveTextContent('62%');
     expect(stat('Overall mastery')).toHaveTextContent('Across 40 concepts');
     expect(stat('Study time')).toHaveTextContent('1 h 5 min');
@@ -96,7 +113,9 @@ describe('ProgressPage — overview', () => {
   it('reports recent improvement and a streak made of finished sessions', async () => {
     renderPage();
     await screen.findByRole('heading', { level: 1, name: 'Progress' });
-    const improvement = screen.getByText('Recent improvement', { selector: '.stat-label' }).parentElement!;
+    const improvement = screen.getByText('Recent improvement', {
+      selector: '.stat-label',
+    }).parentElement!;
     expect(improvement).toHaveTextContent('+8 pts');
     expect(improvement).toHaveTextContent('Mastery over the last 7 days');
     const streak = screen.getByText('Study streak', { selector: '.stat-label' }).parentElement!;
@@ -106,7 +125,9 @@ describe('ProgressPage — overview', () => {
 
   it('lists the concepts that improved, old to new', async () => {
     renderPage();
-    const improved = (await screen.findByRole('heading', { name: 'Improved recently' })).closest('section')!;
+    const improved = (await screen.findByRole('heading', { name: 'Improved recently' })).closest(
+      'section',
+    )!;
     expect(within(improved).getByText('Osmosis')).toBeInTheDocument();
     expect(within(improved).getByText('42% → 61%')).toBeInTheDocument();
   });
@@ -120,7 +141,9 @@ describe('ProgressPage — overview', () => {
     );
     renderPage();
     await screen.findByRole('heading', { level: 1, name: 'Progress' });
-    const improvement = screen.getByText('Recent improvement', { selector: '.stat-label' }).parentElement!;
+    const improvement = screen.getByText('Recent improvement', {
+      selector: '.stat-label',
+    }).parentElement!;
     expect(improvement).toHaveTextContent('—');
     expect(improvement).toHaveTextContent('Shown after 3 days of study');
     expect(screen.queryByRole('heading', { name: 'Improved recently' })).not.toBeInTheDocument();
@@ -129,7 +152,10 @@ describe('ProgressPage — overview', () => {
 
   it('has one primary action once there is something to continue', async () => {
     const { container } = renderPage();
-    expect(await screen.findByRole('link', { name: 'Continue studying' })).toHaveAttribute('href', '/study');
+    expect(await screen.findByRole('link', { name: 'Continue studying' })).toHaveAttribute(
+      'href',
+      '/study',
+    );
     expect(container.querySelectorAll('.btn-primary')).toHaveLength(1);
   });
 });
@@ -140,7 +166,10 @@ describe('ProgressPage — study packs', () => {
     const pack = (await screen.findByRole('link', { name: 'Biology H3' })).closest('li')!;
 
     expect(within(pack).getByText('Biology')).toBeInTheDocument();
-    expect(within(pack).getByRole('progressbar', { name: 'Mastery mastery' })).toHaveAttribute('aria-valuenow', '62');
+    expect(within(pack).getByRole('progressbar', { name: 'Mastery mastery' })).toHaveAttribute(
+      'aria-valuenow',
+      '62',
+    );
     expect(within(pack).getByText('Exam in 9 days')).toBeInTheDocument();
     expect(within(pack).getByText('4 due')).toBeInTheDocument();
 
@@ -172,19 +201,32 @@ describe('ProgressPage — study packs', () => {
         packs: [
           {
             ...base.packs[0]!,
-            trend: { hasEnoughData: false, daysRecorded: 1, minDays: 3, points: [{ day: '2026-09-29', masteryPercent: 62 }], changePercent: null, direction: null },
+            trend: {
+              hasEnoughData: false,
+              daysRecorded: 1,
+              minDays: 3,
+              points: [{ day: '2026-09-29', masteryPercent: 62 }],
+              changePercent: null,
+              direction: null,
+            },
           },
         ],
       }),
     );
     renderPage();
-    expect(await screen.findByText('A trend appears after 3 days of study — 1 so far.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('A trend appears after 3 days of study — 1 so far.'),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('says so when there are no weak or strong concepts', async () => {
     const base = studyProgress();
-    studyMock.mockResolvedValue(studyProgress({ packs: [{ ...base.packs[0]!, weakConcepts: [], strongConcepts: [], lastActivityAt: null }] }));
+    studyMock.mockResolvedValue(
+      studyProgress({
+        packs: [{ ...base.packs[0]!, weakConcepts: [], strongConcepts: [], lastActivityAt: null }],
+      }),
+    );
     renderPage();
     expect(await screen.findByText('No weak concepts.')).toBeInTheDocument();
     expect(screen.getByText('Nothing above 85% yet.')).toBeInTheDocument();
@@ -225,7 +267,9 @@ describe('ProgressPage — empty and error states', () => {
     studyMock.mockRejectedValueOnce(new Error('Server down'));
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Could not load progress' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Could not load progress' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Server down')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Progress' })).toBeInTheDocument();
@@ -237,7 +281,9 @@ describe('ProgressPage — flashcards and quizzes', () => {
   it('keeps labelling flashcard accuracy explicitly and shows the today strip', async () => {
     renderPage();
     expect(await screen.findByText('Flashcard accuracy')).toBeInTheDocument();
-    expect(await screen.findByText('Quiz accuracy', { selector: '.stat-label' })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Quiz accuracy', { selector: '.stat-label' }),
+    ).toBeInTheDocument();
     expect(await screen.findByText(/80% card accuracy/)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getByLabelText('4 / 10 cards')).toBeInTheDocument();
@@ -259,7 +305,11 @@ describe('ProgressPage — flashcards and quizzes', () => {
   it('still shows the study overview when the flashcard statistics fail', async () => {
     getMock.mockRejectedValue(new Error('offline'));
     renderPage();
-    expect(await screen.findByText('Overall mastery', { selector: '.stat-label' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Flashcards and quizzes' })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Overall mastery', { selector: '.stat-label' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Flashcards and quizzes' }),
+    ).not.toBeInTheDocument();
   });
 });

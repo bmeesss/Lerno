@@ -134,5 +134,9 @@ export function sourceExcerptFor(
       match: 'mention',
     };
   }
-  return { text: text.slice(0, EXCERPT_CHARS).trim(), ref: concept.refLabel ?? null, match: 'start' };
+  return {
+    text: text.slice(0, EXCERPT_CHARS).trim(),
+    ref: concept.refLabel ?? null,
+    match: 'start',
+  };
 }

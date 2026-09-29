@@ -44,10 +44,13 @@ export const studySessionService = {
     }),
 
   get: (sessionId: string) =>
-    api.get<{ session: LearningSession }>(`/study-sessions/${sessionId}`).then((data) => data.session),
+    api
+      .get<{ session: LearningSession }>(`/study-sessions/${sessionId}`)
+      .then((data) => data.session),
 
   /** Open sessions ("Continue where you left off"). */
-  active: () => api.get<{ sessions: ResumeCard[] }>('/study-sessions/active').then((data) => data.sessions),
+  active: () =>
+    api.get<{ sessions: ResumeCard[] }>('/study-sessions/active').then((data) => data.sessions),
 
   answer: (sessionId: string, itemId: string, answer: string, responseTimeMs?: number) =>
     api.post<SessionItemResponse>(`/study-sessions/${sessionId}/items/${itemId}/answer`, {
@@ -70,17 +73,26 @@ export const studySessionService = {
     answers: { itemId: string; answer: string }[],
     currentPosition?: number,
   ) =>
-    api.put<SessionSaveResponse>(`/study-sessions/${sessionId}/answers`, { answers, currentPosition }),
+    api.put<SessionSaveResponse>(`/study-sessions/${sessionId}/answers`, {
+      answers,
+      currentPosition,
+    }),
 
   complete: (sessionId: string, answers?: { itemId: string; answer: string }[]) =>
     api
-      .post<{ session: LearningSession }>(`/study-sessions/${sessionId}/complete`, answers ? { answers } : {})
+      .post<{ session: LearningSession }>(
+        `/study-sessions/${sessionId}/complete`,
+        answers ? { answers } : {},
+      )
       .then((data) => data.session),
 
   abandon: (sessionId: string) =>
-    api.post<{ session: LearningSession }>(`/study-sessions/${sessionId}/abandon`).then((data) => data.session),
+    api
+      .post<{ session: LearningSession }>(`/study-sessions/${sessionId}/abandon`)
+      .then((data) => data.session),
 
-  mistakes: (sessionId: string) => api.get<SessionMistakes>(`/study-sessions/${sessionId}/mistakes`),
+  mistakes: (sessionId: string) =>
+    api.get<SessionMistakes>(`/study-sessions/${sessionId}/mistakes`),
 
   /** "Show source": the passage a concept comes from. */
   conceptSource: (packId: string, conceptId: string) =>

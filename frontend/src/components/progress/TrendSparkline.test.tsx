@@ -30,7 +30,13 @@ describe('TrendSparkline', () => {
 
   it('draws nothing without enough data — no fake chart', () => {
     const { container } = render(
-      <TrendSparkline trend={trend({ hasEnoughData: false, daysRecorded: 1, points: [{ day: '2026-09-29', masteryPercent: 10 }] })} />,
+      <TrendSparkline
+        trend={trend({
+          hasEnoughData: false,
+          daysRecorded: 1,
+          points: [{ day: '2026-09-29', masteryPercent: 10 }],
+        })}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -60,8 +66,12 @@ describe('TrendSparkline', () => {
 describe('trendSummary', () => {
   it('reports the change with the day it started from', () => {
     expect(trendSummary(trend())).toBe(`Up 14 points since ${formatDay('2026-09-22')}`);
-    expect(trendSummary(trend({ direction: 'down', changePercent: -6 }))).toMatch(/^Down 6 points since /);
-    expect(trendSummary(trend({ direction: 'steady', changePercent: 0 }))).toMatch(/^Steady since /);
+    expect(trendSummary(trend({ direction: 'down', changePercent: -6 }))).toMatch(
+      /^Down 6 points since /,
+    );
+    expect(trendSummary(trend({ direction: 'steady', changePercent: 0 }))).toMatch(
+      /^Steady since /,
+    );
   });
 
   it('explains honestly why there is no trend yet', () => {

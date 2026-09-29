@@ -130,7 +130,9 @@ export function sessionProgress(
 }
 
 /** Index of the first item that still needs the student's attention. */
-export function firstOpenPosition(items: Pick<LearningSessionItemRecord, 'status' | 'position'>[]): number {
+export function firstOpenPosition(
+  items: Pick<LearningSessionItemRecord, 'status' | 'position'>[],
+): number {
   const open = items
     .filter((item) => item.status === 'pending')
     .sort((a, b) => a.position - b.position)[0];

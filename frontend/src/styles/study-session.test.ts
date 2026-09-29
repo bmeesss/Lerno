@@ -24,15 +24,23 @@ function blocks(css: string, selector: string): string[] {
 }
 
 function px(block: string, property: string): number | null {
-  const match = block.match(new RegExp(`(?:^|[;\\s])${escapeRegExp(property)}:\\s*(\\d+(?:\\.\\d+)?)px`));
+  const match = block.match(
+    new RegExp(`(?:^|[;\\s])${escapeRegExp(property)}:\\s*(\\d+(?:\\.\\d+)?)px`),
+  );
   return match ? Number(match[1]) : null;
 }
 
 describe('study experience styles', () => {
   it('are loaded after the base styles, so they can build on them', () => {
-    const order = ['tokens.css', 'base.css', 'components.css', 'layout.css', 'study-pack.css', 'study-session.css', 'study-planner.css'].map(
-      (file) => main.indexOf(`./styles/${file}`),
-    );
+    const order = [
+      'tokens.css',
+      'base.css',
+      'components.css',
+      'layout.css',
+      'study-pack.css',
+      'study-session.css',
+      'study-planner.css',
+    ].map((file) => main.indexOf(`./styles/${file}`));
     for (const index of order) expect(index).toBeGreaterThan(-1);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
@@ -58,7 +66,12 @@ describe('study experience styles', () => {
         const selectors = match[1]!.split(',').map((entry) => entry.trim());
         for (const selector of selectors) {
           // Headings with tabindex="-1" receive focus from the page so screen readers start there.
-          if (!/^(\.session-question|\.session-result-title|#mistakes-heading)(:focus)?$/.test(selector)) offenders.push(selector);
+          if (
+            !/^(\.session-question|\.session-result-title|#mistakes-heading)(:focus)?$/.test(
+              selector,
+            )
+          )
+            offenders.push(selector);
         }
       }
       expect(offenders).toEqual([]);
@@ -108,7 +121,11 @@ describe('study session screens on a phone', () => {
   });
 
   it('shows keyboard focus on cards that hide their native radio ring', () => {
-    for (const selector of ['.session-option:focus-within', '.test-mode:focus-within', '.learn-rating-button:focus-visible']) {
+    for (const selector of [
+      '.session-option:focus-within',
+      '.test-mode:focus-within',
+      '.learn-rating-button:focus-visible',
+    ]) {
       const [block] = blocks(css, selector);
       expect(block, selector).toMatch(/outline:\s*2px solid var\(--accent\)/);
     }

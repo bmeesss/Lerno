@@ -5,7 +5,12 @@ import { IconArrowRight, IconFlag, IconSparkles } from '../../components/ui/Icon
 import { MasteryMeter } from '../../components/study-pack/PackBits';
 import { useAsync } from '../../hooks/useAsync';
 import { examInLabel, relativeDay } from '../../lib/sessionCopy';
-import { formatExamDate, sessionHref, taskActionLabel, todayTaskHref } from '../../lib/studyPackRoutes';
+import {
+  formatExamDate,
+  sessionHref,
+  taskActionLabel,
+  todayTaskHref,
+} from '../../lib/studyPackRoutes';
 import { stepReason } from '../../lib/todayPlan';
 import { studySetService } from '../../services/studySetService';
 import { subjectService } from '../../services/subjectService';
@@ -16,7 +21,12 @@ interface SubjectData {
   sets: StudySetSummary[];
 }
 
-const ACTIVITY_NOUN = { learn: 'Learn', practice: 'Practice', review: 'Review', test: 'Test' } as const;
+const ACTIVITY_NOUN = {
+  learn: 'Learn',
+  practice: 'Practice',
+  review: 'Review',
+  test: 'Test',
+} as const;
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -50,7 +60,11 @@ export function SubjectDetailPage() {
     return (
       <EmptyState
         title={missing ? 'Subject not found' : 'Could not load this subject'}
-        description={missing ? 'It may have been deleted, or it belongs to someone else.' : (error ?? 'Try again in a moment.')}
+        description={
+          missing
+            ? 'It may have been deleted, or it belongs to someone else.'
+            : (error ?? 'Try again in a moment.')
+        }
         action={
           <div className="session-empty-actions">
             {missing ? null : <Button onClick={reload}>Try again</Button>}
@@ -149,11 +163,11 @@ export function SubjectDetailPage() {
               label="Mastery"
               value={totals.masteryPercent === null ? 'Not started' : `${totals.masteryPercent}%`}
             />
-            <Fact label="Due" value={`${totals.dueCards} card${totals.dueCards === 1 ? '' : 's'}`} />
             <Fact
-              label="Weak concepts"
-              value={String(totals.weakConcepts)}
+              label="Due"
+              value={`${totals.dueCards} card${totals.dueCards === 1 ? '' : 's'}`}
             />
+            <Fact label="Weak concepts" value={String(totals.weakConcepts)} />
             <Fact label="Exams" value={exams.length > 0 ? String(exams.length) : 'None set'} />
           </dl>
         </section>
@@ -178,8 +192,20 @@ export function SubjectDetailPage() {
                       <Link to={`/study-packs/${pack.packId}`}>{pack.title}</Link>
                     </h3>
                     <div className="subject-pack-badges">
-                      {pack.dueCards > 0 ? <Badge variant="accent">{pack.dueCards} due</Badge> : null}
-                      {exam ? <Badge variant={pack.examDaysLeft !== null && pack.examDaysLeft <= 7 ? 'warning' : 'default'}>{exam}</Badge> : null}
+                      {pack.dueCards > 0 ? (
+                        <Badge variant="accent">{pack.dueCards} due</Badge>
+                      ) : null}
+                      {exam ? (
+                        <Badge
+                          variant={
+                            pack.examDaysLeft !== null && pack.examDaysLeft <= 7
+                              ? 'warning'
+                              : 'default'
+                          }
+                        >
+                          {exam}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                   <MasteryMeter percent={pack.masteryPercent} compact />
@@ -199,7 +225,9 @@ export function SubjectDetailPage() {
                               aria-label={`Practice ${concept.name} (${concept.masteryPercent}%)`}
                             >
                               <span>{concept.name}</span>
-                              <span className="session-concept-mastery">{concept.masteryPercent}%</span>
+                              <span className="session-concept-mastery">
+                                {concept.masteryPercent}%
+                              </span>
                             </Link>
                           </li>
                         ))}
@@ -240,7 +268,9 @@ export function SubjectDetailPage() {
           <div className="section-title">
             <div>
               <h2 id="subject-weak-title">Needs attention</h2>
-              <p className="muted">The weakest concepts across this subject. Tap one to practice it.</p>
+              <p className="muted">
+                The weakest concepts across this subject. Tap one to practice it.
+              </p>
             </div>
           </div>
           <ul className="session-concept-chips" role="list">
@@ -303,7 +333,9 @@ export function SubjectDetailPage() {
             ))}
           </ul>
         ) : (
-          <p className="muted">No finished sessions yet. Your first practice or test shows up here.</p>
+          <p className="muted">
+            No finished sessions yet. Your first practice or test shows up here.
+          </p>
         )}
       </section>
 

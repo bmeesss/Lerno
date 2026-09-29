@@ -42,11 +42,7 @@ export interface SeededPack {
   conceptByName: (name: string) => ConceptRecord;
 }
 
-export async function seedPack(
-  db: Database,
-  userId: string,
-  spec: PackSpec,
-): Promise<SeededPack> {
+export async function seedPack(db: Database, userId: string, spec: PackSpec): Promise<SeededPack> {
   const pack = await db.packs.create({
     ownerId: userId,
     subjectId: spec.subject?.id ?? null,

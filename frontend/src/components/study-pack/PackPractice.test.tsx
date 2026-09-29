@@ -30,7 +30,10 @@ function pack(overrides: Record<string, unknown> = {}): StudyPackDetail {
   } as unknown as StudyPackDetail;
 }
 
-function renderPractice(detail: StudyPackDetail, props: { review?: boolean; focusConceptId?: string } = {}) {
+function renderPractice(
+  detail: StudyPackDetail,
+  props: { review?: boolean; focusConceptId?: string } = {},
+) {
   const onChanged = vi.fn();
   render(
     <MemoryRouter>
@@ -52,25 +55,38 @@ describe('PackPractice', () => {
     renderPractice(pack());
     expect(await screen.findByRole('heading', { name: 'Practice Biology' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start practice/i })).toBeInTheDocument();
-    expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'practice', conceptId: undefined }));
-    expect(screen.getByRole('link', { name: /take a test instead/i })).toHaveAttribute('href', '/?tab=test');
+    expect(previewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'practice', conceptId: undefined }),
+    );
+    expect(screen.getByRole('link', { name: /take a test instead/i })).toHaveAttribute(
+      'href',
+      '/?tab=test',
+    );
   });
 
   it('practises one concept when the link names it', async () => {
     renderPractice(pack(), { focusConceptId: 'c1' });
     await screen.findByRole('heading', { name: 'Practice Biology' });
-    expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'practice', conceptId: 'c1' }));
+    expect(previewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'practice', conceptId: 'c1' }),
+    );
   });
 
   it('starts a review of due concepts in review mode', async () => {
     previewMock.mockResolvedValue(
-      preview({ type: 'review', title: 'Review Biology', focus: { label: 'Focus: concepts due for review', conceptId: null, conceptName: null } }),
+      preview({
+        type: 'review',
+        title: 'Review Biology',
+        focus: { label: 'Focus: concepts due for review', conceptId: null, conceptName: null },
+      }),
     );
     renderPractice(pack(), { review: true });
     expect(await screen.findByRole('heading', { name: 'Review Biology' })).toBeInTheDocument();
     expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'review' }));
     expect(screen.getByRole('button', { name: /start review/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /generate more questions/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /generate more questions/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('offers to generate questions when the pack has none, and never starts a session', async () => {
@@ -82,7 +98,9 @@ describe('PackPractice', () => {
 
   it('lets only the owner generate, and needs a readable source first', () => {
     renderPractice(pack({ isOwner: false, counts: { practiceQuestions: 0, readySources: 1 } }));
-    expect(screen.queryByRole('button', { name: /generate practice questions/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /generate practice questions/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows generated questions for review before anything is saved', async () => {

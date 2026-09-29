@@ -73,10 +73,20 @@ describe('daily budget', () => {
   });
 
   it('fits activities to the budget, keeping the first one and skipping what does not fit', () => {
-    const items = [{ id: 'a', minutes: 30 }, { id: 'b', minutes: 12 }, { id: 'c', minutes: 3 }, { id: 'd', minutes: 2 }];
+    const items = [
+      { id: 'a', minutes: 30 },
+      { id: 'b', minutes: 12 },
+      { id: 'c', minutes: 3 },
+      { id: 'd', minutes: 2 },
+    ];
     // The first item is always kept, even when it alone is over budget.
     expect(fitToBudget(items, 25).map((item) => item.id)).toEqual(['a']);
-    const small = [{ id: 'a', minutes: 9 }, { id: 'b', minutes: 20 }, { id: 'c', minutes: 6 }, { id: 'd', minutes: 4 }];
+    const small = [
+      { id: 'a', minutes: 9 },
+      { id: 'b', minutes: 20 },
+      { id: 'c', minutes: 6 },
+      { id: 'd', minutes: 4 },
+    ];
     expect(fitToBudget(small, 25).map((item) => item.id)).toEqual(['a', 'c', 'd']);
     expect(fitToBudget(small, 25, 2).map((item) => item.id)).toEqual(['a', 'c']);
     expect(fitToBudget([], 25)).toEqual([]);
@@ -88,7 +98,13 @@ describe("today's numbered plan", () => {
     const plan = buildTodayPlan(
       [
         task({ label: 'Practice Osmosis', minutes: 6 }),
-        task({ type: 'learn', label: 'Learn Diffusion', sessionType: 'learn', conceptId: 'c2', minutes: 9 }),
+        task({
+          type: 'learn',
+          label: 'Learn Diffusion',
+          sessionType: 'learn',
+          conceptId: 'c2',
+          minutes: 9,
+        }),
         task({ type: 'test', label: 'Test', sessionType: 'test', conceptId: null, minutes: 14 }),
         task({ type: 'practice', label: 'Practice Mitosis', conceptId: 'c3', minutes: 6 }),
       ],
@@ -108,7 +124,9 @@ describe("today's numbered plan", () => {
     const duplicated = buildTodayPlan([task(), task()], 25);
     expect(duplicated.steps).toHaveLength(1);
     expect(buildTodayPlan([addMaterialTask()], 25).steps[0]!.type).toBe('add-material');
-    expect(buildTodayPlan([addMaterialTask(), task()], 25).steps.map((step) => step.type)).toEqual(['practice']);
+    expect(buildTodayPlan([addMaterialTask(), task()], 25).steps.map((step) => step.type)).toEqual([
+      'practice',
+    ]);
   });
 
   it('flags the plan as adjusted for the exam only when an exam within a month shaped it', () => {
@@ -144,7 +162,7 @@ describe('exam banner', () => {
     expect(examMessage('Biology', 1)).toBe('Biology exam is tomorrow');
   });
 
-  it('counts days by the student\'s calendar, not by UTC', () => {
+  it("counts days by the student's calendar, not by UTC", () => {
     const lateUtc = new Date('2026-10-07T23:30:00.000Z');
     expect(nearestExam([packs[0]!], lateUtc, 'UTC')!.daysLeft).toBe(1);
     expect(nearestExam([packs[0]!], lateUtc, 'Europe/Amsterdam')!.daysLeft).toBe(0);
@@ -169,14 +187,26 @@ describe('Today by subject', () => {
   }
 
   it('orders subjects by the engine ranking: the one with the exam first', async () => {
-    expect((await twoSubjects('Biology')).map((row) => row.subjectName)).toEqual(['Biology', 'History']);
+    expect((await twoSubjects('Biology')).map((row) => row.subjectName)).toEqual([
+      'Biology',
+      'History',
+    ]);
     // Swap the exam: the order follows, nothing is hardcoded.
-    expect((await twoSubjects('History')).map((row) => row.subjectName)).toEqual(['History', 'Biology']);
+    expect((await twoSubjects('History')).map((row) => row.subjectName)).toEqual([
+      'History',
+      'Biology',
+    ]);
   });
 
   it('describes each subject with its own steps, mastery and exam', async () => {
     const [first, second] = await twoSubjects('Biology');
-    expect(first).toMatchObject({ subjectName: 'Biology', packs: 1, weakConcepts: 1, masteryPercent: 20, examDaysLeft: 7 });
+    expect(first).toMatchObject({
+      subjectName: 'Biology',
+      packs: 1,
+      weakConcepts: 1,
+      masteryPercent: 20,
+      examDaysLeft: 7,
+    });
     expect(first!.steps.map((step) => step.order)).toEqual([1]);
     expect(second).toMatchObject({ subjectName: 'History', examDaysLeft: null });
     expect(second!.steps.map((step) => step.order)).toEqual([2]);
@@ -185,7 +215,11 @@ describe('Today by subject', () => {
 });
 
 describe('exam planner', () => {
-  const concept = (name: string, position: number, importance: number | null = null): ConceptRecord => ({
+  const concept = (
+    name: string,
+    position: number,
+    importance: number | null = null,
+  ): ConceptRecord => ({
     id: name,
     packId: 'p',
     sourceId: null,
@@ -200,7 +234,11 @@ describe('exam planner', () => {
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
   });
-  const state = (mastery: number, attempts = 3, nextReviewAt: string | null = daysAhead(3)): MasteryState => ({
+  const state = (
+    mastery: number,
+    attempts = 3,
+    nextReviewAt: string | null = daysAhead(3),
+  ): MasteryState => ({
     ...emptyMastery(),
     mastery,
     attempts,
@@ -239,8 +277,21 @@ describe('exam planner', () => {
       daysSinceStudied: 1,
       recentMistakes: new Map(),
       liveTasks: [
-        task({ label: 'Practice Osmosis', conceptId: 'Osmosis', conceptName: 'Osmosis', minutes: 6 }),
-        task({ type: 'learn', label: 'Learn Meiosis', sessionType: 'learn', conceptId: 'Meiosis', conceptName: 'Meiosis', count: 3, minutes: 9 }),
+        task({
+          label: 'Practice Osmosis',
+          conceptId: 'Osmosis',
+          conceptName: 'Osmosis',
+          minutes: 6,
+        }),
+        task({
+          type: 'learn',
+          label: 'Learn Meiosis',
+          sessionType: 'learn',
+          conceptId: 'Meiosis',
+          conceptName: 'Meiosis',
+          count: 3,
+          minutes: 9,
+        }),
       ],
       now: NOW,
       ...overrides,
@@ -261,9 +312,12 @@ describe('exam planner', () => {
     }
   });
 
-  it('starts from today\'s live plan, so the plan and Today agree', () => {
+  it("starts from today's live plan, so the plan and Today agree", () => {
     const plan = planStudyDays(input());
-    expect(plan.sessions[0]!.tasks!.map((t) => t.label)).toEqual(['Practice Osmosis', 'Learn Meiosis']);
+    expect(plan.sessions[0]!.tasks!.map((t) => t.label)).toEqual([
+      'Practice Osmosis',
+      'Learn Meiosis',
+    ]);
   });
 
   it('teaches every concept that is not known yet exactly once before the exam', () => {
@@ -304,9 +358,15 @@ describe('exam planner', () => {
 
   it('adds a checkpoint test in the middle of longer plans, not in short ones', () => {
     const long = planStudyDays(input());
-    expect(long.sessions.slice(1, -1).some((s) => s.tasks!.some((t) => t.type === 'test' && t.mode === 'quick10'))).toBe(true);
+    expect(
+      long.sessions
+        .slice(1, -1)
+        .some((s) => s.tasks!.some((t) => t.type === 'test' && t.mode === 'quick10')),
+    ).toBe(true);
     const short = planStudyDays(input({ days: 3, examDaysLeft: 3 }));
-    expect(short.sessions.slice(1, -1).some((s) => s.tasks!.some((t) => t.type === 'test'))).toBe(false);
+    expect(short.sessions.slice(1, -1).some((s) => s.tasks!.some((t) => t.type === 'test'))).toBe(
+      false,
+    );
   });
 
   it('puts the exam simulation in a one-day plan (exam tomorrow) but not on exam day itself', () => {
@@ -336,7 +396,10 @@ describe('exam planner', () => {
     );
     expect(plan.overview).toMatch(/do not fit before the exam/);
     // The most important concept is not left for last.
-    const learnLabels = plan.sessions.flatMap((s) => s.tasks!).filter((t) => t.type === 'learn').map((t) => t.label);
+    const learnLabels = plan.sessions
+      .flatMap((s) => s.tasks!)
+      .filter((t) => t.type === 'learn')
+      .map((t) => t.label);
     expect(learnLabels.join(' ')).toContain('Topic 12');
   });
 
@@ -371,7 +434,9 @@ describe('exam planner', () => {
   });
 
   it('turns engine tasks into plan tasks and skips setup chores', () => {
-    expect(toPlanTask(task({ type: 'review', sessionType: null, label: 'Review 12 cards' }))!.type).toBe('cards');
+    expect(
+      toPlanTask(task({ type: 'review', sessionType: null, label: 'Review 12 cards' }))!.type,
+    ).toBe('cards');
     expect(toPlanTask(task({ type: 'review', sessionType: 'review' }))!.type).toBe('review');
     expect(toPlanTask(task({ type: 'generate-concepts', sessionType: null }))).toBeNull();
     expect(toPlanTask(task({ type: 'add-material', sessionType: null }))).toBeNull();
@@ -387,9 +452,21 @@ describe('studyPlanService.today', () => {
       examDate: '2026-10-08',
       questionsPerConcept: 3,
       concepts: [
-        { name: 'Osmosis', mastery: 0.42, attempts: 4, lastPracticedAt: daysAgo(1), nextReviewAt: daysAhead(2) },
+        {
+          name: 'Osmosis',
+          mastery: 0.42,
+          attempts: 4,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAhead(2),
+        },
         { name: 'Diffusion' },
-        { name: 'Mitosis', mastery: 0.1, attempts: 2, lastPracticedAt: daysAgo(2), nextReviewAt: daysAhead(1) },
+        {
+          name: 'Mitosis',
+          mastery: 0.1,
+          attempts: 2,
+          lastPracticedAt: daysAgo(2),
+          nextReviewAt: daysAhead(1),
+        },
       ],
     });
     const history = await seedPack(db, USER, {
@@ -407,10 +484,17 @@ describe('studyPlanService.today', () => {
     expect(today.date).toBe('2026-09-29');
     expect(today.plan.budgetMinutes).toBe(30); // exam in 9 days → 30 minutes
     expect(today.plan.steps.length).toBeGreaterThan(1);
-    expect(today.plan.steps.map((step) => step.order)).toEqual(today.plan.steps.map((_, index) => index + 1));
+    expect(today.plan.steps.map((step) => step.order)).toEqual(
+      today.plan.steps.map((_, index) => index + 1),
+    );
     expect(today.primary).toEqual(today.plan.steps[0]);
     expect(today.recommended.label).toBe(today.plan.steps[0]!.label);
-    expect(today.exam).toMatchObject({ title: 'Biology', daysLeft: 9, message: 'Biology exam in 9 days', note: 'Your plan is adjusted for the exam.' });
+    expect(today.exam).toMatchObject({
+      title: 'Biology',
+      daysLeft: 9,
+      message: 'Biology exam in 9 days',
+      note: 'Your plan is adjusted for the exam.',
+    });
     expect(today.plan.adjustedForExam).toBe(true);
     // Legacy fields stay.
     expect(today.exams).toHaveLength(1);
@@ -477,7 +561,10 @@ describe('studyPlanService.today', () => {
 
     let today = await studyPlanService.today(db, USER, new Date());
     expect(today.resume).toHaveLength(1);
-    expect(today.resume[0]).toMatchObject({ label: 'Biology Practice', positionLabel: 'Question 6 of 10' });
+    expect(today.resume[0]).toMatchObject({
+      label: 'Biology Practice',
+      positionLabel: 'Question 6 of 10',
+    });
     // An open session is not a streak.
     expect(today.streak).toMatchObject({ current: 0, todayDone: false });
 
@@ -508,7 +595,7 @@ describe('studyPlanService.today', () => {
     expect(today.exam).toBeNull();
   });
 
-  it('does not show another student\'s packs', async () => {
+  it("does not show another student's packs", async () => {
     const { db } = await setup();
     const other = await studyPlanService.today(db, 'someone-else', NOW);
     expect(other.recommended.type).toBe('add-material');
@@ -524,12 +611,20 @@ describe('plan tasks match the live engine', () => {
       examDate: '2026-10-08',
       questionsPerConcept: 3,
       concepts: [
-        { name: 'Osmosis', mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(1), nextReviewAt: daysAhead(1) },
+        {
+          name: 'Osmosis',
+          mastery: 0.2,
+          attempts: 3,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAhead(1),
+        },
         { name: 'Diffusion' },
       ],
     });
     const [snapshot] = await loadPackSnapshots(db, USER, [bio.pack], NOW, 'UTC');
-    const live = rankRecommendations(packCandidates(snapshot!, emptyContext(NOW, 'UTC'))).map(toTask);
+    const live = rankRecommendations(packCandidates(snapshot!, emptyContext(NOW, 'UTC'))).map(
+      toTask,
+    );
     await studyPlanService.build(db, USER, bio.pack, {}, NOW);
     const plan = await db.studyPlans.getByPack(bio.pack.id);
     const dayOne = plan!.sessions[0]!.tasks!.map((t) => t.label);

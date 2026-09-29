@@ -47,7 +47,11 @@ beforeEach(() => {
       type: 'test',
       mode: 'quick10',
       title: 'Practice test · Biology',
-      focus: { label: 'No hints or explanations until you finish', conceptId: null, conceptName: null },
+      focus: {
+        label: 'No hints or explanations until you finish',
+        conceptId: null,
+        conceptName: null,
+      },
       modes: testModes(),
     }),
   );
@@ -70,11 +74,20 @@ describe('PackTest', () => {
     renderTest(
       pack({
         recentAttempts: [
-          { id: 'a1', testId: 't1', score: 7, total: 10, createdAt: '2026-09-20T10:00:00.000Z', packTitle: 'Biology' },
+          {
+            id: 'a1',
+            testId: 't1',
+            score: 7,
+            total: 10,
+            createdAt: '2026-09-20T10:00:00.000Z',
+            packTitle: 'Biology',
+          },
         ],
       }),
     );
-    const list = (await screen.findByRole('heading', { name: 'Previous attempts' })).closest('section')!;
+    const list = (await screen.findByRole('heading', { name: 'Previous attempts' })).closest(
+      'section',
+    )!;
     expect(within(list).getByText('70%')).toBeInTheDocument();
     expect(within(list).getByText(/7\/10/)).toBeInTheDocument();
   });
@@ -82,7 +95,9 @@ describe('PackTest', () => {
   it('asks for practice questions first when there are none', () => {
     renderTest(pack({ counts: { practiceQuestions: 0, readySources: 1 } }));
     expect(screen.getByRole('heading', { name: 'Practice questions first' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /generate practice questions/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /generate practice questions/i }),
+    ).toBeInTheDocument();
     expect(previewMock).not.toHaveBeenCalled();
   });
 

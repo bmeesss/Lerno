@@ -60,7 +60,13 @@ describe('pack recommendations', () => {
     const bio = await seedPack(db, USER, {
       title: 'Biology',
       concepts: [
-        { name: 'Osmosis', mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(1), nextReviewAt: daysAhead(1) },
+        {
+          name: 'Osmosis',
+          mastery: 0.2,
+          attempts: 3,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAhead(1),
+        },
         { name: 'Diffusion' },
       ],
     });
@@ -86,13 +92,28 @@ describe('pack recommendations', () => {
     const bio = await seedPack(db, USER, {
       title: 'Biology',
       concepts: [
-        { name: 'Osmosis', mastery: 0.42, attempts: 4, lastPracticedAt: daysAgo(1), nextReviewAt: daysAhead(2) },
-        { name: 'Diffusion', mastery: 0.9, attempts: 6, lastPracticedAt: daysAgo(1), nextReviewAt: daysAhead(9) },
+        {
+          name: 'Osmosis',
+          mastery: 0.42,
+          attempts: 4,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAhead(2),
+        },
+        {
+          name: 'Diffusion',
+          mastery: 0.9,
+          attempts: 6,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAhead(9),
+        },
       ],
     });
     const snapshots = await snapshotsOf(db, [bio]);
     const osmosis = bio.conceptByName('Osmosis');
-    const best = bestTaskForPack(snapshots[0]!, ctxWith({ recentMistakes: new Map([[osmosis.id, 3]]) }));
+    const best = bestTaskForPack(
+      snapshots[0]!,
+      ctxWith({ recentMistakes: new Map([[osmosis.id, 3]]) }),
+    );
     expect(best).toMatchObject({
       label: 'Practice Osmosis',
       reason: 'mistakes',
@@ -107,8 +128,20 @@ describe('pack recommendations', () => {
     const bio = await seedPack(db, USER, {
       title: 'Biology',
       concepts: [
-        { name: 'Osmosis', mastery: 0.7, attempts: 4, lastPracticedAt: daysAgo(8), nextReviewAt: daysAgo(1) },
-        { name: 'Diffusion', mastery: 0.7, attempts: 4, lastPracticedAt: daysAgo(9), nextReviewAt: daysAgo(2) },
+        {
+          name: 'Osmosis',
+          mastery: 0.7,
+          attempts: 4,
+          lastPracticedAt: daysAgo(8),
+          nextReviewAt: daysAgo(1),
+        },
+        {
+          name: 'Diffusion',
+          mastery: 0.7,
+          attempts: 4,
+          lastPracticedAt: daysAgo(9),
+          nextReviewAt: daysAgo(2),
+        },
       ],
     });
     const candidates = packCandidates((await snapshotsOf(db, [bio]))[0]!, ctxWith());
@@ -155,7 +188,9 @@ describe('pack recommendations', () => {
     const spec = (title: string, examDate: string | null): PackSpec => ({
       title,
       examDate,
-      concepts: [{ name: `${title} concept`, mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(1) }],
+      concepts: [
+        { name: `${title} concept`, mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(1) },
+      ],
     });
     const biology = await seedPack(db, USER, spec('Biology', '2026-10-04')); // 5 days
     const history = await seedPack(db, USER, spec('History', null));
@@ -171,7 +206,7 @@ describe('pack recommendations', () => {
     expect(second[0]!.examDaysLeft).toBe(3);
   });
 
-  it('counts the exam day in the student\'s own timezone', async () => {
+  it("counts the exam day in the student's own timezone", async () => {
     const db = newDb();
     const bio = await seedPack(db, USER, {
       title: 'Biology',
@@ -238,13 +273,29 @@ describe('recent mistakes', () => {
     const concept = bio.concepts[0]!;
     const question = bio.questions[0]!;
     await db.practiceAttempts.createMany([
-      { userId: USER, packId: bio.pack.id, questionId: question.id, conceptId: concept.id, answer: 'x', verdict: 'incorrect' },
-      { userId: USER, packId: bio.pack.id, questionId: question.id, conceptId: concept.id, answer: 'Right', verdict: 'correct' },
+      {
+        userId: USER,
+        packId: bio.pack.id,
+        questionId: question.id,
+        conceptId: concept.id,
+        answer: 'x',
+        verdict: 'incorrect',
+      },
+      {
+        userId: USER,
+        packId: bio.pack.id,
+        questionId: question.id,
+        conceptId: concept.id,
+        answer: 'Right',
+        verdict: 'correct',
+      },
     ]);
     const snapshots = await snapshotsOf(db, [bio]);
     expect(collectRecentMistakes(snapshots, NOW).get(concept.id)).toBe(1);
     // A week later the same mistake no longer counts as recent.
-    expect(collectRecentMistakes(snapshots, new Date(NOW.getTime() + 8 * DAY)).get(concept.id)).toBeUndefined();
+    expect(
+      collectRecentMistakes(snapshots, new Date(NOW.getTime() + 8 * DAY)).get(concept.id),
+    ).toBeUndefined();
   });
 });
 
@@ -264,7 +315,11 @@ describe('learn selection', () => {
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
   }));
-  const state = (mastery: number, attempts = 3, nextReviewAt: string | null = daysAhead(3)): MasteryState => ({
+  const state = (
+    mastery: number,
+    attempts = 3,
+    nextReviewAt: string | null = daysAhead(3),
+  ): MasteryState => ({
     ...emptyMastery(),
     mastery,
     attempts,
@@ -307,7 +362,9 @@ describe('learn selection', () => {
   });
 
   it('respects the limit', () => {
-    expect(selectLearnConcepts({ concepts, states: new Map(), limit: 3, now: NOW })).toHaveLength(3);
+    expect(selectLearnConcepts({ concepts, states: new Map(), limit: 3, now: NOW })).toHaveLength(
+      3,
+    );
   });
 });
 
@@ -318,9 +375,27 @@ describe('adaptive question selection', () => {
       title: 'Biology',
       questionsPerConcept: 4,
       concepts: [
-        { name: 'Osmosis', mastery: 0.15, attempts: 4, lastPracticedAt: daysAgo(2), nextReviewAt: daysAgo(1) },
-        { name: 'Diffusion', mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(2), nextReviewAt: daysAgo(1) },
-        { name: 'Mitosis', mastery: 0.95, attempts: 8, lastPracticedAt: daysAgo(3), nextReviewAt: daysAhead(9) },
+        {
+          name: 'Osmosis',
+          mastery: 0.15,
+          attempts: 4,
+          lastPracticedAt: daysAgo(2),
+          nextReviewAt: daysAgo(1),
+        },
+        {
+          name: 'Diffusion',
+          mastery: 0.2,
+          attempts: 3,
+          lastPracticedAt: daysAgo(2),
+          nextReviewAt: daysAgo(1),
+        },
+        {
+          name: 'Mitosis',
+          mastery: 0.95,
+          attempts: 8,
+          lastPracticedAt: daysAgo(3),
+          nextReviewAt: daysAhead(9),
+        },
         { name: 'Meiosis' },
       ],
     });
@@ -350,7 +425,9 @@ describe('adaptive question selection', () => {
   it('picks questions of weak concepts before strong ones', async () => {
     const { bio, states } = await setup();
     const picked = selectAdaptiveQuestions({ ...base(bio, states), count: 4 });
-    const names = picked.map((entry) => bio.concepts.find((c) => c.id === entry.question.conceptId)!.name);
+    const names = picked.map(
+      (entry) => bio.concepts.find((c) => c.id === entry.question.conceptId)!.name,
+    );
     expect(names).not.toContain('Mitosis');
     expect(new Set(names)).toEqual(new Set(['Osmosis', 'Diffusion']));
     expect(picked.every((entry) => ['weak', 'due'].includes(entry.reason))).toBe(true);
@@ -376,13 +453,23 @@ describe('adaptive question selection', () => {
 
   it('asks a recently missed question again, before an unseen one', async () => {
     const { bio, states } = await setup();
-    const osmosisQuestions = bio.questions.filter((q) => q.conceptId === bio.conceptByName('Osmosis').id);
+    const osmosisQuestions = bio.questions.filter(
+      (q) => q.conceptId === bio.conceptByName('Osmosis').id,
+    );
     const missed = osmosisQuestions[2]!;
     const picked = selectAdaptiveQuestions({
       ...base(bio, states),
       onlyConceptIds: new Set([bio.conceptByName('Osmosis').id]),
       history: new Map([
-        [missed.id, history({ lastVerdict: 'incorrect', lastAnsweredAt: Date.parse(daysAgo(2)), lastSeenAt: Date.parse(daysAgo(2)), timesSeen: 1 })],
+        [
+          missed.id,
+          history({
+            lastVerdict: 'incorrect',
+            lastAnsweredAt: Date.parse(daysAgo(2)),
+            lastSeenAt: Date.parse(daysAgo(2)),
+            timesSeen: 1,
+          }),
+        ],
       ]),
       count: 1,
     });
@@ -399,7 +486,15 @@ describe('adaptive question selection', () => {
       ...base(bio, states),
       onlyConceptIds: new Set([concept.id]),
       history: new Map([
-        [justCorrect.id, history({ lastVerdict: 'correct', lastAnsweredAt: NOW.getTime() - 3_600_000, lastSeenAt: NOW.getTime() - 3_600_000, timesSeen: 2 })],
+        [
+          justCorrect.id,
+          history({
+            lastVerdict: 'correct',
+            lastAnsweredAt: NOW.getTime() - 3_600_000,
+            lastSeenAt: NOW.getTime() - 3_600_000,
+            timesSeen: 2,
+          }),
+        ],
       ]),
       count: 3,
     });
@@ -414,7 +509,13 @@ describe('adaptive question selection', () => {
       attempts: [],
       testAttempts: [],
       seenItems: [
-        { questionId: first!.id, verdict: null, answeredAt: NOW.toISOString(), createdAt: NOW.toISOString(), status: 'skipped' },
+        {
+          questionId: first!.id,
+          verdict: null,
+          answeredAt: NOW.toISOString(),
+          createdAt: NOW.toISOString(),
+          status: 'skipped',
+        },
       ],
     });
     expect(seen.get(first!.id)).toMatchObject({ timesSeen: 1, lastVerdict: null });
@@ -430,10 +531,16 @@ describe('adaptive question selection', () => {
   it('puts the focus concept first', async () => {
     const { bio, states } = await setup();
     const focus = bio.conceptByName('Meiosis');
-    const picked = selectAdaptiveQuestions({ ...base(bio, states), count: 5, focusConceptId: focus.id });
+    const picked = selectAdaptiveQuestions({
+      ...base(bio, states),
+      count: 5,
+      focusConceptId: focus.id,
+    });
     expect(picked[0]!.question.conceptId).toBe(focus.id);
     expect(picked[0]!.reason).toBe('focus');
-    expect(picked.filter((entry) => entry.question.conceptId === focus.id).length).toBeGreaterThanOrEqual(2);
+    expect(
+      picked.filter((entry) => entry.question.conceptId === focus.id).length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('is deterministic for identical input', async () => {
@@ -474,8 +581,12 @@ describe('adaptive question selection', () => {
     expect(targetDifficultyLevel({ ...emptyMastery(), mastery: 0.1, attempts: 3 }, weak)).toBe(1);
     expect(targetDifficultyLevel({ ...emptyMastery(), mastery: 0.7, attempts: 5 }, strong)).toBe(3);
     // A hard concept starts one level easier, an easy one one level harder.
-    expect(targetDifficultyLevel({ ...emptyMastery(), mastery: 0.7 }, { ...strong, difficulty: 'hard' })).toBe(2);
-    expect(targetDifficultyLevel({ ...emptyMastery(), mastery: 0.1 }, { ...weak, difficulty: 'easy' })).toBe(2);
+    expect(
+      targetDifficultyLevel({ ...emptyMastery(), mastery: 0.7 }, { ...strong, difficulty: 'hard' }),
+    ).toBe(2);
+    expect(
+      targetDifficultyLevel({ ...emptyMastery(), mastery: 0.1 }, { ...weak, difficulty: 'easy' }),
+    ).toBe(2);
 
     const picked = selectAdaptiveQuestions({
       questions: pack.questions,
@@ -488,12 +599,18 @@ describe('adaptive question selection', () => {
       now: NOW,
       count: 2,
     });
-    expect(describeDifficulty(picked, new Map(), new Map(pack.concepts.map((c) => [c.id, c])))).toMatch(/easy|medium|hard/);
+    expect(
+      describeDifficulty(picked, new Map(), new Map(pack.concepts.map((c) => [c.id, c]))),
+    ).toMatch(/easy|medium|hard/);
   });
 });
 
 describe('test question selection', () => {
-  const question = (id: string, conceptId: string | null, position: number): PracticeQuestionRecord => ({
+  const question = (
+    id: string,
+    conceptId: string | null,
+    position: number,
+  ): PracticeQuestionRecord => ({
     id,
     packId: 'p',
     conceptId,
@@ -552,8 +669,20 @@ describe('what to do after a session', () => {
     const bio = await seedPack(db, USER, {
       title: 'Biology',
       concepts: [
-        { name: 'Osmosis', mastery: 0.42, attempts: 4, lastPracticedAt: daysAgo(0), nextReviewAt: daysAhead(1) },
-        { name: 'Diffusion', mastery: 0.3, attempts: 3, lastPracticedAt: daysAgo(0), nextReviewAt: daysAhead(1) },
+        {
+          name: 'Osmosis',
+          mastery: 0.42,
+          attempts: 4,
+          lastPracticedAt: daysAgo(0),
+          nextReviewAt: daysAhead(1),
+        },
+        {
+          name: 'Diffusion',
+          mastery: 0.3,
+          attempts: 3,
+          lastPracticedAt: daysAgo(0),
+          nextReviewAt: daysAhead(1),
+        },
       ],
     });
     const snapshot = (await snapshotsOf(db, [bio]))[0]!;
@@ -578,7 +707,13 @@ describe('what to do after a session', () => {
     const bio = await seedPack(db, USER, {
       title: 'Biology',
       concepts: [
-        { name: 'Osmosis', mastery: 0.9, attempts: 5, lastPracticedAt: daysAgo(0), nextReviewAt: daysAhead(7) },
+        {
+          name: 'Osmosis',
+          mastery: 0.9,
+          attempts: 5,
+          lastPracticedAt: daysAgo(0),
+          nextReviewAt: daysAhead(7),
+        },
         { name: 'Diffusion' },
       ],
     });

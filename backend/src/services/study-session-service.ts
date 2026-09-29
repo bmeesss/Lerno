@@ -155,7 +155,10 @@ interface PlanInputData {
 
 /** Fills in the options a true/false question is always graded against. */
 export function withOptions(question: PracticeQuestionRecord): PracticeQuestionRecord {
-  if (question.questionType === 'true_false' && (!question.options || question.options.length === 0)) {
+  if (
+    question.questionType === 'true_false' &&
+    (!question.options || question.options.length === 0)
+  ) {
     return { ...question, options: ['True', 'False'] };
   }
   return question;
@@ -211,7 +214,11 @@ export function planSessionItems(input: PlanInputData): SessionPlan {
         examDaysLeft: input.examDaysLeft,
       });
       if (check) used.add(check.question.id);
-      return { kind: 'concept' as const, conceptId: entry.concept.id, questionId: check?.question.id ?? null };
+      return {
+        kind: 'concept' as const,
+        conceptId: entry.concept.id,
+        questionId: check?.question.id ?? null,
+      };
     });
   } else if (input.type === 'test') {
     const chosen = selectTestQuestions({
@@ -265,7 +272,9 @@ export function planSessionItems(input: PlanInputData): SessionPlan {
   return {
     items,
     focusConceptId: input.focusConceptId,
-    targetConceptIds: [...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : [])))],
+    targetConceptIds: [
+      ...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : []))),
+    ],
     reasons,
     difficulty: describeDifficulty(selected, states, conceptById),
     learn,
@@ -316,7 +325,10 @@ export function buildSessionResult(input: {
   for (const [conceptId, entries] of byConcept) {
     const ordered = entries.slice().sort((a, b) => a.position - b.position);
     const first = ordered.find((item) => item.masteryBefore !== null);
-    const last = ordered.slice().reverse().find((item) => item.masteryAfter !== null);
+    const last = ordered
+      .slice()
+      .reverse()
+      .find((item) => item.masteryAfter !== null);
     if (!first || !last) continue;
     const name = input.conceptNames.get(conceptId) ?? '';
     const conceptCorrect = entries.filter((item) => item.verdict === 'correct').length;
@@ -327,7 +339,8 @@ export function buildSessionResult(input: {
       name,
       beforePercent: Math.round((first.masteryBefore ?? 0) * 100),
       afterPercent: Math.round((last.masteryAfter ?? 0) * 100),
-      answered: entries.filter((item) => item.status === 'answered' || item.verdict !== null).length,
+      answered: entries.filter((item) => item.status === 'answered' || item.verdict !== null)
+        .length,
       correct: conceptCorrect,
       incorrect: conceptIncorrect,
     });
@@ -360,10 +373,14 @@ export function buildSessionResult(input: {
     .sort((a, b) => a.masteryPercent - b.masteryPercent);
 
   const knownWell = isTest
-    ? outcomes.filter((outcome) => outcome.percent >= KNOWN_WELL_PERCENT).sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name))
+    ? outcomes
+        .filter((outcome) => outcome.percent >= KNOWN_WELL_PERCENT)
+        .sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name))
     : [];
   const needsPractice = isTest
-    ? outcomes.filter((outcome) => outcome.percent < KNOWN_WELL_PERCENT).sort((a, b) => a.percent - b.percent || a.name.localeCompare(b.name))
+    ? outcomes
+        .filter((outcome) => outcome.percent < KNOWN_WELL_PERCENT)
+        .sort((a, b) => a.percent - b.percent || a.name.localeCompare(b.name))
     : [];
 
   return {
@@ -534,8 +551,12 @@ async function loadLookups(
   items: LearningSessionItemRecord[],
   type: LearningSessionType,
 ) {
-  const conceptIds = [...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : [])))];
-  const questionIds = [...new Set(items.flatMap((item) => (item.questionId ? [item.questionId] : [])))];
+  const conceptIds = [
+    ...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : []))),
+  ];
+  const questionIds = [
+    ...new Set(items.flatMap((item) => (item.questionId ? [item.questionId] : []))),
+  ];
   if (type === 'learn') {
     // Learn shows the material itself, so it needs the whole pack context once.
     const context = await loadPackContext(db, pack);
@@ -585,7 +606,9 @@ async function buildDetail(
     let learn: LearnView | null = null;
     if (session.type === 'learn' && item.kind === 'concept' && concept) {
       const state = states.get(concept.id) ?? emptyMastery();
-      const conceptSource = concept.sourceId ? (lookups.sourceById.get(concept.sourceId) ?? null) : null;
+      const conceptSource = concept.sourceId
+        ? (lookups.sourceById.get(concept.sourceId) ?? null)
+        : null;
       learn = {
         explanation: concept.explanation,
         example: findConceptExample(concept, sources, cards),
@@ -593,14 +616,17 @@ async function buildDetail(
         refLabel: concept.refLabel,
         origin: concept.origin,
         // While the session runs this is the mastery before the concept was studied.
-        masteryPercent: item.masteryBefore === null ? percentOf(state) : Math.round(item.masteryBefore * 100),
+        masteryPercent:
+          item.masteryBefore === null ? percentOf(state) : Math.round(item.masteryBefore * 100),
         reason: learnReason(state),
       };
     }
     return toItemView(item, { concept, question, sourceTitle }, { hideFeedback, learn });
   });
 
-  const focus = session.focusConceptId ? (lookups.conceptById.get(session.focusConceptId) ?? null) : null;
+  const focus = session.focusConceptId
+    ? (lookups.conceptById.get(session.focusConceptId) ?? null)
+    : null;
   return {
     session: {
       id: session.id,
@@ -701,7 +727,13 @@ export const studySessionService = {
   async preview(
     db: Database,
     userId: string,
-    input: { packId: string; type: LearningSessionType; mode?: TestMode; conceptId?: string | null; count?: number },
+    input: {
+      packId: string;
+      type: LearningSessionType;
+      mode?: TestMode;
+      conceptId?: string | null;
+      count?: number;
+    },
     now: Date = new Date(),
   ) {
     const pack = await requireVisiblePack(db, userId, input.packId);
@@ -709,7 +741,8 @@ export const studySessionService = {
     const data = await loadPlanData(db, userId, pack, now, timeZone);
     const mode = input.type === 'test' ? (input.mode ?? 'quick10') : null;
     const conceptById = new Map(data.context.concepts.map((concept) => [concept.id, concept]));
-    if (input.conceptId && !conceptById.has(input.conceptId)) throw errors.notFound('Concept not found');
+    if (input.conceptId && !conceptById.has(input.conceptId))
+      throw errors.notFound('Concept not found');
     const focus = input.conceptId ? (conceptById.get(input.conceptId) ?? null) : null;
     const available = data.context.questions.length;
     const isOwner = pack.ownerId === userId;
@@ -717,7 +750,10 @@ export const studySessionService = {
     const countFor = (m: TestMode | null): number =>
       input.type === 'test' && m
         ? testQuestionCount(m, available)
-        : Math.min(input.count ?? DEFAULT_COUNTS[input.type as 'learn' | 'practice' | 'review'], 50);
+        : Math.min(
+            input.count ?? DEFAULT_COUNTS[input.type as 'learn' | 'practice' | 'review'],
+            50,
+          );
 
     const plan = planSessionItems({
       type: input.type,
@@ -753,7 +789,11 @@ export const studySessionService = {
       blockedReason = 'Only the owner of a study pack can take its tests.';
     } else if (input.type === 'test' && available < 3) {
       blockedReason = 'Add at least three practice questions before taking a test.';
-    } else if (input.type === 'practice' && focus && !data.context.questions.some((q) => q.conceptId === focus.id)) {
+    } else if (
+      input.type === 'practice' &&
+      focus &&
+      !data.context.questions.some((q) => q.conceptId === focus.id)
+    ) {
       blockedReason = 'This concept has no practice questions yet.';
     } else if (input.type === 'practice' && plan.items.length === 0) {
       blockedReason = 'This study pack has no practice questions yet.';
@@ -778,11 +818,17 @@ export const studySessionService = {
       return 'Focus: a mix of concepts';
     })();
 
-    const open = await findOpenSession(db, userId, pack.id, {
-      type: input.type,
-      mode,
-      conceptId: input.conceptId ?? null,
-    }, now);
+    const open = await findOpenSession(
+      db,
+      userId,
+      pack.id,
+      {
+        type: input.type,
+        mode,
+        conceptId: input.conceptId ?? null,
+      },
+      now,
+    );
 
     return {
       packId: pack.id,
@@ -835,14 +881,25 @@ export const studySessionService = {
     const mode: TestMode | null = type === 'test' ? (input.mode ?? 'quick10') : null;
     const start = input.start ?? true;
 
-    const existing = await findOpenSession(db, userId, pack.id, { type, mode, conceptId: input.conceptId ?? null }, now);
+    const existing = await findOpenSession(
+      db,
+      userId,
+      pack.id,
+      { type, mode, conceptId: input.conceptId ?? null },
+      now,
+    );
     if (existing && !input.restart) {
       let session = existing;
       if (start && existing.status === 'not_started') {
         session = await db.learningSessions.update(existing.id, startPatch(existing, now));
-      } else if (now.getTime() - Date.parse(existing.lastActivityAt) > IDLE_GAP_CAP_SECONDS * 1000) {
+      } else if (
+        now.getTime() - Date.parse(existing.lastActivityAt) >
+        IDLE_GAP_CAP_SECONDS * 1000
+      ) {
         // Coming back after a break: the break is not study time.
-        session = await db.learningSessions.update(existing.id, { lastActivityAt: now.toISOString() });
+        session = await db.learningSessions.update(existing.id, {
+          lastActivityAt: now.toISOString(),
+        });
       }
       return { ...(await buildDetail(db, userId, session, pack, { resumed: true })) };
     }
@@ -855,7 +912,10 @@ export const studySessionService = {
 
     const timeZone = await resolveTimeZone(db, userId);
     const data = await loadPlanData(db, userId, pack, now, timeZone);
-    if (input.conceptId && !data.context.concepts.some((concept) => concept.id === input.conceptId)) {
+    if (
+      input.conceptId &&
+      !data.context.concepts.some((concept) => concept.id === input.conceptId)
+    ) {
       throw errors.notFound('Concept not found');
     }
     if (type === 'test' && data.context.questions.length < 3) {
@@ -959,7 +1019,11 @@ export const studySessionService = {
   },
 
   /** Open sessions of the student (resume list), newest first. */
-  async listActive(db: Database, userId: string, now: Date = new Date()): Promise<{ sessions: ResumeCard[] }> {
+  async listActive(
+    db: Database,
+    userId: string,
+    now: Date = new Date(),
+  ): Promise<{ sessions: ResumeCard[] }> {
     const open = (
       await db.learningSessions.listByUser(userId, {
         statuses: ['not_started', 'active'],
@@ -968,7 +1032,9 @@ export const studySessionService = {
     ).filter((session) => isResumable(session, now));
     if (open.length === 0) return { sessions: [] };
     const packs = await db.packs.listByIds([...new Set(open.map((session) => session.packId))]);
-    const byId = new Map(packs.filter((pack) => canViewPack(pack, userId)).map((pack) => [pack.id, pack]));
+    const byId = new Map(
+      packs.filter((pack) => canViewPack(pack, userId)).map((pack) => [pack.id, pack]),
+    );
     return {
       sessions: open.flatMap((session) => {
         const pack = byId.get(session.packId);
@@ -980,7 +1046,8 @@ export const studySessionService = {
   async start(db: Database, userId: string, sessionId: string, now: Date = new Date()) {
     const { session, pack } = await loadSession(db, userId, sessionId);
     if (session.status === 'active') return buildDetail(db, userId, session, pack);
-    if (!canTransition(session.status, 'active')) throw conflict('This session can no longer be started');
+    if (!canTransition(session.status, 'active'))
+      throw conflict('This session can no longer be started');
     const updated = await db.learningSessions.update(session.id, startPatch(session, now));
     return buildDetail(db, userId, updated, pack);
   },
@@ -1020,7 +1087,13 @@ export const studySessionService = {
         db,
         userId,
         pack.id,
-        [{ conceptId: concept.id, evidence: { kind: 'verdict', verdict: graded.verdict }, at: now }],
+        [
+          {
+            conceptId: concept.id,
+            evidence: { kind: 'verdict', verdict: graded.verdict },
+            at: now,
+          },
+        ],
         new Map([[concept.id, masteryFromRecord(previous)]]),
       );
       applied = recorded.applied[0] ?? null;
@@ -1068,7 +1141,11 @@ export const studySessionService = {
           }
         : {}),
     });
-    return itemResponse(updatedSession, nextItems, toItemView(updatedItem, lookups, { hideFeedback: false }));
+    return itemResponse(
+      updatedSession,
+      nextItems,
+      toItemView(updatedItem, lookups, { hideFeedback: false }),
+    );
   },
 
   /** Learn: "How well do you know this?" — one self-rating finishes a concept. */
@@ -1084,7 +1161,8 @@ export const studySessionService = {
     assertOpen(session);
     if (session.type !== 'learn') throw errors.validation('Only Learn sessions use self-ratings');
     const { items, item } = await requireItem(db, session, itemId);
-    if (item.kind !== 'concept' || !item.conceptId) throw errors.validation('This step cannot be rated');
+    if (item.kind !== 'concept' || !item.conceptId)
+      throw errors.validation('This step cannot be rated');
     const concept = await db.concepts.get(item.conceptId);
     const question = item.questionId ? await db.practiceQuestions.get(item.questionId) : null;
     const lookups = await itemLookups(db, item, { question, concept });
@@ -1107,7 +1185,12 @@ export const studySessionService = {
       packId: pack.id,
       conceptId: item.conceptId,
       eventType: 'self_rating',
-      isCorrect: input.rating === 'good' || input.rating === 'easy' ? true : input.rating === 'again' ? false : null,
+      isCorrect:
+        input.rating === 'good' || input.rating === 'easy'
+          ? true
+          : input.rating === 'again'
+            ? false
+            : null,
       responseTimeMs: input.responseTimeMs ?? null,
       metadata: { rating: input.rating, sessionId: session.id, sessionType: 'learn' },
     });
@@ -1129,11 +1212,21 @@ export const studySessionService = {
       answeredCount: session.answeredCount + 1,
       currentPosition: firstOpenPosition(nextItems),
     });
-    return itemResponse(updatedSession, nextItems, toItemView(updatedItem, lookups, { hideFeedback: false }));
+    return itemResponse(
+      updatedSession,
+      nextItems,
+      toItemView(updatedItem, lookups, { hideFeedback: false }),
+    );
   },
 
   /** Skips a question without changing mastery. */
-  async skip(db: Database, userId: string, sessionId: string, itemId: string, now: Date = new Date()) {
+  async skip(
+    db: Database,
+    userId: string,
+    sessionId: string,
+    itemId: string,
+    now: Date = new Date(),
+  ) {
     const { session } = await loadSession(db, userId, sessionId);
     assertOpen(session);
     if (session.type === 'test' || session.type === 'learn') {
@@ -1156,7 +1249,11 @@ export const studySessionService = {
       ...activityPatch(session, now),
       currentPosition: firstOpenPosition(nextItems),
     });
-    return itemResponse(updatedSession, nextItems, toItemView(updatedItem, lookups, { hideFeedback: false }));
+    return itemResponse(
+      updatedSession,
+      nextItems,
+      toItemView(updatedItem, lookups, { hideFeedback: false }),
+    );
   },
 
   /**
@@ -1176,7 +1273,9 @@ export const studySessionService = {
     const items = await db.learningSessionItems.listBySession(session.id);
     const merged = mergeTestAnswers(items, input.answers);
     if (merged.changed.length > 0) await db.learningSessionItems.saveMany(merged.changed);
-    const answeredCount = merged.items.filter((item) => item.answer !== null && item.answer !== '').length;
+    const answeredCount = merged.items.filter(
+      (item) => item.answer !== null && item.answer !== '',
+    ).length;
     const currentPosition = Math.min(
       Math.max(0, input.currentPosition ?? session.currentPosition),
       Math.max(0, session.itemCount - 1),
@@ -1247,7 +1346,9 @@ export const studySessionService = {
     }
 
     const durationSeconds = addActiveSeconds(session.durationSeconds, session.lastActivityAt, now);
-    const conceptIds = [...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : [])))];
+    const conceptIds = [
+      ...new Set(items.flatMap((item) => (item.conceptId ? [item.conceptId] : []))),
+    ];
     const concepts = await db.concepts.listByIds(conceptIds);
     const conceptNames = new Map(concepts.map((concept) => [concept.id, concept.name]));
 
@@ -1265,7 +1366,13 @@ export const studySessionService = {
     };
     const next: SessionNextStep = snapshot
       ? nextStepAfterSession({ snapshot, ctx, missed })
-      : { type: 'practice', label: 'Keep practising', description: '', conceptId: null, conceptName: null };
+      : {
+          type: 'practice',
+          label: 'Keep practising',
+          description: '',
+          conceptId: null,
+          conceptName: null,
+        };
 
     const result = buildSessionResult({
       session,
@@ -1293,7 +1400,9 @@ export const studySessionService = {
     });
 
     // Follow-ups never fail the completion: the session result is already stored.
-    await masteryService.recordSnapshots(db, userId, [pack.id], now, timeZone).catch(() => undefined);
+    await masteryService
+      .recordSnapshots(db, userId, [pack.id], now, timeZone)
+      .catch(() => undefined);
     await studyPlanService.refreshAfterSession(db, userId, pack.id, now).catch(() => undefined);
 
     return buildDetail(db, userId, completed, pack);
@@ -1303,14 +1412,17 @@ export const studySessionService = {
   async abandon(db: Database, userId: string, sessionId: string, now: Date = new Date()) {
     const { session, pack } = await loadSession(db, userId, sessionId);
     if (session.status === 'abandoned') return buildDetail(db, userId, session, pack);
-    if (!canTransition(session.status, 'abandoned')) throw conflict('A finished session cannot be abandoned');
+    if (!canTransition(session.status, 'abandoned'))
+      throw conflict('A finished session cannot be abandoned');
     const updated = await db.learningSessions.update(session.id, {
       status: 'abandoned',
       ...activityPatch(session, now),
     });
     if (session.answeredCount > 0 && session.type !== 'test') {
       const timeZone = await resolveTimeZone(db, userId);
-      await masteryService.recordSnapshots(db, userId, [pack.id], now, timeZone).catch(() => undefined);
+      await masteryService
+        .recordSnapshots(db, userId, [pack.id], now, timeZone)
+        .catch(() => undefined);
     }
     return buildDetail(db, userId, updated, pack);
   },
@@ -1354,7 +1466,11 @@ export const studySessionService = {
           concept: concept ? { id: concept.id, name: concept.name } : null,
           source:
             source || concept?.refLabel
-              ? { title: source?.title ?? null, ref: concept?.refLabel ?? null, origin: question.origin }
+              ? {
+                  title: source?.title ?? null,
+                  ref: concept?.refLabel ?? null,
+                  origin: question.origin,
+                }
               : null,
         };
       }),
@@ -1404,7 +1520,9 @@ async function loadPlanData(
   const seenItems = await db.learningSessionItems.listSeenByUserAndPack(userId, pack.id);
   return {
     context: snapshot.context,
-    states: new Map(snapshot.progress.conceptStates.map((entry) => [entry.concept.id, entry.state])),
+    states: new Map(
+      snapshot.progress.conceptStates.map((entry) => [entry.concept.id, entry.state]),
+    ),
     history: buildQuestionHistory({
       attempts: snapshot.progress.attempts,
       testAttempts: snapshot.progress.testAttempts,
@@ -1473,7 +1591,13 @@ async function gradeTest(
 
   const outcomes: MasteryOutcome[] = graded.flatMap((entry) =>
     entry.concept
-      ? [{ conceptId: entry.concept.id, evidence: { kind: 'verdict' as const, verdict: entry.verdict }, at: now }]
+      ? [
+          {
+            conceptId: entry.concept.id,
+            evidence: { kind: 'verdict' as const, verdict: entry.verdict },
+            at: now,
+          },
+        ]
       : [],
   );
   const { applied, final } = await masteryService.record(db, userId, pack.id, outcomes);

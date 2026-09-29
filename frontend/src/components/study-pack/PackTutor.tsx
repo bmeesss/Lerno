@@ -10,7 +10,13 @@ import type { StudyPackDetail } from '../../types';
  * student is on and which questions they missed, and every reply says whether
  * it is "Based on your material" or a general explanation.
  */
-export function PackTutor({ pack, focusConceptId }: { pack: StudyPackDetail; focusConceptId?: string }) {
+export function PackTutor({
+  pack,
+  focusConceptId,
+}: {
+  pack: StudyPackDetail;
+  focusConceptId?: string;
+}) {
   const focus = pack.concepts.find((concept) => concept.id === focusConceptId) ?? null;
   const context = useMemo(() => (focus ? { conceptId: focus.id } : undefined), [focus]);
   const chat = useTutorChat(pack.id, context);
@@ -23,7 +29,9 @@ export function PackTutor({ pack, focusConceptId }: { pack: StudyPackDetail; foc
         `Why do I keep getting ${focus.name} wrong?`,
       ]
     : [
-        pack.concepts[0] ? `Explain ${pack.concepts[0].name} in simple words` : 'Explain the main idea',
+        pack.concepts[0]
+          ? `Explain ${pack.concepts[0].name} in simple words`
+          : 'Explain the main idea',
         pack.progress.weakConcepts[0]
           ? `Why do I keep getting ${pack.progress.weakConcepts[0].name} wrong?`
           : 'What are the most important concepts here?',
@@ -34,15 +42,13 @@ export function PackTutor({ pack, focusConceptId }: { pack: StudyPackDetail; foc
     <section className="stack" style={{ gap: 18 }} aria-labelledby="pack-tutor-heading">
       <div className="section-title">
         <div>
-          <h2 id="pack-tutor-heading">
-            AI Tutor · {focus ? focus.name : pack.title}
-          </h2>
+          <h2 id="pack-tutor-heading">AI Tutor · {focus ? focus.name : pack.title}</h2>
           <p className="muted">
             Answers come from the {pack.counts.readySources} source
             {pack.counts.readySources === 1 ? '' : 's'} in this pack
-            {pack.subjectName ? ` — think “${pack.subjectName}”` : ''}. If the material does not cover
-            something, Lerno says so instead of guessing — and tells you when an answer is a general
-            explanation.
+            {pack.subjectName ? ` — think “${pack.subjectName}”` : ''}. If the material does not
+            cover something, Lerno says so instead of guessing — and tells you when an answer is a
+            general explanation.
           </p>
         </div>
       </div>
@@ -61,7 +67,10 @@ export function PackTutor({ pack, focusConceptId }: { pack: StudyPackDetail; foc
         empty={
           <div className="pack-chat-empty">
             <IconSparkles size={22} />
-            <p>Ask anything about this material. Nothing outside this pack is presented as course content.</p>
+            <p>
+              Ask anything about this material. Nothing outside this pack is presented as course
+              content.
+            </p>
             <div className="pack-chip-row">
               {suggestions.map((suggestion) => (
                 <button

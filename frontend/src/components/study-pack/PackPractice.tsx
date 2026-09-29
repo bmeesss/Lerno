@@ -37,8 +37,12 @@ export function PackPractice({
         description="Practice questions check whether you really understand the material. Generate them from your sources."
         action={
           pack.isOwner ? (
-            <Button onClick={() => void generate()} disabled={generating || pack.counts.readySources === 0}>
-              <IconSparkles size={17} /> {generating ? 'Generating…' : 'Generate practice questions'}
+            <Button
+              onClick={() => void generate()}
+              disabled={generating || pack.counts.readySources === 0}
+            >
+              <IconSparkles size={17} />{' '}
+              {generating ? 'Generating…' : 'Generate practice questions'}
             </Button>
           ) : undefined
         }

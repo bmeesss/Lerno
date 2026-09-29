@@ -51,8 +51,20 @@ function testSession(overrides: Partial<LearningSession> = {}): LearningSession 
 function saved(answered: number) {
   return {
     saved: answered,
-    progress: { position: answered, total: 3, answered, skipped: 0, percent: Math.round((answered / 3) * 100) },
-    session: { id: 's1', status: 'active' as const, currentPosition: answered, answeredCount: answered, durationSeconds: 20 },
+    progress: {
+      position: answered,
+      total: 3,
+      answered,
+      skipped: 0,
+      percent: Math.round((answered / 3) * 100),
+    },
+    session: {
+      id: 's1',
+      status: 'active' as const,
+      currentPosition: answered,
+      answeredCount: answered,
+      durationSeconds: 20,
+    },
   };
 }
 
@@ -70,16 +82,22 @@ beforeEach(() => {
 describe('test session', () => {
   it('shows no explanation, no feedback and no mastery hint while the test runs', async () => {
     renderRunner();
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i1?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i1?' }),
+    ).toBeInTheDocument();
 
-    expect(screen.getByText('No hints or explanations until you finish the test.')).toBeInTheDocument();
+    expect(
+      screen.getByText('No hints or explanations until you finish the test.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Biology Test')).toBeInTheDocument();
     expect(screen.getByText('Question 1 of 3')).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByText(/correct answer/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/mastery/i)).not.toBeInTheDocument();
     // No tutor, no "explain this" while a test is running.
-    expect(screen.queryByRole('button', { name: /ai tutor|explain this/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /ai tutor|explain this/i }),
+    ).not.toBeInTheDocument();
     // There is no "Check answer": nothing is graded until the end.
     expect(screen.queryByRole('button', { name: /check answer/i })).not.toBeInTheDocument();
   });
@@ -94,7 +112,9 @@ describe('test session', () => {
     await user.click(within(actionBar(container)).getByRole('button', { name: /next question/i }));
     expect(svc.saveAnswers).toHaveBeenCalledTimes(1);
     expect(svc.saveAnswers).toHaveBeenCalledWith('s1', [{ itemId: 'i1', answer: 'Option A' }], 1);
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i2?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i2?' }),
+    ).toBeInTheDocument();
   });
 
   it('lets the student go back and change an answer', async () => {
@@ -126,7 +146,11 @@ describe('test session', () => {
     await user.click(within(actionBar(container)).getByRole('button', { name: 'Previous' }));
     expect(screen.getByRole('radio', { name: 'Option B' })).toBeChecked();
     await waitFor(() => expect(svc.saveAnswers).toHaveBeenCalledTimes(2));
-    expect(svc.saveAnswers).toHaveBeenLastCalledWith('s1', [{ itemId: 'i1', answer: 'Option B' }], 0);
+    expect(svc.saveAnswers).toHaveBeenLastCalledWith(
+      's1',
+      [{ itemId: 'i1', answer: 'Option B' }],
+      0,
+    );
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
@@ -138,7 +162,9 @@ describe('test session', () => {
     await user.click(await screen.findByRole('radio', { name: 'Option B' }));
     await user.click(within(actionBar(container)).getByRole('button', { name: /next question/i }));
 
-    await user.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Save now' }));
+    await user.click(
+      within(await screen.findByRole('alert')).getByRole('button', { name: 'Save now' }),
+    );
     await waitFor(() => expect(svc.saveAnswers).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
@@ -147,15 +173,23 @@ describe('test session', () => {
     svc.get.mockResolvedValue(
       testSession({
         currentPosition: 1,
-        items: [questionItem('i1', { answer: 'Option C' }), questionItem('i2', { answer: 'Option A' }), questionItem('i3')],
+        items: [
+          questionItem('i1', { answer: 'Option C' }),
+          questionItem('i2', { answer: 'Option A' }),
+          questionItem('i3'),
+        ],
       }),
     );
     const { container } = renderRunner();
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i2?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i2?' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Question 2 of 3')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Option A' })).toBeChecked();
     expect(screen.getByText('2 of 3 answered')).toBeInTheDocument();
-    await userEvent.setup().click(within(actionBar(container)).getByRole('button', { name: 'Previous' }));
+    await userEvent
+      .setup()
+      .click(within(actionBar(container)).getByRole('button', { name: 'Previous' }));
     expect(screen.getByRole('radio', { name: 'Option C' })).toBeChecked();
   });
 
@@ -167,9 +201,13 @@ describe('test session', () => {
 
     const grid = screen.getByRole('list', { name: 'Questions' });
     expect(within(grid).getByRole('button', { name: 'Question 1, answered' })).toBeInTheDocument();
-    expect(within(grid).getByRole('button', { name: 'Question 3, not answered yet' })).toBeInTheDocument();
+    expect(
+      within(grid).getByRole('button', { name: 'Question 3, not answered yet' }),
+    ).toBeInTheDocument();
     await user.click(within(grid).getByRole('button', { name: 'Question 3, not answered yet' }));
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i3?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i3?' }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -196,7 +234,9 @@ describe('handing in a test', () => {
 
     await user.click(within(actionBar(container)).getByRole('button', { name: 'Finish test' }));
     const dialog = screen.getByRole('dialog', { name: 'Finish the test?' });
-    expect(within(dialog).getByText('You have 2 unanswered questions. They count as incorrect.')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('You have 2 unanswered questions. They count as incorrect.'),
+    ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Finish test' }));
 
     expect(svc.complete).toHaveBeenCalledWith('s1', [{ itemId: 'i1', answer: 'Option A' }]);
@@ -208,7 +248,9 @@ describe('handing in a test', () => {
     const { container } = renderRunner();
     await toLastQuestion(user, container);
     await user.click(within(actionBar(container)).getByRole('button', { name: 'Finish test' }));
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep working' }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep working' }),
+    );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(svc.complete).not.toHaveBeenCalled();
   });
@@ -218,7 +260,12 @@ describe('handing in a test', () => {
     svc.get.mockResolvedValue(testSession({ items: [questionItem('i1')] }));
     svc.complete.mockRejectedValueOnce(new ApiError('The server is busy', 'busy', 503));
     svc.complete.mockResolvedValueOnce(
-      testSession({ status: 'completed', hideFeedback: false, items: [questionItem('i1')], result: result({ total: 1, correct: 1, incorrect: 0, percent: 100, mistakeCount: 0 }) }),
+      testSession({
+        status: 'completed',
+        hideFeedback: false,
+        items: [questionItem('i1')],
+        result: result({ total: 1, correct: 1, incorrect: 0, percent: 100, mistakeCount: 0 }),
+      }),
     );
     const { container } = renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option A' }));
@@ -248,10 +295,28 @@ describe('test results', () => {
         percent: 72,
         mistakeCount: 7,
         knownWell: [
-          { conceptId: 'c1', name: 'Osmosis', correct: 5, partial: 0, incorrect: 0, total: 5, percent: 100, masteryPercent: 80 },
+          {
+            conceptId: 'c1',
+            name: 'Osmosis',
+            correct: 5,
+            partial: 0,
+            incorrect: 0,
+            total: 5,
+            percent: 100,
+            masteryPercent: 80,
+          },
         ],
         needsPractice: [
-          { conceptId: 'c2', name: 'Diffusion', correct: 1, partial: 0, incorrect: 3, total: 4, percent: 25, masteryPercent: 20 },
+          {
+            conceptId: 'c2',
+            name: 'Diffusion',
+            correct: 1,
+            partial: 0,
+            incorrect: 3,
+            total: 4,
+            percent: 25,
+            masteryPercent: 20,
+          },
         ],
         next: {
           type: 'practice',
@@ -287,7 +352,9 @@ describe('test results', () => {
     svc.get.mockResolvedValue(finished());
     renderRunner();
 
-    const recommended = (await screen.findByRole('heading', { name: 'Recommended' })).closest('section')!;
+    const recommended = (await screen.findByRole('heading', { name: 'Recommended' })).closest(
+      'section',
+    )!;
     expect(within(recommended).getByText('Practice Diffusion')).toBeInTheDocument();
     expect(recommended).toHaveTextContent('You missed 3 questions on it.');
     expect(screen.getByRole('link', { name: 'Start practice' })).toHaveAttribute(
@@ -295,9 +362,14 @@ describe('test results', () => {
       '/study-packs/pack-1?tab=practice&concept=c2',
     );
     expect(
-      screen.getByText((_, element) => element?.tagName === 'P' && element.textContent === '7 questions to review'),
+      screen.getByText(
+        (_, element) => element?.tagName === 'P' && element.textContent === '7 questions to review',
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review mistakes (7)' })).toHaveAttribute('href', '/study/sessions/s1?view=mistakes');
+    expect(screen.getByRole('link', { name: 'Review mistakes (7)' })).toHaveAttribute(
+      'href',
+      '/study/sessions/s1?view=mistakes',
+    );
   });
 
   it('offers another test when nothing is left to practise', async () => {
@@ -305,11 +377,20 @@ describe('test results', () => {
       finished({
         needsPractice: [],
         mistakeCount: 0,
-        next: { type: 'test', label: 'Take an exam simulation', description: 'You are ready.', conceptId: null, conceptName: null },
+        next: {
+          type: 'test',
+          label: 'Take an exam simulation',
+          description: 'You are ready.',
+          conceptId: null,
+          conceptName: null,
+        },
       }),
     );
     renderRunner();
-    expect(await screen.findByRole('link', { name: 'Take another test' })).toHaveAttribute('href', '/study-packs/pack-1?tab=test');
+    expect(await screen.findByRole('link', { name: 'Take another test' })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=test',
+    );
     expect(screen.getByText('Nothing needs extra practice. Well done.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /review mistakes/i })).not.toBeInTheDocument();
   });

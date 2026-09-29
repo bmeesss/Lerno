@@ -51,10 +51,18 @@ export function TutorChatView({
 
   return (
     <div className="tutor-chat">
-      <div className="tutor-drawer-log" role="log" aria-live="polite" aria-label="AI Tutor conversation">
+      <div
+        className="tutor-drawer-log"
+        role="log"
+        aria-live="polite"
+        aria-label="AI Tutor conversation"
+      >
         {chat.messages.length === 0 && !chat.busy ? empty : null}
         {chat.messages.map((message, index) => (
-          <div key={`${message.role}-${index}`} className={`tutor-message tutor-message-${message.role}`}>
+          <div
+            key={`${message.role}-${index}`}
+            className={`tutor-message tutor-message-${message.role}`}
+          >
             {message.role === 'assistant' ? (
               <>
                 <MarkdownLite text={message.content} />

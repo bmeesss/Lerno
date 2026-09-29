@@ -1,12 +1,6 @@
 import { minutesLong } from './sessionCopy';
 import { formatMinutes } from './studyPackRoutes';
-import type {
-  ExamBanner,
-  ResumeCard,
-  StudyPackToday,
-  StudyStreak,
-  TodayStep,
-} from '../types';
+import type { ExamBanner, ResumeCard, StudyPackToday, StudyStreak, TodayStep } from '../types';
 
 /** One numbered step of today's plan. */
 export type PlanStep = TodayStep & { order: number };
@@ -60,7 +54,11 @@ export function normalizeToday(today: StudyPackToday | null): NormalizedToday {
         examDate: upcoming.examDate,
         daysLeft: upcoming.daysLeft,
         message: `${upcoming.title} exam ${
-          upcoming.daysLeft === 0 ? 'is today' : upcoming.daysLeft === 1 ? 'is tomorrow' : `in ${upcoming.daysLeft} days`
+          upcoming.daysLeft === 0
+            ? 'is today'
+            : upcoming.daysLeft === 1
+              ? 'is tomorrow'
+              : `in ${upcoming.daysLeft} days`
         }`,
         note: null,
       };

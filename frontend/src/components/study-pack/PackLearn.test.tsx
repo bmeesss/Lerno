@@ -75,13 +75,18 @@ describe('PackLearn', () => {
   it('learns one specific concept when the link names it', async () => {
     renderLearn(PACK, 'concept-2');
     await screen.findByRole('heading', { name: 'Learn Biology' });
-    expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'learn', conceptId: 'concept-2' }));
+    expect(previewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'learn', conceptId: 'concept-2' }),
+    );
   });
 
   it('renders an honest empty state when a pack has no concepts', () => {
     renderLearn({ ...PACK, concepts: [] } as StudyPackDetail);
     expect(screen.getByRole('heading', { name: 'Nothing to learn yet' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open concepts' })).toHaveAttribute('href', '/?tab=concepts');
+    expect(screen.getByRole('link', { name: 'Open concepts' })).toHaveAttribute(
+      'href',
+      '/?tab=concepts',
+    );
     expect(previewMock).not.toHaveBeenCalled();
   });
 });

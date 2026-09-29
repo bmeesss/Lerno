@@ -28,7 +28,13 @@ export function PackProgressCard({ pack }: { pack: PackProgressRow }) {
           {pack.subjectName ? <span className="muted">{pack.subjectName}</span> : null}
         </div>
         <div className="progress-pack-badges">
-          {exam ? <Badge variant={pack.examDaysLeft !== null && pack.examDaysLeft <= 7 ? 'warning' : 'default'}>{exam}</Badge> : null}
+          {exam ? (
+            <Badge
+              variant={pack.examDaysLeft !== null && pack.examDaysLeft <= 7 ? 'warning' : 'default'}
+            >
+              {exam}
+            </Badge>
+          ) : null}
           {pack.dueCards > 0 ? <Badge variant="accent">{pack.dueCards} due</Badge> : null}
         </div>
       </div>

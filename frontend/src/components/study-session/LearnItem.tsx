@@ -85,7 +85,9 @@ export function LearnItem({
           <div className="learn-blocks">
             <section aria-labelledby="learn-what">
               <h3 id="learn-what">What is it?</h3>
-              <p className="learn-explanation">{learn.explanation || 'No explanation has been added yet.'}</p>
+              <p className="learn-explanation">
+                {learn.explanation || 'No explanation has been added yet.'}
+              </p>
             </section>
             <section aria-labelledby="learn-example">
               <h3 id="learn-example">Example</h3>
@@ -161,7 +163,8 @@ export function LearnItem({
       {step === 'read' ? (
         <SessionCtaBar>
           <Button block onClick={() => setStep(question ? 'check' : 'rate')}>
-            {question ? 'Check yourself' : 'How well do you know this?'} <IconArrowRight size={17} />
+            {question ? 'Check yourself' : 'How well do you know this?'}{' '}
+            <IconArrowRight size={17} />
           </Button>
         </SessionCtaBar>
       ) : null}
@@ -179,7 +182,8 @@ export function LearnItem({
                 onClick={() => onCheck(answer, Math.max(0, Date.now() - shownAt.current))}
                 disabled={busy || answer.trim().length === 0}
               >
-                {busy ? <InlineSpinner /> : <IconCheck size={17} />} {busy ? 'Checking…' : 'Check answer'}
+                {busy ? <InlineSpinner /> : <IconCheck size={17} />}{' '}
+                {busy ? 'Checking…' : 'Check answer'}
               </Button>
               <Button variant="ghost" onClick={() => setStep('rate')} disabled={busy}>
                 Skip the check

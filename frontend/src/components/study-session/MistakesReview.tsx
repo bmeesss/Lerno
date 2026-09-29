@@ -31,12 +31,7 @@ export function MistakesReview({
 
   if (loading) return <LoadingRow />;
   if (error || !data) {
-    return (
-      <SessionError
-        message={error ?? 'Could not load your mistakes.'}
-        onRetry={reload}
-      />
-    );
+    return <SessionError message={error ?? 'Could not load your mistakes.'} onRetry={reload} />;
   }
 
   if (data.total === 0) {
@@ -58,7 +53,8 @@ export function MistakesReview({
             Review mistakes
           </h2>
           <p className="muted">
-            {data.total} question{data.total === 1 ? '' : 's'} to learn from — only what you did not get right.
+            {data.total} question{data.total === 1 ? '' : 's'} to learn from — only what you did not
+            get right.
           </p>
         </div>
         <Link to={backTo} className="btn btn-ghost btn-sm">

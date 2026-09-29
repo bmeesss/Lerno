@@ -7,24 +7,11 @@ import { formatDay } from '../components/progress/TrendSparkline';
 import { useAsync } from '../hooks/useAsync';
 import { formatMinutes } from '../lib/studyPackRoutes';
 import { progressService } from '../services/progressService';
-import type {
-  ProgressStats,
-  StudyProgressOverview,
-  TodaySummary,
-  WeekSummary,
-} from '../types';
+import type { ProgressStats, StudyProgressOverview, TodaySummary, WeekSummary } from '../types';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-}) {
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <section className="card stat-card">
       <div className="stat-label">{label}</div>
@@ -109,7 +96,11 @@ export function ProgressPage() {
                 value={String(overall.questionsAnswered)}
                 sub="Practice, learn checks and tests"
               />
-              <Stat label="Cards reviewed" value={String(overall.cardsReviewed)} sub="Flashcard reviews" />
+              <Stat
+                label="Cards reviewed"
+                value={String(overall.cardsReviewed)}
+                sub="Flashcard reviews"
+              />
               <Stat
                 label="Tests completed"
                 value={String(overall.testsCompleted)}
@@ -172,7 +163,8 @@ export function ProgressPage() {
                 <div>
                   <h2 id="progress-packs-title">Study packs</h2>
                   <p className="muted">
-                    Mastery is averaged across concepts, not cards opened. As of {formatDay(overview.today)}.
+                    Mastery is averaged across concepts, not cards opened. As of{' '}
+                    {formatDay(overview.today)}.
                   </p>
                 </div>
               </div>
@@ -211,10 +203,13 @@ export function ProgressPage() {
                 <section className="card stat-card">
                   <div className="stat-label">Quiz accuracy</div>
                   <div className="stat-value">
-                    {legacy.quizAccuracy === null ? '—' : `${Math.round(legacy.quizAccuracy * 100)}%`}
+                    {legacy.quizAccuracy === null
+                      ? '—'
+                      : `${Math.round(legacy.quizAccuracy * 100)}%`}
                   </div>
                   <div className="stat-sub">
-                    {legacy.quizAttempts} quiz attempt{legacy.quizAttempts === 1 ? '' : 's'} · {legacy.dueCards} cards due
+                    {legacy.quizAttempts} quiz attempt{legacy.quizAttempts === 1 ? '' : 's'} ·{' '}
+                    {legacy.dueCards} cards due
                   </div>
                 </section>
               </div>
@@ -239,7 +234,10 @@ export function ProgressPage() {
                             : ''}
                         </span>
                       </div>
-                      <ProgressBar value={subject.learnedCards} max={Math.max(subject.totalCards, 1)} />
+                      <ProgressBar
+                        value={subject.learnedCards}
+                        max={Math.max(subject.totalCards, 1)}
+                      />
                     </div>
                   ))}
                 </div>

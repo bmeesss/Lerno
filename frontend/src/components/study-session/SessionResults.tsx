@@ -52,12 +52,19 @@ function ResultLinks({ session, result }: { session: LearningSession; result: Se
 }
 
 /** The end of a Learn, Practice or Review session. */
-export function PracticeResults({ session, result }: { session: LearningSession; result: SessionResult }) {
+export function PracticeResults({
+  session,
+  result,
+}: {
+  session: LearningSession;
+  result: SessionResult;
+}) {
   const improved = result.concepts
     .filter((concept) => concept.afterPercent > concept.beforePercent)
     .sort(
       (a, b) =>
-        b.afterPercent - b.beforePercent - (a.afterPercent - a.beforePercent) || a.name.localeCompare(b.name),
+        b.afterPercent - b.beforePercent - (a.afterPercent - a.beforePercent) ||
+        a.name.localeCompare(b.name),
     );
   const top = improved[0];
   const isLearn = session.type === 'learn';
@@ -76,10 +83,16 @@ export function PracticeResults({ session, result }: { session: LearningSession;
         <div className="pack-session-stats" role="group" aria-label="Session summary">
           <Stat value={duration(result.durationSeconds)} label="time" />
           {isLearn ? (
-            <Stat value={result.answered} label={result.answered === 1 ? 'concept rated' : 'concepts rated'} />
+            <Stat
+              value={result.answered}
+              label={result.answered === 1 ? 'concept rated' : 'concepts rated'}
+            />
           ) : (
             <>
-              <Stat value={result.answered} label={result.answered === 1 ? 'question' : 'questions'} />
+              <Stat
+                value={result.answered}
+                label={result.answered === 1 ? 'question' : 'questions'}
+              />
               <Stat value={result.correct} label="correct" />
               <Stat value={result.incorrect} label="incorrect" />
             </>
@@ -129,7 +142,8 @@ export function PracticeResults({ session, result }: { session: LearningSession;
         </section>
 
         <p className="muted">
-          {session.packTitle} · {result.packMasteryPercent}% mastered · {result.packWeakCount} weak concept
+          {session.packTitle} · {result.packMasteryPercent}% mastered · {result.packWeakCount} weak
+          concept
           {result.packWeakCount === 1 ? '' : 's'} overall
         </p>
       </article>
@@ -140,13 +154,21 @@ export function PracticeResults({ session, result }: { session: LearningSession;
           <ResultLinks session={session} result={result} />
         </div>
       </div>
-      {result.next.description ? <p className="muted session-next-reason">{result.next.description}</p> : null}
+      {result.next.description ? (
+        <p className="muted session-next-reason">{result.next.description}</p>
+      ) : null}
     </section>
   );
 }
 
 /** The end of a test: score, what to be proud of, what to practise, what to do next. */
-export function TestResults({ session, result }: { session: LearningSession; result: SessionResult }) {
+export function TestResults({
+  session,
+  result,
+}: {
+  session: LearningSession;
+  result: SessionResult;
+}) {
   return (
     <section className="session-screen" aria-labelledby="session-result-heading">
       <article className="card session-card session-result">
@@ -203,7 +225,8 @@ export function TestResults({ session, result }: { session: LearningSession; res
         </div>
 
         <p>
-          <strong>{result.mistakeCount}</strong> question{result.mistakeCount === 1 ? '' : 's'} to review
+          <strong>{result.mistakeCount}</strong> question{result.mistakeCount === 1 ? '' : 's'} to
+          review
         </p>
 
         <section className="test-recommended" aria-labelledby="result-recommended">

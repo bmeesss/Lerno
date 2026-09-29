@@ -112,7 +112,8 @@ export function SessionStart({
   const modeAvailable = selectedMode ? selectedMode.available : true;
   const canStart = preview.canStart && modeAvailable;
   const exam = examInLabel(preview.examDaysLeft);
-  const weak = type === 'practice' || type === 'learn' ? pack.progress.weakConcepts.slice(0, 5) : [];
+  const weak =
+    type === 'practice' || type === 'learn' ? pack.progress.weakConcepts.slice(0, 5) : [];
   const resume = preview.resume;
 
   return (
@@ -190,7 +191,11 @@ export function SessionStart({
                 <li key={concept.id} className="session-concept-chip">
                   <span>{concept.name}</span>
                   <span className="session-concept-mastery">{concept.masteryPercent}%</span>
-                  {reason ? <Badge variant={concept.reason === 'weak' ? 'warning' : 'default'}>{reason}</Badge> : null}
+                  {reason ? (
+                    <Badge variant={concept.reason === 'weak' ? 'warning' : 'default'}>
+                      {reason}
+                    </Badge>
+                  ) : null}
                 </li>
               );
             })}
@@ -236,16 +241,26 @@ export function SessionStart({
       <div className="session-start-actions">
         {resume ? (
           <>
-            <Button size="lg" onClick={() => navigate(sessionHref(resume.sessionId))} disabled={starting}>
+            <Button
+              size="lg"
+              onClick={() => navigate(sessionHref(resume.sessionId))}
+              disabled={starting}
+            >
               Continue <IconArrowRight size={18} />
             </Button>
-            <Button size="lg" variant="secondary" onClick={() => void begin(true)} disabled={starting || !canStart}>
+            <Button
+              size="lg"
+              variant="secondary"
+              onClick={() => void begin(true)}
+              disabled={starting || !canStart}
+            >
               {starting ? 'Starting…' : 'Start over'}
             </Button>
           </>
         ) : (
           <Button size="lg" onClick={() => void begin(false)} disabled={starting || !canStart}>
-            {starting ? 'Preparing…' : startLabel(type)} {!starting ? <IconArrowRight size={18} /> : null}
+            {starting ? 'Preparing…' : startLabel(type)}{' '}
+            {!starting ? <IconArrowRight size={18} /> : null}
           </Button>
         )}
       </div>

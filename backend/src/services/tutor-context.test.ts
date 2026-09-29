@@ -25,9 +25,9 @@ describe('tutor citations', () => {
   const sources = [source('s1', 'Biologie H3.pdf', ['page 1', 'page 6']), source('s2', 'Notes.md')];
 
   it('accepts a citation that names a real source and a real place in it', () => {
-    expect(extractCitations('Mitose is celdeling. [Source: Biologie H3.pdf · page 6]', sources)).toEqual([
-      { sourceId: 's1', title: 'Biologie H3.pdf', ref: 'page 6' },
-    ]);
+    expect(
+      extractCitations('Mitose is celdeling. [Source: Biologie H3.pdf · page 6]', sources),
+    ).toEqual([{ sourceId: 's1', title: 'Biologie H3.pdf', ref: 'page 6' }]);
   });
 
   it('keeps the source but drops a place it does not have', () => {
@@ -38,18 +38,24 @@ describe('tutor citations', () => {
 
   it('drops invented sources and tolerates a missing file extension', () => {
     expect(extractCitations('… [Source: Made Up Book · page 3]', sources)).toEqual([]);
-    expect(extractCitations('… [Source: Notes]', sources)).toEqual([{ sourceId: 's2', title: 'Notes.md', ref: null }]);
+    expect(extractCitations('… [Source: Notes]', sources)).toEqual([
+      { sourceId: 's2', title: 'Notes.md', ref: null },
+    ]);
     expect(extractCitations('No citations here.', sources)).toEqual([]);
   });
 
   it('lists each cited place once', () => {
-    const reply = 'A [Source: Biologie H3.pdf · page 6] and again [Source: Biologie H3.pdf · page 6].';
+    const reply =
+      'A [Source: Biologie H3.pdf · page 6] and again [Source: Biologie H3.pdf · page 6].';
     expect(extractCitations(reply, sources)).toHaveLength(1);
   });
 });
 
 describe('source excerpts', () => {
-  const text = 'Intro text about cells. '.repeat(5) + 'Osmosis moves water across a membrane. '.repeat(3) + 'Closing words.';
+  const text =
+    'Intro text about cells. '.repeat(5) +
+    'Osmosis moves water across a membrane. '.repeat(3) +
+    'Closing words.';
   const references = [
     { label: 'page 1', start: 0 },
     { label: 'page 2', start: 120 },
@@ -65,7 +71,10 @@ describe('source excerpts', () => {
     const mention = sourceExcerptFor({ name: 'Osmosis', refLabel: null }, { text, references: [] });
     expect(mention.match).toBe('mention');
     expect(mention.text).toContain('Osmosis moves water');
-    const start = sourceExcerptFor({ name: 'Photosynthesis', refLabel: null }, { text, references: [] });
+    const start = sourceExcerptFor(
+      { name: 'Photosynthesis', refLabel: null },
+      { text, references: [] },
+    );
     expect(start.match).toBe('start');
     expect(start.text.startsWith('Intro text')).toBe(true);
   });

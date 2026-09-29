@@ -104,7 +104,9 @@ export async function createPack(
     });
   expect(created.status).toBe(201);
   const packId = created.body.data.id as string;
-  const sources = await request(app).get(`/api/study-packs/${packId}/sources`).set(auth(student.token));
+  const sources = await request(app)
+    .get(`/api/study-packs/${packId}/sources`)
+    .set(auth(student.token));
   const sourceId = (sources.body.data as { id: string }[])[0]?.id ?? null;
 
   const names = options.concepts ?? CONCEPT_NAMES;
@@ -121,9 +123,9 @@ export async function createPack(
       })),
     });
   expect(conceptRes.status).toBe(201);
-  const concepts = (
-    (conceptRes.body.data.concepts ?? []) as { id: string; name: string }[]
-  ).map((concept) => ({ id: concept.id, name: concept.name }));
+  const concepts = ((conceptRes.body.data.concepts ?? []) as { id: string; name: string }[]).map(
+    (concept) => ({ id: concept.id, name: concept.name }),
+  );
   expect(concepts).toHaveLength(names.length);
 
   const perConcept = options.questionsPerConcept ?? 4;
@@ -205,7 +207,13 @@ export interface SessionDetail {
     knownWell: { conceptId: string; name: string; percent: number }[];
     needsPractice: { conceptId: string; name: string; percent: number }[];
     mistakeCount: number;
-    next: { type: string; label: string; description: string; conceptName: string | null; conceptId: string | null };
+    next: {
+      type: string;
+      label: string;
+      description: string;
+      conceptName: string | null;
+      conceptId: string | null;
+    };
     testAttemptId: string | null;
     packWeakCount: number;
     packMasteryPercent: number;
@@ -223,7 +231,11 @@ export async function startSession(
   return res.body.data as { session: SessionDetail; resumed: boolean };
 }
 
-export async function getSession(app: Express, student: Student, id: string): Promise<SessionDetail> {
+export async function getSession(
+  app: Express,
+  student: Student,
+  id: string,
+): Promise<SessionDetail> {
   const res = await request(app).get(`/api/study-sessions/${id}`).set(auth(student.token));
   expect(res.status).toBe(200);
   return (res.body.data as { session: SessionDetail }).session;

@@ -99,7 +99,11 @@ export function PracticeItem({
       {error ? (
         <SessionError
           message={error}
-          onRetry={!answered && answer.trim() ? () => onCheck(answer, Date.now() - shownAt.current) : undefined}
+          onRetry={
+            !answered && answer.trim()
+              ? () => onCheck(answer, Date.now() - shownAt.current)
+              : undefined
+          }
         />
       ) : null}
 
@@ -115,7 +119,8 @@ export function PracticeItem({
               onClick={() => onCheck(answer, Math.max(0, Date.now() - shownAt.current))}
               disabled={busy || answer.trim().length === 0}
             >
-              {busy ? <InlineSpinner /> : <IconCheck size={17} />} {busy ? 'Checking…' : 'Check answer'}
+              {busy ? <InlineSpinner /> : <IconCheck size={17} />}{' '}
+              {busy ? 'Checking…' : 'Check answer'}
             </Button>
             <Button variant="ghost" onClick={onSkip} disabled={busy}>
               Skip

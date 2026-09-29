@@ -86,7 +86,9 @@ describe('practice session', () => {
   it('shows one question at a time with its position and progress', async () => {
     renderRunner();
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i1?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i1?' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Biology Practice')).toBeInTheDocument();
     expect(screen.getByText('Question 1 of 3')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
@@ -105,7 +107,9 @@ describe('practice session', () => {
   it('checks the answer, then shows instant feedback with explanation, concept, mastery and source', async () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
-    svc.answer.mockResolvedValue(answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }));
+    svc.answer.mockResolvedValue(
+      answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }),
+    );
     renderRunner();
 
     await user.click(await screen.findByRole('radio', { name: 'Option B' }));
@@ -116,10 +120,14 @@ describe('practice session', () => {
     expect(panel).toHaveAttribute('aria-live', 'polite');
     expect(within(panel).getByText('Not quite')).toBeInTheDocument();
     expect(within(panel).getByText('Correct answer').parentElement).toHaveTextContent('Option A');
-    expect(within(panel).getByText('Why').parentElement).toHaveTextContent('Because water follows the solute.');
+    expect(within(panel).getByText('Why').parentElement).toHaveTextContent(
+      'Because water follows the solute.',
+    );
     expect(within(panel).getByText('Concept').parentElement).toHaveTextContent('Osmosis');
     expect(within(panel).getByLabelText('Mastery 42% to 35%')).toBeInTheDocument();
-    expect(within(panel).getByText('Source').parentElement).toHaveTextContent('Biology.pdf · page 3');
+    expect(within(panel).getByText('Source').parentElement).toHaveTextContent(
+      'Biology.pdf · page 3',
+    );
     // The answers can no longer be changed, and the next step has focus.
     for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled();
     const next = screen.getByRole('button', { name: /next question/i });
@@ -129,7 +137,9 @@ describe('practice session', () => {
   it('marks the right option without relying on colour alone', async () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
-    svc.answer.mockResolvedValue(answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }));
+    svc.answer.mockResolvedValue(
+      answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }),
+    );
     renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option B' }));
     await user.click(screen.getByRole('button', { name: /check answer/i }));
@@ -144,7 +154,12 @@ describe('practice session', () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
     svc.answer.mockResolvedValue(
-      answeredResponse(first, 'Option A', feedback({ verdict: 'correct', masteryAfterPercent: 50 }), { answered: 1, total: 3, position: 1 }),
+      answeredResponse(
+        first,
+        'Option A',
+        feedback({ verdict: 'correct', masteryAfterPercent: 50 }),
+        { answered: 1, total: 3, position: 1 },
+      ),
     );
     renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option A' }));
@@ -152,7 +167,9 @@ describe('practice session', () => {
     expect(await screen.findByText('Well done')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /next question/i }));
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i2?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i2?' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Question 2 of 3')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33');
   });
@@ -163,12 +180,20 @@ describe('practice session', () => {
     svc.skip.mockResolvedValue({
       item: { ...first, status: 'skipped' },
       progress: { position: 1, total: 3, answered: 0, skipped: 1, percent: 33 },
-      session: { id: 's1', status: 'active', currentPosition: 1, answeredCount: 0, durationSeconds: 5 },
+      session: {
+        id: 's1',
+        status: 'active',
+        currentPosition: 1,
+        answeredCount: 0,
+        durationSeconds: 5,
+      },
     });
     renderRunner();
     await user.click(await screen.findByRole('button', { name: 'Skip' }));
     expect(svc.skip).toHaveBeenCalledWith('s1', 'i1');
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i2?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i2?' }),
+    ).toBeInTheDocument();
   });
 
   it('answers an open question from a text box', async () => {
@@ -177,7 +202,11 @@ describe('practice session', () => {
     open.question = { ...open.question!, questionType: 'short_answer', options: null };
     svc.get.mockResolvedValue(session({ items: [open] }));
     svc.answer.mockResolvedValue(
-      answeredResponse(open, 'water moves', feedback({ verdict: 'partial' }), { answered: 1, total: 1, position: 1 }),
+      answeredResponse(open, 'water moves', feedback({ verdict: 'partial' }), {
+        answered: 1,
+        total: 1,
+        position: 1,
+      }),
     );
     renderRunner();
 
@@ -195,7 +224,9 @@ describe('finishing a practice session', () => {
     const user = userEvent.setup();
     const only = questionItem('i1');
     svc.get.mockResolvedValue(session({ items: [only] }));
-    svc.answer.mockResolvedValue(answeredResponse(only, 'Option B', feedback(), { answered: 1, total: 1, position: 1 }));
+    svc.answer.mockResolvedValue(
+      answeredResponse(only, 'Option B', feedback(), { answered: 1, total: 1, position: 1 }),
+    );
     const completed: LearningSession = session({
       items: [{ ...only, status: 'answered', answer: 'Option B', feedback: feedback() }],
       status: 'completed',
@@ -214,7 +245,9 @@ describe('finishing a practice session', () => {
   it('ends with the improvement, what is still weak and the next step', async () => {
     await finishOneQuestion();
 
-    expect(await screen.findByRole('heading', { name: 'Great work — Osmosis improved from 42% → 61%' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Great work — Osmosis improved from 42% → 61%' }),
+    ).toBeInTheDocument();
     expect(svc.complete).toHaveBeenCalledWith('s1');
     expect(screen.getByText('2 concepts still need attention')).toBeInTheDocument();
     expect(screen.getByText('Diffusion')).toBeInTheDocument();
@@ -232,7 +265,10 @@ describe('finishing a practice session', () => {
 
   it('offers "Review mistakes" from the result, and only when there are mistakes', async () => {
     await finishOneQuestion(1);
-    expect(await screen.findByRole('link', { name: 'Review mistakes (1)' })).toHaveAttribute('href', '/study/sessions/s1?view=mistakes');
+    expect(await screen.findByRole('link', { name: 'Review mistakes (1)' })).toHaveAttribute(
+      'href',
+      '/study/sessions/s1?view=mistakes',
+    );
   });
 
   it('hides "Review mistakes" after a perfect session', async () => {
@@ -245,10 +281,21 @@ describe('finishing a practice session', () => {
     const user = userEvent.setup();
     const only = questionItem('i1');
     svc.get.mockResolvedValue(session({ items: [only] }));
-    svc.answer.mockResolvedValue(answeredResponse(only, 'Option A', feedback({ verdict: 'correct' }), { answered: 1, total: 1, position: 1 }));
+    svc.answer.mockResolvedValue(
+      answeredResponse(only, 'Option A', feedback({ verdict: 'correct' }), {
+        answered: 1,
+        total: 1,
+        position: 1,
+      }),
+    );
     svc.complete.mockRejectedValueOnce(new ApiError('The server is busy', 'busy', 503));
     svc.complete.mockResolvedValueOnce(
-      session({ items: [only], status: 'completed', answeredCount: 1, result: result({ mistakeCount: 0 }) }),
+      session({
+        items: [only],
+        status: 'completed',
+        answeredCount: 1,
+        result: result({ mistakeCount: 0 }),
+      }),
     );
     renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option A' }));
@@ -269,7 +316,13 @@ describe('finishing a practice session', () => {
     svc.skip.mockResolvedValue({
       item: { ...only, status: 'skipped' },
       progress: { position: 1, total: 1, answered: 0, skipped: 1, percent: 100 },
-      session: { id: 's1', status: 'active', currentPosition: 1, answeredCount: 0, durationSeconds: 3 },
+      session: {
+        id: 's1',
+        status: 'active',
+        currentPosition: 1,
+        answeredCount: 0,
+        durationSeconds: 3,
+      },
     });
     svc.abandon.mockResolvedValue(session({ status: 'abandoned' }));
     renderRunner();
@@ -284,7 +337,9 @@ describe('resume, errors and leaving', () => {
   it('resumes at the first open question: "Question 6 of 10"', async () => {
     const items = Array.from({ length: 10 }, (_, index) => {
       const item = questionItem(`i${index + 1}`);
-      return index < 5 ? { ...item, status: 'answered' as const, answer: 'Option A', feedback: feedback() } : item;
+      return index < 5
+        ? { ...item, status: 'answered' as const, answer: 'Option A', feedback: feedback() }
+        : item;
     });
     svc.get.mockResolvedValue(
       session({
@@ -296,7 +351,9 @@ describe('resume, errors and leaving', () => {
     );
     renderRunner();
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i6?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i6?' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Question 6 of 10')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
   });
@@ -305,7 +362,9 @@ describe('resume, errors and leaving', () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
     svc.answer.mockRejectedValueOnce(new ApiError('Connection lost', 'network', 0));
-    svc.answer.mockResolvedValueOnce(answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }));
+    svc.answer.mockResolvedValueOnce(
+      answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }),
+    );
     renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option B' }));
     await user.click(screen.getByRole('button', { name: /check answer/i }));
@@ -323,25 +382,47 @@ describe('resume, errors and leaving', () => {
     const user = userEvent.setup();
     renderRunner();
 
-    expect(await screen.findByRole('heading', { name: 'Could not open this session' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Could not open this session' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Study session not found')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to My Study' })).toHaveAttribute('href', '/study');
+    expect(screen.getByRole('link', { name: 'Back to My Study' })).toHaveAttribute(
+      'href',
+      '/study',
+    );
     await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { level: 2, name: 'Question i1?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Question i1?' }),
+    ).toBeInTheDocument();
   });
 
   it('explains that an ended session was kept, and offers a fresh start', async () => {
     svc.get.mockResolvedValue(session({ status: 'abandoned' }));
     renderRunner();
-    expect(await screen.findByRole('heading', { name: 'This session was ended' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Start again' })).toHaveAttribute('href', '/study-packs/pack-1?tab=practice');
+    expect(
+      await screen.findByRole('heading', { name: 'This session was ended' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Start again' })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=practice',
+    );
   });
 
   it('asks before leaving, reassures that progress is saved and can end with results', async () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
-    svc.get.mockResolvedValue(session({ answeredCount: 1, items: [{ ...first, status: 'answered', answer: 'Option A', feedback: feedback() }, questionItem('i2')] }));
-    svc.complete.mockResolvedValue(session({ status: 'completed', answeredCount: 1, result: result() }));
+    svc.get.mockResolvedValue(
+      session({
+        answeredCount: 1,
+        items: [
+          { ...first, status: 'answered', answer: 'Option A', feedback: feedback() },
+          questionItem('i2'),
+        ],
+      }),
+    );
+    svc.complete.mockResolvedValue(
+      session({ status: 'completed', answeredCount: 1, result: result() }),
+    );
     renderRunner();
     await user.click(await screen.findByRole('button', { name: 'Leave' }));
 
@@ -375,7 +456,9 @@ describe('contextual help', () => {
     const user = userEvent.setup();
     const first = session().items[0]!;
     svc.get.mockResolvedValue(session({ isOwner }));
-    svc.answer.mockResolvedValue(answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }));
+    svc.answer.mockResolvedValue(
+      answeredResponse(first, 'Option B', feedback(), { answered: 1, total: 3, position: 1 }),
+    );
     renderRunner();
     await user.click(await screen.findByRole('radio', { name: 'Option B' }));
     await user.click(screen.getByRole('button', { name: /check answer/i }));
@@ -396,7 +479,11 @@ describe('contextual help', () => {
   });
 
   it('opens the tutor with the concept, session and question as context', async () => {
-    tutorMock.mockResolvedValue({ reply: 'Water follows the solute.', basedOnMaterial: true, citations: [] });
+    tutorMock.mockResolvedValue({
+      reply: 'Water follows the solute.',
+      basedOnMaterial: true,
+      citations: [],
+    });
     const user = await answerFirst(true);
     await user.click(screen.getByRole('button', { name: 'Explain this' }));
 
@@ -415,7 +502,11 @@ describe('contextual help', () => {
     svc.conceptSource.mockResolvedValue({
       concept: { id: 'c1', name: 'Osmosis' },
       source: { id: 'source-1', title: 'Biology.pdf', kind: 'pdf' },
-      excerpt: { text: 'Osmosis is the diffusion of water across a membrane.', ref: 'page 3', match: 'reference' },
+      excerpt: {
+        text: 'Osmosis is the diffusion of water across a membrane.',
+        ref: 'page 3',
+        match: 'reference',
+      },
     });
     const user = await answerFirst(true);
     await user.click(screen.getByRole('button', { name: 'Show source' }));
@@ -423,11 +514,17 @@ describe('contextual help', () => {
     expect(svc.conceptSource).toHaveBeenCalledWith('pack-1', 'c1');
     const region = await screen.findByRole('region', { name: 'Source' });
     expect(within(region).getByText('Biology.pdf · page 3')).toBeInTheDocument();
-    expect(within(region).getByText('Osmosis is the diffusion of water across a membrane.')).toBeInTheDocument();
+    expect(
+      within(region).getByText('Osmosis is the diffusion of water across a membrane.'),
+    ).toBeInTheDocument();
   });
 
   it('says so when a concept has no source, instead of inventing one', async () => {
-    svc.conceptSource.mockResolvedValue({ concept: { id: 'c1', name: 'Osmosis' }, source: null, excerpt: null });
+    svc.conceptSource.mockResolvedValue({
+      concept: { id: 'c1', name: 'Osmosis' },
+      source: null,
+      excerpt: null,
+    });
     const user = await answerFirst(true);
     await user.click(screen.getByRole('button', { name: 'Show source' }));
     expect(await screen.findByText('No source is linked to this concept yet.')).toBeInTheDocument();
@@ -445,7 +542,12 @@ describe('contextual help', () => {
 describe('review mistakes', () => {
   beforeEach(() => {
     svc.get.mockResolvedValue(
-      session({ status: 'completed', answeredCount: 3, result: result(), items: session().items.map((item) => ({ ...item, status: 'answered' as const })) }),
+      session({
+        status: 'completed',
+        answeredCount: 3,
+        result: result(),
+        items: session().items.map((item) => ({ ...item, status: 'answered' as const })),
+      }),
     );
     svc.mistakes.mockResolvedValue(mistakes());
   });
@@ -455,13 +557,25 @@ describe('review mistakes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Review mistakes' })).toBeInTheDocument();
     expect(screen.getByText(/1 question to learn from/)).toBeInTheDocument();
-    const card = screen.getByRole('heading', { name: 'Which way does water move in osmosis?' }).closest('li')!;
-    expect(within(card).getByText('Your answer').nextElementSibling).toHaveTextContent('Towards less solute');
-    expect(within(card).getByText('Correct answer').nextElementSibling).toHaveTextContent('Towards more solute');
-    expect(within(card).getByText('Explanation').nextElementSibling).toHaveTextContent('Water follows the solute across the membrane.');
+    const card = screen
+      .getByRole('heading', { name: 'Which way does water move in osmosis?' })
+      .closest('li')!;
+    expect(within(card).getByText('Your answer').nextElementSibling).toHaveTextContent(
+      'Towards less solute',
+    );
+    expect(within(card).getByText('Correct answer').nextElementSibling).toHaveTextContent(
+      'Towards more solute',
+    );
+    expect(within(card).getByText('Explanation').nextElementSibling).toHaveTextContent(
+      'Water follows the solute across the membrane.',
+    );
     expect(within(card).getByText('Concept').nextElementSibling).toHaveTextContent('Osmosis');
-    expect(within(card).getByText('Source').nextElementSibling).toHaveTextContent('Biology.pdf · page 3');
-    expect(screen.getAllByRole('listitem').filter((item) => item.classList.contains('mistake-card'))).toHaveLength(1);
+    expect(within(card).getByText('Source').nextElementSibling).toHaveTextContent(
+      'Biology.pdf · page 3',
+    );
+    expect(
+      screen.getAllByRole('listitem').filter((item) => item.classList.contains('mistake-card')),
+    ).toHaveLength(1);
   });
 
   it('turns every mistake into practice for that concept', async () => {
@@ -471,13 +585,18 @@ describe('review mistakes', () => {
       '/study-packs/pack-1?tab=practice&concept=c1',
     );
     expect(screen.getByRole('button', { name: 'Ask AI Tutor' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to results' })).toHaveAttribute('href', '/study/sessions/s1');
+    expect(screen.getByRole('link', { name: 'Back to results' })).toHaveAttribute(
+      'href',
+      '/study/sessions/s1',
+    );
   });
 
   it('congratulates instead of showing an empty list when nothing was wrong', async () => {
     svc.mistakes.mockResolvedValue(mistakes({ total: 0, mistakes: [] }));
     renderRunner('/study/sessions/s1?view=mistakes');
-    expect(await screen.findByRole('heading', { name: 'No mistakes to review' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'No mistakes to review' }),
+    ).toBeInTheDocument();
   });
 
   it('retries when the mistakes cannot be loaded', async () => {

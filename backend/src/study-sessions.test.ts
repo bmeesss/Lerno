@@ -66,7 +66,10 @@ async function answerAll(
 describe('study sessions: create, resume, complete', () => {
   it('creates an active practice session with server-side items and no solutions', async () => {
     const { student, pack } = await ready();
-    const { session, resumed } = await startSession(app, student, { packId: pack.id, type: 'practice' });
+    const { session, resumed } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+    });
 
     expect(resumed).toBe(false);
     expect(session).toMatchObject({
@@ -78,7 +81,13 @@ describe('study sessions: create, resume, complete', () => {
       currentPosition: 0,
       hideFeedback: false,
     });
-    expect(session.progress).toEqual({ position: 1, total: 10, answered: 0, skipped: 0, percent: 0 });
+    expect(session.progress).toEqual({
+      position: 1,
+      total: 10,
+      answered: 0,
+      skipped: 0,
+      percent: 0,
+    });
     expect(session.items).toHaveLength(10);
 
     const first = session.items[0]!;
@@ -97,7 +106,11 @@ describe('study sessions: create, resume, complete', () => {
     expect(again.resumed).toBe(true);
     expect(again.session.id).toBe(first.session.id);
 
-    const fresh = await startSession(app, student, { packId: pack.id, type: 'practice', restart: true });
+    const fresh = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      restart: true,
+    });
     expect(fresh.resumed).toBe(false);
     expect(fresh.session.id).not.toBe(first.session.id);
     expect((await getSession(app, student, first.session.id)).status).toBe('abandoned');
@@ -118,7 +131,11 @@ describe('study sessions: create, resume, complete', () => {
 
   it('can be created without starting and starts on demand', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', start: false });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      start: false,
+    });
     expect(session.status).toBe('not_started');
     const started = await request(app)
       .post(`/api/study-sessions/${session.id}/start`)
@@ -159,9 +176,13 @@ describe('study sessions: create, resume, complete', () => {
   it('shows the resume card on My Study as well', async () => {
     const { student, pack } = await ready();
     const { session } = await startSession(app, student, { packId: pack.id, type: 'practice' });
-    for (const item of session.items.slice(0, 5)) await answerItem(app, student, session.id, item.id, RIGHT);
+    for (const item of session.items.slice(0, 5))
+      await answerItem(app, student, session.id, item.id, RIGHT);
     const today = await request(app).get('/api/study-packs/today').set(auth(student.token));
-    expect(today.body.data.resume[0]).toMatchObject({ label: 'Biology Practice', positionLabel: 'Question 6 of 10' });
+    expect(today.body.data.resume[0]).toMatchObject({
+      label: 'Biology Practice',
+      positionLabel: 'Question 6 of 10',
+    });
     // An open session is what "Continue studying" leads back to.
     expect(today.body.data.primary).toMatchObject({ type: 'continue', sessionId: session.id });
   });
@@ -182,13 +203,22 @@ describe('study sessions: create, resume, complete', () => {
 
     const done = await completeSession(app, student, session.id);
     expect(done.status).toBe('completed');
-    expect(done.result).toMatchObject({ total: 5, answered: 5, correct: 2, incorrect: 3, percent: 40 });
+    expect(done.result).toMatchObject({
+      total: 5,
+      answered: 5,
+      correct: 2,
+      incorrect: 3,
+      percent: 40,
+    });
     const osmosisChange = done.result!.concepts.find((change) => change.name === 'Osmosis')!;
     expect(osmosisChange.beforePercent).toBe(42);
     // The focus concept has three questions: right, right, wrong = 0.42 + 0.2 + 0.2 − 0.15.
     expect(osmosisChange.afterPercent).toBe(67);
     // Three questions were missed (one on Osmosis, two on other concepts): the weakest of them is next.
-    expect(done.result!.next).toMatchObject({ type: 'practice', description: 'You missed 1 question on it.' });
+    expect(done.result!.next).toMatchObject({
+      type: 'practice',
+      description: 'You missed 1 question on it.',
+    });
     expect(done.result!.next.conceptName).not.toBeNull();
     expect(done.durationSeconds).toBeGreaterThanOrEqual(0);
 
@@ -199,7 +229,11 @@ describe('study sessions: create, resume, complete', () => {
 
   it('completing twice is safe and returns the stored result', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     await answerAll(student, session.id, session.items, () => RIGHT);
     const first = await completeSession(app, student, session.id);
     const second = await completeSession(app, student, session.id);
@@ -208,7 +242,11 @@ describe('study sessions: create, resume, complete', () => {
 
   it('refuses to finish empty-handed, and to answer once finished or abandoned', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     await completeSession(app, student, session.id, {}, 400);
 
     await answerItem(app, student, session.id, session.items[0]!.id, RIGHT);
@@ -219,7 +257,11 @@ describe('study sessions: create, resume, complete', () => {
       .set(auth(student.token));
     expect(abandon.status).toBe(409);
 
-    const other = await startSession(app, student, { packId: pack.id, type: 'practice', restart: true });
+    const other = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      restart: true,
+    });
     const left = await request(app)
       .post(`/api/study-sessions/${other.session.id}/abandon`)
       .set(auth(student.token));
@@ -230,7 +272,11 @@ describe('study sessions: create, resume, complete', () => {
 
   it('keeps answers given before abandoning: mastery is never silently lost', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 4 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 4,
+    });
     await answerItem(app, student, session.id, session.items[0]!.id, RIGHT);
     await request(app).post(`/api/study-sessions/${session.id}/abandon`).set(auth(student.token));
     const rows = await memoryDb().conceptMastery.listByUserAndPack(student.id, pack.id);
@@ -240,7 +286,11 @@ describe('study sessions: create, resume, complete', () => {
 
   it('skips a question without touching mastery', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     const res = await request(app)
       .post(`/api/study-sessions/${session.id}/items/${session.items[0]!.id}/skip`)
       .set(auth(student.token));
@@ -276,12 +326,20 @@ describe('practice: instant feedback and mastery', () => {
     expect(result.progress).toMatchObject({ answered: 1, position: 2 });
 
     const wrong = await answerItem(app, student, session.id, session.items[1]!.id, WRONG);
-    expect(wrong.item.feedback).toMatchObject({ verdict: 'incorrect', masteryBeforePercent: 62, masteryAfterPercent: 47 });
+    expect(wrong.item.feedback).toMatchObject({
+      verdict: 'incorrect',
+      masteryBeforePercent: 62,
+      masteryAfterPercent: 47,
+    });
   });
 
   it('never counts an answer twice', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     const item = session.items[0]!;
     const first = await answerItem(app, student, session.id, item.id, RIGHT);
     const second = await answerItem(app, student, session.id, item.id, WRONG);
@@ -296,7 +354,11 @@ describe('practice: instant feedback and mastery', () => {
 
   it('writes attempts and learning events that point back to the session', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 2,
+    });
     await answerItem(app, student, session.id, session.items[0]!.id, RIGHT);
     const events = await memoryDb().learningEvents.listByUser(student.id);
     expect(events).toHaveLength(1);
@@ -306,7 +368,11 @@ describe('practice: instant feedback and mastery', () => {
 
   it('accepts an option index like the classic practice endpoint, and shows the chosen text', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 2,
+    });
     const res = await answerItem(app, student, session.id, session.items[0]!.id, '0');
     expect(res.item.feedback!.verdict).toBe('correct');
     expect(res.item.answer).toBe(RIGHT);
@@ -321,7 +387,11 @@ describe('adaptive selection', () => {
     await setMastery(student.id, conceptId(pack, 'Diffusion'), 0.9, { attempts: 6 });
     await setMastery(student.id, conceptId(pack, 'Meiosis'), 0.9, { attempts: 6 });
 
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 6 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 6,
+    });
     const names = session.items.map((item) => item.conceptName);
     expect(names.slice(0, 3)).toEqual(['Osmosis', 'Osmosis', 'Osmosis']);
     // Diversity: the weak concept does not take every seat while others wait.
@@ -335,7 +405,11 @@ describe('adaptive selection', () => {
     await answerAll(student, first.session.id, first.session.items, () => RIGHT);
     await completeSession(app, student, first.session.id);
 
-    const second = await startSession(app, student, { packId: pack.id, type: 'practice', count: 8 });
+    const second = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 8,
+    });
     const overlap = second.session.items.filter((item) => seen.has(item.question!.id));
     // 16 questions exist: the second session takes the 8 unseen ones.
     expect(overlap).toHaveLength(0);
@@ -347,19 +421,36 @@ describe('adaptive selection', () => {
       vi.setSystemTime(new Date('2026-09-29T10:00:00.000Z'));
       const { student, pack } = await ready({ questionsPerConcept: 3 });
       const osmosis = conceptId(pack, 'Osmosis');
-      const first = await startSession(app, student, { packId: pack.id, type: 'practice', conceptId: osmosis, count: 1 });
+      const first = await startSession(app, student, {
+        packId: pack.id,
+        type: 'practice',
+        conceptId: osmosis,
+        count: 1,
+      });
       const missed = first.session.items[0]!.question!.id;
       await answerItem(app, student, first.session.id, first.session.items[0]!.id, WRONG);
       await completeSession(app, student, first.session.id);
 
       // Straight away the student has just seen the explanation: a fresh question comes first.
-      const soon = await startSession(app, student, { packId: pack.id, type: 'practice', conceptId: osmosis, count: 1 });
+      const soon = await startSession(app, student, {
+        packId: pack.id,
+        type: 'practice',
+        conceptId: osmosis,
+        count: 1,
+      });
       expect(soon.session.items[0]!.question!.id).not.toBe(missed);
-      await request(app).post(`/api/study-sessions/${soon.session.id}/abandon`).set(auth(student.token));
+      await request(app)
+        .post(`/api/study-sessions/${soon.session.id}/abandon`)
+        .set(auth(student.token));
 
       // Two days later the missed question is the one worth asking again.
       vi.setSystemTime(new Date('2026-10-01T10:00:00.000Z'));
-      const later = await startSession(app, student, { packId: pack.id, type: 'practice', conceptId: osmosis, count: 1 });
+      const later = await startSession(app, student, {
+        packId: pack.id,
+        type: 'practice',
+        conceptId: osmosis,
+        count: 1,
+      });
       expect(later.session.items[0]!.question!.id).toBe(missed);
     } finally {
       vi.useRealTimers();
@@ -369,14 +460,25 @@ describe('adaptive selection', () => {
   it('puts the requested concept first and validates it', async () => {
     const { student, pack } = await ready();
     const meiosis = conceptId(pack, 'Meiosis');
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', conceptId: meiosis, count: 5 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      conceptId: meiosis,
+      count: 5,
+    });
     expect(session.items[0]!.conceptId).toBe(meiosis);
-    expect(session.items.filter((item) => item.conceptId === meiosis).length).toBeGreaterThanOrEqual(3);
+    expect(
+      session.items.filter((item) => item.conceptId === meiosis).length,
+    ).toBeGreaterThanOrEqual(3);
 
     const unknown = await request(app)
       .post('/api/study-sessions')
       .set(auth(student.token))
-      .send({ packId: pack.id, type: 'practice', conceptId: '11111111-1111-4111-8111-111111111111' });
+      .send({
+        packId: pack.id,
+        type: 'practice',
+        conceptId: '11111111-1111-4111-8111-111111111111',
+      });
     expect(unknown.status).toBe(404);
   });
 
@@ -385,7 +487,10 @@ describe('adaptive selection', () => {
     const extra = await request(app)
       .post(`/api/study-packs/${pack.id}/content`)
       .set(auth(student.token))
-      .send({ target: 'concepts', concepts: [{ name: 'Enzymes', explanation: 'Proteins that speed up reactions.' }] });
+      .send({
+        target: 'concepts',
+        concepts: [{ name: 'Enzymes', explanation: 'Proteins that speed up reactions.' }],
+      });
     const enzymes = extra.body.data.concepts[0].id as string;
     const res = await request(app)
       .post('/api/study-sessions')
@@ -405,7 +510,11 @@ describe('adaptive selection', () => {
 
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
     const lastWeek = new Date(Date.now() - 8 * 86_400_000).toISOString();
-    await setMastery(student.id, conceptId(pack, 'Diffusion'), 0.7, { attempts: 4, nextReviewAt: yesterday, lastPracticedAt: lastWeek });
+    await setMastery(student.id, conceptId(pack, 'Diffusion'), 0.7, {
+      attempts: 4,
+      nextReviewAt: yesterday,
+      lastPracticedAt: lastWeek,
+    });
     const { session } = await startSession(app, student, { packId: pack.id, type: 'review' });
     expect(session.label).toBe('Biology Review');
     expect(new Set(session.items.map((item) => item.conceptName))).toEqual(new Set(['Diffusion']));
@@ -428,7 +537,11 @@ describe('adaptive selection', () => {
       resume: null,
     });
     expect(res.body.data.concepts.map((c: { name: string }) => c.name)).toContain('Osmosis');
-    expect(res.body.data.concepts[0]).toMatchObject({ name: 'Osmosis', masteryPercent: 10, reason: 'weak' });
+    expect(res.body.data.concepts[0]).toMatchObject({
+      name: 'Osmosis',
+      masteryPercent: 10,
+      reason: 'weak',
+    });
     expect(res.body.data.difficulty).toMatch(/easy|medium|hard/);
     // Previews never write.
     const active = await request(app).get('/api/study-sessions/active').set(auth(student.token));
@@ -449,7 +562,11 @@ describe('learn sessions', () => {
     await setMastery(student.id, conceptId(pack, 'Meiosis'), 0.1, { attempts: 3 });
     await setMastery(student.id, conceptId(pack, 'Mitosis'), 0.95, { attempts: 6 });
 
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 3,
+    });
     expect(session.label).toBe('Biology Learn');
     expect(session.items.map((item) => [item.conceptName, item.learn!.reason])).toEqual([
       ['Meiosis', 'weak'],
@@ -470,11 +587,19 @@ describe('learn sessions', () => {
 
   it('runs check → self-rating and moves mastery with both', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 2 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 2,
+    });
     const item = session.items[0]!;
 
     const checked = await answerItem(app, student, session.id, item.id, RIGHT);
-    expect(checked.item.feedback).toMatchObject({ verdict: 'correct', masteryBeforePercent: 0, masteryAfterPercent: 20 });
+    expect(checked.item.feedback).toMatchObject({
+      verdict: 'correct',
+      masteryBeforePercent: 0,
+      masteryAfterPercent: 20,
+    });
     // The concept is only finished by its self-rating.
     expect(checked.item.status).toBe('pending');
     expect(checked.progress.answered).toBe(0);
@@ -497,7 +622,11 @@ describe('learn sessions', () => {
 
   it('"again" leaves a concept weak; a right check plus "easy" lifts another — the summary says which', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 1 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 2,
+    });
     const [again, easy] = session.items as [SessionItem, SessionItem];
     await rateItem(app, student, session.id, again.id, 'again');
     await answerItem(app, student, session.id, easy.id, RIGHT);
@@ -506,7 +635,11 @@ describe('learn sessions', () => {
 
     expect(done.result!.answered).toBe(2);
     expect(done.result!.stillWeak.map((entry) => entry.name)).toEqual([again.conceptName]);
-    const changes = done.result!.concepts.map((change) => [change.name, change.beforePercent, change.afterPercent]);
+    const changes = done.result!.concepts.map((change) => [
+      change.name,
+      change.beforePercent,
+      change.afterPercent,
+    ]);
     expect(changes).toContainEqual([again.conceptName, 0, 0]);
     // +0.2 for the check, +0.25 for the rating.
     expect(changes).toContainEqual([easy.conceptName, 0, 45]);
@@ -518,9 +651,16 @@ describe('learn sessions', () => {
     const extra = await request(app)
       .post(`/api/study-packs/${pack.id}/content`)
       .set(auth(student.token))
-      .send({ target: 'concepts', concepts: [{ name: 'Enzymes', explanation: 'Speed up reactions.' }] });
+      .send({
+        target: 'concepts',
+        concepts: [{ name: 'Enzymes', explanation: 'Speed up reactions.' }],
+      });
     expect(extra.status).toBe(201);
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 5 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 5,
+    });
     const enzymes = session.items.find((item) => item.conceptName === 'Enzymes')!;
     expect(enzymes.question).toBeNull();
     const rated = await rateItem(app, student, session.id, enzymes.id, 'good');
@@ -536,10 +676,22 @@ describe('tests: no feedback until the end, then a full analysis', () => {
   it('hides every hint while the test runs and answers in batches', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 3 });
     const { session } = await testSession(student, pack);
-    expect(session).toMatchObject({ type: 'test', mode: 'quick10', hideFeedback: true, itemCount: 10 });
+    expect(session).toMatchObject({
+      type: 'test',
+      mode: 'quick10',
+      hideFeedback: true,
+      itemCount: 10,
+    });
 
     const raw = JSON.stringify(session);
-    for (const forbidden of ['correctAnswer', 'explanation', 'verdict', 'masteryAfter', 'masteryBefore', 'Because that is how']) {
+    for (const forbidden of [
+      'correctAnswer',
+      'explanation',
+      'verdict',
+      'masteryAfter',
+      'masteryBefore',
+      'Because that is how',
+    ]) {
       expect(raw).not.toContain(forbidden);
     }
     expect(session.items.every((item) => item.feedback === null)).toBe(true);
@@ -593,7 +745,11 @@ describe('tests: no feedback until the end, then a full analysis', () => {
     expect(result.needsPractice.map((entry) => entry.name)).toContain('Osmosis');
     expect(result.needsPractice.find((entry) => entry.name === 'Osmosis')!.percent).toBe(0);
     expect(result.knownWell.every((entry) => entry.percent >= 75)).toBe(true);
-    expect(result.next).toMatchObject({ type: 'practice', conceptName: 'Osmosis', label: 'Practice Osmosis' });
+    expect(result.next).toMatchObject({
+      type: 'practice',
+      conceptName: 'Osmosis',
+      label: 'Practice Osmosis',
+    });
     expect(result.next.description).toMatch(/You missed \d+ questions? on it/);
     expect(result.testAttemptId).toBeTruthy();
 
@@ -610,7 +766,9 @@ describe('tests: no feedback until the end, then a full analysis', () => {
     const done = await completeSession(app, student, session.id, { answers });
     expect(done.result).toMatchObject({ correct: 10, incorrect: 0, percent: 100 });
 
-    const attempts = await request(app).get(`/api/study-packs/${pack.id}/tests`).set(auth(student.token));
+    const attempts = await request(app)
+      .get(`/api/study-packs/${pack.id}/tests`)
+      .set(auth(student.token));
     expect(attempts.body.data.attempts).toHaveLength(1);
     expect(attempts.body.data.attempts[0]).toMatchObject({ total: 10, correctCount: 10 });
     const rows = await memoryDb().conceptMastery.listByUserAndPack(student.id, pack.id);
@@ -633,13 +791,22 @@ describe('tests: no feedback until the end, then a full analysis', () => {
       .get('/api/study-sessions/preview')
       .query({ packId: pack.id, type: 'test' })
       .set(auth(student.token));
-    expect(preview.body.data.modes.map((mode: { mode: string; count: number }) => [mode.mode, mode.count])).toEqual([
+    expect(
+      preview.body.data.modes.map((mode: { mode: string; count: number }) => [
+        mode.mode,
+        mode.count,
+      ]),
+    ).toEqual([
       ['quick10', 10],
       ['quick20', 16],
       ['exam', 16],
     ]);
     const exam = await testSession(student, pack, 'exam');
-    expect(exam.session).toMatchObject({ mode: 'exam', label: 'Biology Exam simulation', itemCount: 16 });
+    expect(exam.session).toMatchObject({
+      mode: 'exam',
+      label: 'Biology Exam simulation',
+      itemCount: 16,
+    });
   });
 
   it('needs three questions, and only the owner can take a test', async () => {
@@ -660,7 +827,11 @@ describe('tests: no feedback until the end, then a full analysis', () => {
       .send({ packId: shared.id, type: 'test' });
     expect([403, 404]).toContain(denied.status);
     // Anyone who can see a public pack can practise it, with their own sessions.
-    const practice = await startSession(app, guest, { packId: shared.id, type: 'practice', count: 3 });
+    const practice = await startSession(app, guest, {
+      packId: shared.id,
+      type: 'practice',
+      count: 3,
+    });
     expect(practice.session.status).toBe('active');
     // The session says who owns the pack, so the app can hide owner-only actions (AI Tutor).
     expect((practice.session as unknown as { isOwner: boolean }).isOwner).toBe(false);
@@ -670,11 +841,19 @@ describe('tests: no feedback until the end, then a full analysis', () => {
 describe('review mistakes', () => {
   it('lists only the wrong questions with everything needed to learn from them', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 3 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 6 });
-    await answerAll(student, session.id, session.items, (_, index) => (index % 3 === 0 ? WRONG : RIGHT));
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 6,
+    });
+    await answerAll(student, session.id, session.items, (_, index) =>
+      index % 3 === 0 ? WRONG : RIGHT,
+    );
     await completeSession(app, student, session.id);
 
-    const res = await request(app).get(`/api/study-sessions/${session.id}/mistakes`).set(auth(student.token));
+    const res = await request(app)
+      .get(`/api/study-sessions/${session.id}/mistakes`)
+      .set(auth(student.token));
     expect(res.status).toBe(200);
     expect(res.body.data.total).toBe(2);
     const [first] = res.body.data.mistakes;
@@ -688,19 +867,33 @@ describe('review mistakes', () => {
     expect(first.explanation).toMatch(/Because that is how/);
     expect(first.question.prompt).toMatch(/Which statement about/);
     // Only wrong questions: every listed prompt belongs to a wrong item.
-    const wrongPrompts = session.items.filter((_, index) => index % 3 === 0).map((item) => item.question!.prompt);
-    expect(res.body.data.mistakes.map((m: { question: { prompt: string } }) => m.question.prompt).sort()).toEqual(wrongPrompts.sort());
+    const wrongPrompts = session.items
+      .filter((_, index) => index % 3 === 0)
+      .map((item) => item.question!.prompt);
+    expect(
+      res.body.data.mistakes.map((m: { question: { prompt: string } }) => m.question.prompt).sort(),
+    ).toEqual(wrongPrompts.sort());
   });
 
   it('works for a finished test, counts unanswered questions, and is closed while the test runs', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 3 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'test', mode: 'quick10' });
-    const during = await request(app).get(`/api/study-sessions/${session.id}/mistakes`).set(auth(student.token));
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'test',
+      mode: 'quick10',
+    });
+    const during = await request(app)
+      .get(`/api/study-sessions/${session.id}/mistakes`)
+      .set(auth(student.token));
     expect(during.status).toBe(409);
 
-    const answers = session.items.slice(0, 4).map((item, index) => ({ itemId: item.id, answer: index === 0 ? WRONG : RIGHT }));
+    const answers = session.items
+      .slice(0, 4)
+      .map((item, index) => ({ itemId: item.id, answer: index === 0 ? WRONG : RIGHT }));
     await completeSession(app, student, session.id, { answers });
-    const res = await request(app).get(`/api/study-sessions/${session.id}/mistakes`).set(auth(student.token));
+    const res = await request(app)
+      .get(`/api/study-sessions/${session.id}/mistakes`)
+      .set(auth(student.token));
     // 1 wrong answer + 6 unanswered questions.
     expect(res.body.data.total).toBe(7);
     const blank = res.body.data.mistakes.find((m: { yourAnswer: string }) => m.yourAnswer === '');
@@ -709,10 +902,16 @@ describe('review mistakes', () => {
 
   it('is empty after a perfect session', async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     await answerAll(student, session.id, session.items, () => RIGHT);
     await completeSession(app, student, session.id);
-    const res = await request(app).get(`/api/study-sessions/${session.id}/mistakes`).set(auth(student.token));
+    const res = await request(app)
+      .get(`/api/study-sessions/${session.id}/mistakes`)
+      .set(auth(student.token));
     expect(res.body.data).toMatchObject({ total: 0, mistakes: [] });
   });
 });
@@ -720,18 +919,36 @@ describe('review mistakes', () => {
 describe('study sessions: permissions', () => {
   it("never shows, changes or completes another student's session", async () => {
     const { student, pack } = await ready();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     const intruder = await signup(app);
     const item = session.items[0]!;
 
     const attempts = [
       request(app).get(`/api/study-sessions/${session.id}`).set(auth(intruder.token)),
       request(app).post(`/api/study-sessions/${session.id}/start`).set(auth(intruder.token)),
-      request(app).post(`/api/study-sessions/${session.id}/items/${item.id}/answer`).set(auth(intruder.token)).send({ answer: RIGHT }),
-      request(app).post(`/api/study-sessions/${session.id}/items/${item.id}/rating`).set(auth(intruder.token)).send({ rating: 'good' }),
-      request(app).post(`/api/study-sessions/${session.id}/items/${item.id}/skip`).set(auth(intruder.token)),
-      request(app).put(`/api/study-sessions/${session.id}/answers`).set(auth(intruder.token)).send({ answers: [] }),
-      request(app).post(`/api/study-sessions/${session.id}/complete`).set(auth(intruder.token)).send({}),
+      request(app)
+        .post(`/api/study-sessions/${session.id}/items/${item.id}/answer`)
+        .set(auth(intruder.token))
+        .send({ answer: RIGHT }),
+      request(app)
+        .post(`/api/study-sessions/${session.id}/items/${item.id}/rating`)
+        .set(auth(intruder.token))
+        .send({ rating: 'good' }),
+      request(app)
+        .post(`/api/study-sessions/${session.id}/items/${item.id}/skip`)
+        .set(auth(intruder.token)),
+      request(app)
+        .put(`/api/study-sessions/${session.id}/answers`)
+        .set(auth(intruder.token))
+        .send({ answers: [] }),
+      request(app)
+        .post(`/api/study-sessions/${session.id}/complete`)
+        .set(auth(intruder.token))
+        .send({}),
       request(app).post(`/api/study-sessions/${session.id}/abandon`).set(auth(intruder.token)),
       request(app).get(`/api/study-sessions/${session.id}/mistakes`).set(auth(intruder.token)),
     ];
@@ -749,7 +966,10 @@ describe('study sessions: permissions', () => {
     const { student, pack } = await ready();
     const intruder = await signup(app);
     for (const type of ['learn', 'practice', 'review', 'test'] as const) {
-      const res = await request(app).post('/api/study-sessions').set(auth(intruder.token)).send({ packId: pack.id, type });
+      const res = await request(app)
+        .post('/api/study-sessions')
+        .set(auth(intruder.token))
+        .send({ packId: pack.id, type });
       expect([403, 404]).toContain(res.status);
     }
     const preview = await request(app)
@@ -760,7 +980,7 @@ describe('study sessions: permissions', () => {
     expect(student.id).not.toBe(intruder.id);
   });
 
-  it("rejects an item that belongs to a different session of the same student", async () => {
+  it('rejects an item that belongs to a different session of the same student', async () => {
     const { student, pack } = await ready();
     const a = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
     const b = await startSession(app, student, { packId: pack.id, type: 'learn', count: 2 });
@@ -775,8 +995,15 @@ describe('study sessions: permissions', () => {
     const owner = await signup(app);
     const pack = await createPack(app, owner, { visibility: 'public' });
     const guest = await signup(app);
-    const { session } = await startSession(app, guest, { packId: pack.id, type: 'practice', count: 3 });
-    const hide = await request(app).patch(`/api/study-packs/${pack.id}`).set(auth(owner.token)).send({ visibility: 'private' });
+    const { session } = await startSession(app, guest, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
+    const hide = await request(app)
+      .patch(`/api/study-packs/${pack.id}`)
+      .set(auth(owner.token))
+      .send({ visibility: 'private' });
     expect(hide.status).toBe(200);
     const res = await request(app).get(`/api/study-sessions/${session.id}`).set(auth(guest.token));
     expect(res.status).toBe(404);
@@ -785,17 +1012,30 @@ describe('study sessions: permissions', () => {
   it('requires a signed-in student and valid input', async () => {
     const { student, pack } = await ready();
     expect((await request(app).get('/api/study-sessions/active')).status).toBe(401);
-    expect((await request(app).post('/api/study-sessions').send({ packId: pack.id, type: 'practice' })).status).toBe(401);
+    expect(
+      (await request(app).post('/api/study-sessions').send({ packId: pack.id, type: 'practice' }))
+        .status,
+    ).toBe(401);
     expect((await request(app).get('/api/progress/study')).status).toBe(401);
 
-    const post = (body: unknown) => request(app).post('/api/study-sessions').set(auth(student.token)).send(body as object);
+    const post = (body: unknown) =>
+      request(app)
+        .post('/api/study-sessions')
+        .set(auth(student.token))
+        .send(body as object);
     expect((await post({ packId: 'nope', type: 'practice' })).status).toBe(400);
     expect((await post({ packId: pack.id, type: 'exam' })).status).toBe(400);
     expect((await post({ packId: pack.id, type: 'practice', count: 500 })).status).toBe(400);
     expect((await post({ packId: pack.id, type: 'test', mode: 'sprint' })).status).toBe(400);
-    expect((await request(app).get('/api/study-sessions/not-a-uuid').set(auth(student.token))).status).toBe(400);
+    expect(
+      (await request(app).get('/api/study-sessions/not-a-uuid').set(auth(student.token))).status,
+    ).toBe(400);
 
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 2,
+    });
     const empty = await request(app)
       .post(`/api/study-sessions/${session.id}/items/${session.items[0]!.id}/answer`)
       .set(auth(student.token))
@@ -809,10 +1049,18 @@ describe('study sessions work without AI and in single requests', () => {
     const { student, pack } = await ready({ questionsPerConcept: 3 });
     const learn = await startSession(app, student, { packId: pack.id, type: 'learn', count: 2 });
     await rateItem(app, student, learn.session.id, learn.session.items[0]!.id, 'good');
-    const practice = await startSession(app, student, { packId: pack.id, type: 'practice', count: 3 });
+    const practice = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 3,
+    });
     await answerAll(student, practice.session.id, practice.session.items, () => RIGHT);
     await completeSession(app, student, practice.session.id);
-    const test = await startSession(app, student, { packId: pack.id, type: 'test', mode: 'quick10' });
+    const test = await startSession(app, student, {
+      packId: pack.id,
+      type: 'test',
+      mode: 'quick10',
+    });
     await completeSession(app, student, test.session.id, {
       answers: test.session.items.map((item) => ({ itemId: item.id, answer: RIGHT })),
     });
@@ -823,9 +1071,17 @@ describe('study sessions work without AI and in single requests', () => {
 
   it('returns a whole session in one request, including every item', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 4 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 12 });
-    const res = await request(app).get(`/api/study-sessions/${session.id}`).set(auth(student.token));
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 12,
+    });
+    const res = await request(app)
+      .get(`/api/study-sessions/${session.id}`)
+      .set(auth(student.token));
     expect(res.body.data.session.items).toHaveLength(12);
-    expect(res.body.data.session.items.every((item: SessionItem) => item.question?.prompt)).toBe(true);
+    expect(res.body.data.session.items.every((item: SessionItem) => item.question?.prompt)).toBe(
+      true,
+    );
   });
 });

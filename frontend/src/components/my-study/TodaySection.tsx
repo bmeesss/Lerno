@@ -2,7 +2,12 @@ import { Link } from 'react-router-dom';
 import { ButtonLink } from '../ui/Button';
 import { Badge } from '../ui/Primitives';
 import { IconArrowRight } from '../ui/Icons';
-import { sessionHref, taskActionLabel, todayTaskHref, formatMinutes } from '../../lib/studyPackRoutes';
+import {
+  sessionHref,
+  taskActionLabel,
+  todayTaskHref,
+  formatMinutes,
+} from '../../lib/studyPackRoutes';
 import {
   plannedMinutesSentence,
   stepMeta,
@@ -128,7 +133,10 @@ export function TodaySection({
               const title = stepTitle(step);
               const meta = stepMeta(step, { showPack: packCount > 1 });
               return (
-                <li key={`${step.order}-${step.type}-${step.packId ?? ''}-${step.conceptId ?? ''}`} className="today-step">
+                <li
+                  key={`${step.order}-${step.type}-${step.packId ?? ''}-${step.conceptId ?? ''}`}
+                  className="today-step"
+                >
                   <span className="today-step-number" aria-hidden="true">
                     {index + 1}
                   </span>

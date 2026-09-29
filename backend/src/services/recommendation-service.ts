@@ -152,7 +152,10 @@ export interface RecommendationContext {
   openFlashcardSessions: StudySessionRecord[];
 }
 
-export function emptyContext(now: Date, timeZone: string = DEFAULT_TIMEZONE): RecommendationContext {
+export function emptyContext(
+  now: Date,
+  timeZone: string = DEFAULT_TIMEZONE,
+): RecommendationContext {
   return {
     now,
     timeZone,
@@ -192,7 +195,15 @@ export function collectRecentMistakes(
 /** The fields a candidate has to provide; pack facts and defaults are filled in. */
 type TaskInit = Pick<
   RecommendationTask,
-  'type' | 'label' | 'description' | 'reasonText' | 'reason' | 'conceptId' | 'conceptName' | 'sessionType' | 'minutes'
+  | 'type'
+  | 'label'
+  | 'description'
+  | 'reasonText'
+  | 'reason'
+  | 'conceptId'
+  | 'conceptName'
+  | 'sessionType'
+  | 'minutes'
 > &
   Partial<Pick<RecommendationTask, 'mode' | 'count' | 'sessionId'>>;
 
@@ -228,7 +239,15 @@ export function packCandidates(
   const base = baseTask(snapshot, ctx);
   const candidates: TaskCandidate[] = [];
   const add = (task: TaskInit, priority: number, recency: number = lastActivity(snapshot)) => {
-    candidates.push({ mode: null, count: null, sessionId: null, ...base, ...task, priority, recency });
+    candidates.push({
+      mode: null,
+      count: null,
+      sessionId: null,
+      ...base,
+      ...task,
+      priority,
+      recency,
+    });
   };
 
   /* Continue: an open study session is always the first thing to offer. */
@@ -640,14 +659,13 @@ const EMPTY_HISTORY: QuestionHistory = {
 export function buildQuestionHistory(input: {
   attempts: Pick<PracticeAttemptRecord, 'questionId' | 'verdict' | 'createdAt'>[];
   testAttempts: Pick<TestAttemptRecord, 'answers' | 'createdAt'>[];
-  seenItems: Pick<LearningSessionItemRecord, 'questionId' | 'verdict' | 'answeredAt' | 'createdAt' | 'status'>[];
+  seenItems: Pick<
+    LearningSessionItemRecord,
+    'questionId' | 'verdict' | 'answeredAt' | 'createdAt' | 'status'
+  >[];
 }): Map<string, QuestionHistory> {
   const history = new Map<string, QuestionHistory>();
-  const touch = (
-    questionId: string | null,
-    at: string | null,
-    verdict: AnswerVerdict | null,
-  ) => {
+  const touch = (questionId: string | null, at: string | null, verdict: AnswerVerdict | null) => {
     if (!questionId || !at) return;
     const time = Date.parse(at);
     if (!Number.isFinite(time)) return;
@@ -660,9 +678,11 @@ export function buildQuestionHistory(input: {
     }
     history.set(questionId, entry);
   };
-  for (const attempt of input.attempts) touch(attempt.questionId, attempt.createdAt, attempt.verdict);
+  for (const attempt of input.attempts)
+    touch(attempt.questionId, attempt.createdAt, attempt.verdict);
   for (const attempt of input.testAttempts) {
-    for (const answer of attempt.answers) touch(answer.questionId, attempt.createdAt, answer.verdict);
+    for (const answer of attempt.answers)
+      touch(answer.questionId, attempt.createdAt, answer.verdict);
   }
   for (const item of input.seenItems) {
     if (item.status === 'skipped') touch(item.questionId, item.answeredAt ?? item.createdAt, null);
@@ -808,7 +828,8 @@ export function selectAdaptiveQuestions(input: {
     .filter((question) => !input.excludeQuestionIds?.has(question.id))
     .filter(
       (question) =>
-        !input.onlyConceptIds || (question.conceptId !== null && input.onlyConceptIds.has(question.conceptId)),
+        !input.onlyConceptIds ||
+        (question.conceptId !== null && input.onlyConceptIds.has(question.conceptId)),
     )
     .map((question) => {
       const concept = question.conceptId ? (conceptById.get(question.conceptId) ?? null) : null;
@@ -835,7 +856,8 @@ export function selectAdaptiveQuestions(input: {
     for (const candidate of pool) {
       if (picked.some((entry) => entry.question.id === candidate.question.id)) continue;
       const key = candidate.question.conceptId ?? candidate.question.id;
-      let adjusted = candidate.score - (perConcept.get(key) ?? 0) * QUESTION_SCORING.diversity.sameConcept;
+      let adjusted =
+        candidate.score - (perConcept.get(key) ?? 0) * QUESTION_SCORING.diversity.sameConcept;
       if (previous && previous.questionType === candidate.question.questionType) {
         adjusted -= QUESTION_SCORING.diversity.sameTypeInARow;
       }
@@ -844,7 +866,8 @@ export function selectAdaptiveQuestions(input: {
         (adjusted === bestScore &&
           best &&
           (candidate.question.position < best.question.position ||
-            (candidate.question.position === best.question.position && candidate.question.id < best.question.id)))
+            (candidate.question.position === best.question.position &&
+              candidate.question.id < best.question.id)))
       ) {
         best = candidate;
         bestScore = adjusted;
@@ -923,9 +946,15 @@ export function describeDifficulty(
 ): 'easy' | 'medium' | 'hard' {
   if (picked.length === 0) return 'medium';
   const total = picked.reduce((sum, entry) => {
-    const concept = entry.question.conceptId ? (conceptById.get(entry.question.conceptId) ?? null) : null;
+    const concept = entry.question.conceptId
+      ? (conceptById.get(entry.question.conceptId) ?? null)
+      : null;
     const state = (concept && states.get(concept.id)) || emptyMastery();
-    return sum + TYPE_LEVEL[entry.question.questionType] * 0.5 + targetDifficultyLevel(state, concept) * 0.5;
+    return (
+      sum +
+      TYPE_LEVEL[entry.question.questionType] * 0.5 +
+      targetDifficultyLevel(state, concept) * 0.5
+    );
   }, 0);
   const average = total / picked.length;
   return average < 1.7 ? 'easy' : average < 2.4 ? 'medium' : 'hard';
@@ -951,7 +980,10 @@ export function nextStepAfterSession(input: {
     context.questions.some((question) => question.conceptId === conceptId);
 
   const missedConcept = progress.conceptStates
-    .filter(({ concept, state }) => (missed.get(concept.id) ?? 0) > 0 && state.mastery < STRONG_MASTERY_THRESHOLD)
+    .filter(
+      ({ concept, state }) =>
+        (missed.get(concept.id) ?? 0) > 0 && state.mastery < STRONG_MASTERY_THRESHOLD,
+    )
     .sort(
       (a, b) =>
         (missed.get(b.concept.id) ?? 0) - (missed.get(a.concept.id) ?? 0) ||
@@ -991,4 +1023,3 @@ export function nextStepAfterSession(input: {
     conceptName: null,
   };
 }
-

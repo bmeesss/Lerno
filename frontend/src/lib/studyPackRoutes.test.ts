@@ -36,14 +36,22 @@ describe('study session routes', () => {
     expect(todayTaskHref(task({ type: 'learn', conceptId: 'c1' }))).toBe(
       '/study-packs/pack-1?tab=learn&concept=c1',
     );
-    expect(todayTaskHref(task({ type: 'test', mode: 'exam' }))).toBe('/study-packs/pack-1?tab=test&mode=exam');
+    expect(todayTaskHref(task({ type: 'test', mode: 'exam' }))).toBe(
+      '/study-packs/pack-1?tab=test&mode=exam',
+    );
     expect(todayTaskHref(task({ type: 'test' }))).toBe('/study-packs/pack-1?tab=test');
-    expect(todayTaskHref(task({ type: 'generate-concepts' }))).toBe('/study-packs/pack-1?tab=concepts');
-    expect(todayTaskHref(task({ type: 'generate-practice' }))).toBe('/study-packs/pack-1?tab=practice');
+    expect(todayTaskHref(task({ type: 'generate-concepts' }))).toBe(
+      '/study-packs/pack-1?tab=concepts',
+    );
+    expect(todayTaskHref(task({ type: 'generate-practice' }))).toBe(
+      '/study-packs/pack-1?tab=practice',
+    );
   });
 
   it('separates flashcard review from a concept review session', () => {
-    expect(todayTaskHref(task({ type: 'review', sessionType: null }))).toBe('/study-packs/pack-1?tab=flashcards');
+    expect(todayTaskHref(task({ type: 'review', sessionType: null }))).toBe(
+      '/study-packs/pack-1?tab=flashcards',
+    );
     expect(todayTaskHref(task({ type: 'review', sessionType: 'review', conceptId: 'c2' }))).toBe(
       '/study-packs/pack-1?tab=practice&mode=review&concept=c2',
     );
@@ -69,9 +77,15 @@ describe('study session routes', () => {
   });
 
   it('links "Next: Practice Diffusion" to the pre-start screen of that activity', () => {
-    expect(nextStepHref('p1', { type: 'practice', conceptId: 'c2' })).toBe('/study-packs/p1?tab=practice&concept=c2');
-    expect(nextStepHref('p1', { type: 'learn', conceptId: null })).toBe('/study-packs/p1?tab=learn');
-    expect(nextStepHref('p1', { type: 'review', conceptId: null })).toBe('/study-packs/p1?tab=practice&mode=review');
+    expect(nextStepHref('p1', { type: 'practice', conceptId: 'c2' })).toBe(
+      '/study-packs/p1?tab=practice&concept=c2',
+    );
+    expect(nextStepHref('p1', { type: 'learn', conceptId: null })).toBe(
+      '/study-packs/p1?tab=learn',
+    );
+    expect(nextStepHref('p1', { type: 'review', conceptId: null })).toBe(
+      '/study-packs/p1?tab=practice&mode=review',
+    );
     expect(nextStepHref('p1', { type: 'test', conceptId: null })).toBe('/study-packs/p1?tab=test');
   });
 

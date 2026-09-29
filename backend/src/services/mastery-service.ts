@@ -34,8 +34,7 @@ import {
 } from './study-pack-rules.js';
 
 export type MasteryEvidence =
-  | { kind: 'verdict'; verdict: AnswerVerdict }
-  | { kind: 'rating'; rating: SelfRating };
+  { kind: 'verdict'; verdict: AnswerVerdict } | { kind: 'rating'; rating: SelfRating };
 
 /** One piece of evidence about one concept, at a point in time. */
 export interface MasteryOutcome {
@@ -185,7 +184,11 @@ export function buildMasteryTrend(
     points,
     changePercent,
     direction:
-      changePercent >= TREND_STEADY_BAND ? 'up' : changePercent <= -TREND_STEADY_BAND ? 'down' : 'steady',
+      changePercent >= TREND_STEADY_BAND
+        ? 'up'
+        : changePercent <= -TREND_STEADY_BAND
+          ? 'down'
+          : 'steady',
   };
 }
 
@@ -211,7 +214,11 @@ export function recentChange(
 
 export const masteryService = {
   /** Current mastery states of one pack's concepts (one query). */
-  async loadStates(db: Database, userId: string, packId: string): Promise<Map<string, MasteryState>> {
+  async loadStates(
+    db: Database,
+    userId: string,
+    packId: string,
+  ): Promise<Map<string, MasteryState>> {
     const rows = await db.conceptMastery.listByUserAndPack(userId, packId);
     return new Map(rows.map((row) => [row.conceptId, masteryFromRecord(row)]));
   },

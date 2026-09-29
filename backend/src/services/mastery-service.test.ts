@@ -41,7 +41,9 @@ describe('foldOutcomes', () => {
 
   it('does not touch the states it was given', () => {
     const start = new Map([['a', { ...emptyMastery(), mastery: 0.5, attempts: 2 }]]);
-    foldOutcomes(start, [{ conceptId: 'a', evidence: { kind: 'rating', rating: 'easy' }, at: NOW }]);
+    foldOutcomes(start, [
+      { conceptId: 'a', evidence: { kind: 'rating', rating: 'easy' }, at: NOW },
+    ]);
     expect(start.get('a')!.mastery).toBe(0.5);
   });
 });
@@ -68,12 +70,16 @@ describe('mastery trend', () => {
 
   it('draws no line from fewer than three real days of data', () => {
     const none = buildMasteryTrend([], { today: '2026-09-29', live: 40 });
-    expect(none).toMatchObject({ hasEnoughData: false, daysRecorded: 0, points: [], changePercent: null });
+    expect(none).toMatchObject({
+      hasEnoughData: false,
+      daysRecorded: 0,
+      points: [],
+      changePercent: null,
+    });
 
-    const two = buildMasteryTrend(
-      [snapshot('2026-09-27', 20), snapshot('2026-09-28', 30)],
-      { today: '2026-09-29' },
-    );
+    const two = buildMasteryTrend([snapshot('2026-09-27', 20), snapshot('2026-09-28', 30)], {
+      today: '2026-09-29',
+    });
     expect(two.hasEnoughData).toBe(false);
     expect(two.points).toEqual([]);
     expect(two.daysRecorded).toBe(2);
@@ -81,10 +87,10 @@ describe('mastery trend', () => {
   });
 
   it('reports the change once there are three days, counting today as a live point', () => {
-    const trend = buildMasteryTrend(
-      [snapshot('2026-09-27', 20), snapshot('2026-09-28', 35)],
-      { today: '2026-09-29', live: 50 },
-    );
+    const trend = buildMasteryTrend([snapshot('2026-09-27', 20), snapshot('2026-09-28', 35)], {
+      today: '2026-09-29',
+      live: 50,
+    });
     expect(trend.hasEnoughData).toBe(true);
     expect(trend.points.map((point) => point.masteryPercent)).toEqual([20, 35, 50]);
     expect(trend.changePercent).toBe(30);
@@ -112,7 +118,9 @@ describe('mastery trend', () => {
 
   it('recentChange needs two real points and prefers the live value for today', () => {
     expect(recentChange([], { today: '2026-09-29', live: 60, windowDays: 14 })).toBeNull();
-    expect(recentChange([snapshot('2026-09-20', 40)], { today: '2026-09-29', windowDays: 14 })).toBeNull();
+    expect(
+      recentChange([snapshot('2026-09-20', 40)], { today: '2026-09-29', windowDays: 14 }),
+    ).toBeNull();
     expect(
       recentChange([snapshot('2026-09-20', 40)], { today: '2026-09-29', live: 61, windowDays: 14 }),
     ).toBe(21);
@@ -151,7 +159,10 @@ describe('masteryService', () => {
 
   it('writes nothing for an empty session', async () => {
     const db = createMemoryDatabase(createMemoryState());
-    const { pack } = await seedPack(db, 'u1', { title: 'Biology', concepts: [{ name: 'Osmosis' }] });
+    const { pack } = await seedPack(db, 'u1', {
+      title: 'Biology',
+      concepts: [{ name: 'Osmosis' }],
+    });
     const result = await masteryService.record(db, 'u1', pack.id, []);
     expect(result.applied).toEqual([]);
     expect(await db.conceptMastery.listByUserAndPack('u1', pack.id)).toEqual([]);
@@ -194,7 +205,10 @@ describe('masteryService', () => {
 
   it("stamps the snapshot with the student's local day", async () => {
     const db = createMemoryDatabase(createMemoryState());
-    const { pack } = await seedPack(db, 'u1', { title: 'Biology', concepts: [{ name: 'Osmosis' }] });
+    const { pack } = await seedPack(db, 'u1', {
+      title: 'Biology',
+      concepts: [{ name: 'Osmosis' }],
+    });
     const lateUtc = new Date('2026-09-29T23:30:00.000Z');
     await masteryService.recordSnapshots(db, 'u1', [pack.id], lateUtc, 'Europe/Amsterdam');
     const rows = await db.masterySnapshots.listByUser('u1');

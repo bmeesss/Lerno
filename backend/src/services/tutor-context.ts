@@ -31,7 +31,13 @@ export interface TutorCitation {
 }
 
 export interface TutorFocus {
-  concept: { id: string; name: string; explanation: string; refLabel: string | null; sourceId: string | null };
+  concept: {
+    id: string;
+    name: string;
+    explanation: string;
+    refLabel: string | null;
+    sourceId: string | null;
+  };
   masteryPercent: number | null;
   flashcards: { question: string; answer: string }[];
   mistakes: { prompt: string; yourAnswer: string; correctAnswer: string; explanation: string }[];
@@ -150,7 +156,9 @@ export async function buildTutorFocus(
     question: shown
       ? {
           prompt: shown.prompt,
-          ...(answered ? { correctAnswer: shown.correctAnswer, explanation: shown.explanation } : {}),
+          ...(answered
+            ? { correctAnswer: shown.correctAnswer, explanation: shown.explanation }
+            : {}),
         }
       : null,
     session: session ? { type: session.type, label: session.title } : null,
@@ -162,7 +170,10 @@ function orderedSources(input: PackAiInput, focus: TutorFocus | null): StudyPack
   const readable = input.sources.filter((source) => isReadableSource(source));
   const first = focus?.concept.sourceId;
   return first
-    ? [...readable.filter((source) => source.id === first), ...readable.filter((source) => source.id !== first)]
+    ? [
+        ...readable.filter((source) => source.id === first),
+        ...readable.filter((source) => source.id !== first),
+      ]
     : readable;
 }
 
@@ -184,7 +195,7 @@ export const tutorService = {
             focus,
             note:
               "The student is looking at the concept in 'focus'. Explain that concept first, tailored to their recent mistakes. " +
-              'Flashcards and mistakes are the student\'s own material, not source claims: only cite the source block.',
+              "Flashcards and mistakes are the student's own material, not source claims: only cite the source block.",
           }
         : {}),
       recentConversation: body.history.slice(-8).map((entry) => ({
@@ -198,7 +209,11 @@ export const tutorService = {
       task: 'studio-chat',
       payload,
       contextSource: 'document',
-      logMeta: { packId: input.pack.id, sourceCount: sourceContext.usedSourceIds.length, focused: Boolean(focus) },
+      logMeta: {
+        packId: input.pack.id,
+        sourceCount: sourceContext.usedSourceIds.length,
+        focused: Boolean(focus),
+      },
     });
     const citations = extractCitations(text, input.sources);
     return {

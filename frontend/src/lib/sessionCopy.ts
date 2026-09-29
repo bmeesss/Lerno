@@ -52,7 +52,11 @@ export function conceptReasonLabel(reason: string): string | null {
 }
 
 /** "Osmosis improved from 42% → 61%" */
-export function improvementSentence(name: string, beforePercent: number, afterPercent: number): string {
+export function improvementSentence(
+  name: string,
+  beforePercent: number,
+  afterPercent: number,
+): string {
   return `${name} improved from ${beforePercent}% → ${afterPercent}%`;
 }
 
@@ -77,7 +81,8 @@ export function relativeDay(iso: string | null, now: Date = new Date()): string 
   if (!iso) return null;
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return null;
-  const start = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const start = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((start(now) - start(then)) / 86_400_000);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';

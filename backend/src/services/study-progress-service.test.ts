@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryDatabase, createMemoryState } from '../lib/db/memory.js';
 import type { Database } from '../lib/db/repository.js';
-import type { LearningSessionResult, LearningSessionStat, StudySessionRecord } from '../lib/db/types.js';
+import type {
+  LearningSessionResult,
+  LearningSessionStat,
+  StudySessionRecord,
+} from '../lib/db/types.js';
 import { seedPack } from './pack-fixtures.js';
 import {
   buildStudyStreak,
@@ -71,28 +75,50 @@ describe('study streak', () => {
   });
 
   it('keeps the streak alive until the end of the next day, then resets it', () => {
-    const yesterday = collectStudyDays({ sessions: [stat({ completedAt: daysAgo(1) })], flashcardSessions: [] }, 'UTC');
-    expect(buildStudyStreak(yesterday, '2026-09-29')).toMatchObject({ current: 1, todayDone: false });
-    const lastWeek = collectStudyDays({ sessions: [stat({ completedAt: daysAgo(5) })], flashcardSessions: [] }, 'UTC');
+    const yesterday = collectStudyDays(
+      { sessions: [stat({ completedAt: daysAgo(1) })], flashcardSessions: [] },
+      'UTC',
+    );
+    expect(buildStudyStreak(yesterday, '2026-09-29')).toMatchObject({
+      current: 1,
+      todayDone: false,
+    });
+    const lastWeek = collectStudyDays(
+      { sessions: [stat({ completedAt: daysAgo(5) })], flashcardSessions: [] },
+      'UTC',
+    );
     expect(buildStudyStreak(lastWeek, '2026-09-29')).toMatchObject({ current: 0, longest: 1 });
   });
 
-  it('groups days by the student\'s timezone', () => {
-    const late = { sessions: [stat({ completedAt: '2026-09-29T23:30:00.000Z' })], flashcardSessions: [] };
+  it("groups days by the student's timezone", () => {
+    const late = {
+      sessions: [stat({ completedAt: '2026-09-29T23:30:00.000Z' })],
+      flashcardSessions: [],
+    };
     expect([...collectStudyDays(late, 'UTC')]).toEqual(['2026-09-29']);
     expect([...collectStudyDays(late, 'Europe/Amsterdam')]).toEqual(['2026-09-30']);
   });
 
   it('caps a flashcard session at half an hour because it has no idle tracking', () => {
-    expect(flashcardSessionSeconds(flash({ startedAt: '2026-09-29T11:50:00.000Z', endedAt: '2026-09-29T12:00:00.000Z' }))).toBe(600);
-    expect(flashcardSessionSeconds(flash({ startedAt: '2026-09-29T08:00:00.000Z', endedAt: '2026-09-29T12:00:00.000Z' }))).toBe(1800);
+    expect(
+      flashcardSessionSeconds(
+        flash({ startedAt: '2026-09-29T11:50:00.000Z', endedAt: '2026-09-29T12:00:00.000Z' }),
+      ),
+    ).toBe(600);
+    expect(
+      flashcardSessionSeconds(
+        flash({ startedAt: '2026-09-29T08:00:00.000Z', endedAt: '2026-09-29T12:00:00.000Z' }),
+      ),
+    ).toBe(1800);
     expect(flashcardSessionSeconds(flash({ endedAt: null }))).toBe(0);
     expect(flashcardSessionSeconds(flash({ cardsSeen: 0 }))).toBe(0);
   });
 });
 
 describe('improved concepts', () => {
-  const result = (concepts: LearningSessionResult['concepts']): { completedAt: string; result: LearningSessionResult } => ({
+  const result = (
+    concepts: LearningSessionResult['concepts'],
+  ): { completedAt: string; result: LearningSessionResult } => ({
     completedAt: NOW.toISOString(),
     result: {
       kind: 'practice',
@@ -110,8 +136,17 @@ describe('improved concepts', () => {
 
   it('reports the net change per concept across sessions, largest first', () => {
     const improved = collectImprovedConcepts([
-      { ...result([{ conceptId: 'a', name: 'Osmosis', beforePercent: 42, afterPercent: 50 }]), completedAt: daysAgo(3) },
-      { ...result([{ conceptId: 'a', name: 'Osmosis', beforePercent: 50, afterPercent: 61 }, { conceptId: 'b', name: 'Diffusion', beforePercent: 10, afterPercent: 12 }]), completedAt: daysAgo(1) },
+      {
+        ...result([{ conceptId: 'a', name: 'Osmosis', beforePercent: 42, afterPercent: 50 }]),
+        completedAt: daysAgo(3),
+      },
+      {
+        ...result([
+          { conceptId: 'a', name: 'Osmosis', beforePercent: 50, afterPercent: 61 },
+          { conceptId: 'b', name: 'Diffusion', beforePercent: 10, afterPercent: 12 },
+        ]),
+        completedAt: daysAgo(1),
+      },
     ]);
     expect(improved).toEqual([
       { conceptId: 'a', name: 'Osmosis', beforePercent: 42, afterPercent: 61, changePercent: 19 },
@@ -120,7 +155,9 @@ describe('improved concepts', () => {
 
   it('ignores drops and tiny moves', () => {
     expect(
-      collectImprovedConcepts([result([{ conceptId: 'a', name: 'A', beforePercent: 50, afterPercent: 40 }])]),
+      collectImprovedConcepts([
+        result([{ conceptId: 'a', name: 'A', beforePercent: 50, afterPercent: 40 }]),
+      ]),
     ).toEqual([]);
   });
 });
@@ -205,12 +242,28 @@ describe('progress overview', () => {
   it('shows no trend and no recent improvement without enough real data', async () => {
     const { db, bio } = await setup();
     await db.masterySnapshots.upsertMany([
-      { userId: USER, packId: bio.pack.id, day: '2026-09-28', masteryPercent: 40, conceptsTotal: 2, weakConcepts: 1, masteredConcepts: 0 },
+      {
+        userId: USER,
+        packId: bio.pack.id,
+        day: '2026-09-28',
+        masteryPercent: 40,
+        conceptsTotal: 2,
+        weakConcepts: 1,
+        masteredConcepts: 0,
+      },
     ]);
     const overview = await studyProgressService.overview(db, USER, NOW);
-    expect(overview.packs[0]!.trend).toMatchObject({ hasEnoughData: false, points: [], daysRecorded: 2 });
+    expect(overview.packs[0]!.trend).toMatchObject({
+      hasEnoughData: false,
+      points: [],
+      daysRecorded: 2,
+    });
     // One stored day plus today's live value are two real days: a change, but too little for a line.
-    expect(overview.overall.recentImprovement).toEqual({ changePercent: 15, windowDays: 14, packs: 1 });
+    expect(overview.overall.recentImprovement).toEqual({
+      changePercent: 15,
+      windowDays: 14,
+      packs: 1,
+    });
   });
 
   it('draws the trend from three or more real days', async () => {
@@ -245,7 +298,7 @@ describe('progress overview', () => {
 });
 
 describe('subject overview', () => {
-  it('shows the subject\'s packs, weak concepts, exams and the best next step', async () => {
+  it("shows the subject's packs, weak concepts, exams and the best next step", async () => {
     const db = newDb();
     const subject = await db.subjects.create({ ownerId: USER, name: 'Biology' });
     const other = await db.subjects.create({ ownerId: USER, name: 'History' });
@@ -254,7 +307,15 @@ describe('subject overview', () => {
       subject: { id: subject.id, name: 'Biology' },
       examDate: '2026-10-06',
       questionsPerConcept: 2,
-      concepts: [{ name: 'Osmosis', mastery: 0.2, attempts: 3, lastPracticedAt: daysAgo(1), nextReviewAt: daysAgo(-1) }],
+      concepts: [
+        {
+          name: 'Osmosis',
+          mastery: 0.2,
+          attempts: 3,
+          lastPracticedAt: daysAgo(1),
+          nextReviewAt: daysAgo(-1),
+        },
+      ],
     });
     await seedPack(db, USER, {
       title: 'Genetics',
@@ -287,6 +348,8 @@ describe('subject overview', () => {
     await expect(
       studyProgressService.subjectOverview(db, 'someone-else', subject.id, NOW),
     ).rejects.toMatchObject({ status: 404 });
-    await expect(studyProgressService.subjectOverview(db, USER, 'missing', NOW)).rejects.toMatchObject({ status: 404 });
+    await expect(
+      studyProgressService.subjectOverview(db, USER, 'missing', NOW),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -24,7 +24,11 @@ export function studySessionRoutes(): Router {
   router.use(requireAuth);
 
   // Static paths first so they cannot be swallowed by /:sessionId.
-  router.get('/preview', validate({ query: previewSessionQuerySchema }), studySessionController.preview);
+  router.get(
+    '/preview',
+    validate({ query: previewSessionQuerySchema }),
+    studySessionController.preview,
+  );
   router.get('/active', studySessionController.active);
 
   router.post(

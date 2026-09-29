@@ -26,7 +26,14 @@ function renderStart(props: { type?: SessionType; mode?: TestMode; conceptId?: s
       <Routes>
         <Route
           path="/study-packs/:id"
-          element={<SessionStart pack={PACK} type={props.type ?? 'practice'} mode={props.mode} conceptId={props.conceptId} />}
+          element={
+            <SessionStart
+              pack={PACK}
+              type={props.type ?? 'practice'}
+              mode={props.mode}
+              conceptId={props.conceptId}
+            />
+          }
         />
         <Route path="/study/sessions/:sessionId" element={<p>Session runner</p>} />
       </Routes>
@@ -115,10 +122,16 @@ describe('SessionStart — practice', () => {
 
   it('explains why a session cannot start instead of hiding the button', async () => {
     previewMock.mockResolvedValue(
-      preview({ canStart: false, count: 0, blockedReason: 'This study pack has no practice questions yet.' }),
+      preview({
+        canStart: false,
+        count: 0,
+        blockedReason: 'This study pack has no practice questions yet.',
+      }),
     );
     renderStart();
-    expect(await screen.findByText('This study pack has no practice questions yet.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('This study pack has no practice questions yet.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start practice/i })).toBeDisabled();
   });
 });
@@ -162,7 +175,11 @@ describe('SessionStart — test', () => {
         type: 'test',
         mode: 'quick10',
         title: 'Practice test · Biology',
-        focus: { label: 'No hints or explanations until you finish', conceptId: null, conceptName: null },
+        focus: {
+          label: 'No hints or explanations until you finish',
+          conceptId: null,
+          conceptName: null,
+        },
         modes: testModes(),
       }),
     );
@@ -175,7 +192,11 @@ describe('SessionStart — test', () => {
 
     const group = screen.getByRole('group', { name: 'Test length' });
     const radios = within(group).getAllByRole('radio');
-    expect(radios.map((radio) => (radio as HTMLInputElement).value)).toEqual(['quick10', 'quick20', 'exam']);
+    expect(radios.map((radio) => (radio as HTMLInputElement).value)).toEqual([
+      'quick10',
+      'quick20',
+      'exam',
+    ]);
     expect(within(group).getByRole('radio', { name: /10 questions/ })).toBeChecked();
     expect(within(group).getByText('Exam simulation')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start test' })).toBeEnabled();
@@ -185,15 +206,21 @@ describe('SessionStart — test', () => {
     const user = userEvent.setup();
     renderStart({ type: 'test' });
     await user.click(await screen.findByRole('radio', { name: /exam simulation/i }));
-    await waitFor(() => expect(previewMock).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'exam' })));
+    await waitFor(() =>
+      expect(previewMock).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'exam' })),
+    );
     await user.click(screen.getByRole('button', { name: 'Start test' }));
-    expect(startMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'test', mode: 'exam', restart: false }));
+    expect(startMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'test', mode: 'exam', restart: false }),
+    );
   });
 
   it('preselects the mode from the link that brought the student here', async () => {
     renderStart({ type: 'test', mode: 'quick20' });
     expect(await screen.findByRole('radio', { name: /20 questions/ })).toBeChecked();
-    expect(previewMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'test', mode: 'quick20' }));
+    expect(previewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'test', mode: 'quick20' }),
+    );
   });
 
   it('disables the lengths when there are too few questions', async () => {

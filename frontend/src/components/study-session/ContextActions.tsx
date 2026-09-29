@@ -67,7 +67,9 @@ export function ContextActions({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setTutor({ message: `Explain ${conceptName ?? 'this'} in simple words.` })}
+              onClick={() =>
+                setTutor({ message: `Explain ${conceptName ?? 'this'} in simple words.` })
+              }
             >
               Explain this
             </Button>
@@ -77,7 +79,10 @@ export function ContextActions({
           Show source
         </Button>
         {showPractice ? (
-          <Link className="btn btn-ghost btn-sm" to={`/study-packs/${packId}?tab=practice&concept=${conceptId}`}>
+          <Link
+            className="btn btn-ghost btn-sm"
+            to={`/study-packs/${packId}?tab=practice&concept=${conceptId}`}
+          >
             Practice this
           </Link>
         ) : null}
@@ -94,7 +99,9 @@ export function ContextActions({
               </button>
             </p>
           ) : null}
-          {source && !source.excerpt ? <p className="muted">No source is linked to this concept yet.</p> : null}
+          {source && !source.excerpt ? (
+            <p className="muted">No source is linked to this concept yet.</p>
+          ) : null}
           {source?.excerpt && source.source ? (
             <>
               <p className="context-source-title">

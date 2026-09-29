@@ -105,7 +105,9 @@ export function StudySessionPage() {
       }
       setSession(await studySessionService.complete(current.id));
     } catch (error) {
-      setActionError(errorText(error, 'Could not finish the session. Your progress is saved — try again.'));
+      setActionError(
+        errorText(error, 'Could not finish the session. Your progress is saved — try again.'),
+      );
     } finally {
       setFinishing(false);
     }
@@ -126,7 +128,10 @@ export function StudySessionPage() {
     setBusy(true);
     setActionError(null);
     try {
-      applyResponse(session, await studySessionService.answer(session.id, item.id, answer, responseTimeMs));
+      applyResponse(
+        session,
+        await studySessionService.answer(session.id, item.id, answer, responseTimeMs),
+      );
     } catch (error) {
       setActionError(errorText(error, 'Could not check this answer. Nothing is lost — try again.'));
     } finally {
@@ -171,7 +176,9 @@ export function StudySessionPage() {
     try {
       setSession(await studySessionService.complete(session.id, answers));
     } catch (error) {
-      setActionError(errorText(error, 'Could not hand in your test. Your answers are still here — try again.'));
+      setActionError(
+        errorText(error, 'Could not hand in your test. Your answers are still here — try again.'),
+      );
     } finally {
       setFinishing(false);
     }
@@ -218,7 +225,9 @@ export function StudySessionPage() {
         description="What you answered before leaving is kept. Start a new session whenever you like."
         action={
           <div className="session-empty-actions">
-            <ButtonLink to={`/study-packs/${session.packId}?tab=${session.type === 'review' ? 'practice' : session.type}`}>
+            <ButtonLink
+              to={`/study-packs/${session.packId}?tab=${session.type === 'review' ? 'practice' : session.type}`}
+            >
               Start again
             </ButtonLink>
             <ButtonLink to="/study" variant="secondary">
@@ -270,7 +279,10 @@ export function StudySessionPage() {
           Leave
         </Button>
       </header>
-      <ProgressBar value={session.progress.answered + session.progress.skipped} max={Math.max(1, session.itemCount)} />
+      <ProgressBar
+        value={session.progress.answered + session.progress.skipped}
+        max={Math.max(1, session.itemCount)}
+      />
 
       {session.type === 'test' ? (
         <TestRunner
@@ -303,7 +315,11 @@ export function StudySessionPage() {
           onNext={() => advance(session, viewIndex)}
         />
       ) : (
-        <SessionError message="This session has nothing left to do." onRetry={() => void finish(session)} retryLabel="See results" />
+        <SessionError
+          message="This session has nothing left to do."
+          onRetry={() => void finish(session)}
+          retryLabel="See results"
+        />
       )}
 
       {session.type !== 'test' && finishing ? (
@@ -332,7 +348,9 @@ export function StudySessionPage() {
       >
         <p>
           Your progress is saved on your account. You can continue this session from My Study{' '}
-          {session.type === 'test' ? '— your test answers stay until you hand it in.' : 'at any time.'}
+          {session.type === 'test'
+            ? '— your test answers stay until you hand it in.'
+            : 'at any time.'}
         </p>
       </Modal>
 

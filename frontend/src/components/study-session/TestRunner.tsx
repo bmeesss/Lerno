@@ -176,12 +176,19 @@ export function TestRunner({
             );
           })}
         </ol>
-        <Button variant="secondary" size="sm" onClick={() => setConfirming(true)} disabled={finishing}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setConfirming(true)}
+          disabled={finishing}
+        >
           Finish test
         </Button>
       </details>
 
-      {saveError ? <SessionError message={saveError} onRetry={() => void flush(index)} retryLabel="Save now" /> : null}
+      {saveError ? (
+        <SessionError message={saveError} onRetry={() => void flush(index)} retryLabel="Save now" />
+      ) : null}
       {finishError ? <SessionError message={finishError} onRetry={finish} /> : null}
 
       <SessionCtaBar>
@@ -189,8 +196,13 @@ export function TestRunner({
           Previous
         </Button>
         {isLast ? (
-          <Button block onClick={() => (unanswered > 0 ? setConfirming(true) : finish())} disabled={finishing}>
-            {finishing ? <InlineSpinner /> : <IconCheck size={17} />} {finishing ? 'Checking your test…' : 'Finish test'}
+          <Button
+            block
+            onClick={() => (unanswered > 0 ? setConfirming(true) : finish())}
+            disabled={finishing}
+          >
+            {finishing ? <InlineSpinner /> : <IconCheck size={17} />}{' '}
+            {finishing ? 'Checking your test…' : 'Finish test'}
           </Button>
         ) : (
           <Button block onClick={() => go(index + 1)} disabled={finishing}>

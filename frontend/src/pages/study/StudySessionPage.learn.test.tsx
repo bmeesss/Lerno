@@ -36,8 +36,17 @@ function renderRunner() {
   );
 }
 
-function learnSession(items: SessionItem[], overrides: Partial<LearningSession> = {}): LearningSession {
-  return session({ type: 'learn', label: 'Biology Learn', title: 'Learn Biology', items, ...overrides });
+function learnSession(
+  items: SessionItem[],
+  overrides: Partial<LearningSession> = {},
+): LearningSession {
+  return session({
+    type: 'learn',
+    label: 'Biology Learn',
+    title: 'Learn Biology',
+    items,
+    ...overrides,
+  });
 }
 
 const FEEDBACK: ItemFeedback = {
@@ -49,11 +58,28 @@ const FEEDBACK: ItemFeedback = {
   source: null,
 };
 
-function response(item: SessionItem, patch: Partial<SessionItem>, answered: number, total: number): SessionItemResponse {
+function response(
+  item: SessionItem,
+  patch: Partial<SessionItem>,
+  answered: number,
+  total: number,
+): SessionItemResponse {
   return {
     item: { ...item, ...patch },
-    progress: { position: answered, total, answered, skipped: 0, percent: Math.round((answered / total) * 100) },
-    session: { id: 's1', status: 'active', currentPosition: answered, answeredCount: answered, durationSeconds: 60 },
+    progress: {
+      position: answered,
+      total,
+      answered,
+      skipped: 0,
+      percent: Math.round((answered / total) * 100),
+    },
+    session: {
+      id: 's1',
+      status: 'active',
+      currentPosition: answered,
+      answeredCount: answered,
+      durationSeconds: 60,
+    },
   };
 }
 
@@ -67,8 +93,17 @@ describe('learn session', () => {
     const first = conceptItem('i1', 'Osmosis');
     const second = conceptItem('i2', 'Diffusion');
     svc.get.mockResolvedValue(learnSession([first, second]));
-    svc.answer.mockResolvedValue(response(first, { answer: 'The right answer', feedback: FEEDBACK }, 0, 2));
-    svc.rate.mockResolvedValue(response(first, { status: 'answered', rating: 'good', answer: 'The right answer', feedback: FEEDBACK }, 1, 2));
+    svc.answer.mockResolvedValue(
+      response(first, { answer: 'The right answer', feedback: FEEDBACK }, 0, 2),
+    );
+    svc.rate.mockResolvedValue(
+      response(
+        first,
+        { status: 'answered', rating: 'good', answer: 'The right answer', feedback: FEEDBACK },
+        1,
+        2,
+      ),
+    );
     renderRunner();
 
     // 1. What is it? + Example
@@ -97,7 +132,9 @@ describe('learn session', () => {
     // 3. How well do you know this?
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
     const group = screen.getByRole('group', { name: 'How well do you know this?' });
-    const labels = within(group).getAllByRole('button').map((button) => within(button).getByText(/^(Again|Hard|Good|Easy)$/).textContent);
+    const labels = within(group)
+      .getAllByRole('button')
+      .map((button) => within(button).getByText(/^(Again|Hard|Good|Easy)$/).textContent);
     expect(labels).toEqual(['Again', 'Hard', 'Good', 'Easy']);
     await user.click(within(group).getByRole('button', { name: /good/i }));
 
@@ -113,7 +150,9 @@ describe('learn session', () => {
     plain.learn = { ...plain.learn!, example: null };
     svc.get.mockResolvedValue(learnSession([plain]));
     renderRunner();
-    expect(await screen.findByText('There is no example for this concept in your material yet.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('There is no example for this concept in your material yet.'),
+    ).toBeInTheDocument();
   });
 
   it('goes straight to the rating when a concept has no check question', async () => {
@@ -136,16 +175,24 @@ describe('learn session', () => {
   });
 
   it('continues at the rating after a reload, because the check was already answered', async () => {
-    const checked = conceptItem('i1', 'Osmosis', { answer: 'The right answer', feedback: FEEDBACK });
+    const checked = conceptItem('i1', 'Osmosis', {
+      answer: 'The right answer',
+      feedback: FEEDBACK,
+    });
     svc.get.mockResolvedValue(learnSession([checked]));
     renderRunner();
-    expect(await screen.findByRole('group', { name: 'How well do you know this?' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('group', { name: 'How well do you know this?' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
   });
 
   it('keeps the rating buttons and shows a retry when saving the rating fails', async () => {
     const user = userEvent.setup();
-    const checked = conceptItem('i1', 'Osmosis', { answer: 'The right answer', feedback: FEEDBACK });
+    const checked = conceptItem('i1', 'Osmosis', {
+      answer: 'The right answer',
+      feedback: FEEDBACK,
+    });
     svc.get.mockResolvedValue(learnSession([checked]));
     svc.rate.mockRejectedValueOnce(new ApiError('Connection lost', 'network', 0));
     renderRunner();
@@ -158,24 +205,37 @@ describe('learn session', () => {
 
   it('ends with a summary of what improved and what comes next', async () => {
     const user = userEvent.setup();
-    const checked = conceptItem('i1', 'Osmosis', { answer: 'The right answer', feedback: FEEDBACK });
+    const checked = conceptItem('i1', 'Osmosis', {
+      answer: 'The right answer',
+      feedback: FEEDBACK,
+    });
     svc.get.mockResolvedValue(learnSession([checked]));
     svc.rate.mockResolvedValue(response(checked, { status: 'answered', rating: 'easy' }, 1, 1));
     svc.complete.mockResolvedValue(
       learnSession([{ ...checked, status: 'answered', rating: 'easy' }], {
         status: 'completed',
         answeredCount: 1,
-        result: result({ answered: 1, correct: 1, incorrect: 0, mistakeCount: 0, stillWeak: [{ conceptId: 'c2', name: 'Diffusion', masteryPercent: 18 }] }),
+        result: result({
+          answered: 1,
+          correct: 1,
+          incorrect: 0,
+          mistakeCount: 0,
+          stillWeak: [{ conceptId: 'c2', name: 'Diffusion', masteryPercent: 18 }],
+        }),
       }),
     );
     renderRunner();
     await user.click(await screen.findByRole('button', { name: /easy/i }));
 
-    expect(await screen.findByRole('heading', { name: 'Great work — Osmosis improved from 42% → 61%' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Great work — Osmosis improved from 42% → 61%' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('1 concept still needs attention')).toBeInTheDocument();
     expect(screen.getByText('concept rated')).toBeInTheDocument();
     // Learn sessions have no right or wrong, so there is nothing to "review".
     expect(screen.queryByRole('link', { name: /review mistakes/i })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('link', { name: /Next: Practice Diffusion/ })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Next: Practice Diffusion/ })).toBeInTheDocument(),
+    );
   });
 });

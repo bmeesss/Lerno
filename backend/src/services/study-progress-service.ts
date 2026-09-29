@@ -17,12 +17,13 @@ import type {
 } from '../lib/db/types.js';
 import { errors } from '../lib/errors.js';
 import { dayKeyInZone } from '../lib/timezone.js';
-import { buildMasteryTrend, MIN_TREND_DAYS, recentChange, type MasteryTrend } from './mastery-service.js';
 import {
-  examDaysLeft,
-  loadPackSnapshots,
-  type PackSummarySnapshot,
-} from './pack-data.js';
+  buildMasteryTrend,
+  MIN_TREND_DAYS,
+  recentChange,
+  type MasteryTrend,
+} from './mastery-service.js';
+import { examDaysLeft, loadPackSnapshots, type PackSummarySnapshot } from './pack-data.js';
 import {
   bestTaskForPack,
   collectRecentMistakes,
@@ -147,12 +148,7 @@ function conceptLine(entry: PackSummarySnapshot['progress']['conceptStates'][num
 }
 
 export const studyProgressService = {
-  async streak(
-    db: Database,
-    userId: string,
-    now: Date,
-    timeZone: string,
-  ): Promise<StudyStreak> {
+  async streak(db: Database, userId: string, now: Date, timeZone: string): Promise<StudyStreak> {
     const [sessions, flashcardSessions] = await Promise.all([
       db.learningSessions.statsByUser(userId),
       db.sessions.listByUser(userId),
@@ -212,7 +208,10 @@ export const studyProgressService = {
       (sum, snapshot) => sum + snapshot.summary.masteredConcepts,
       0,
     );
-    const conceptsWeak = snapshots.reduce((sum, snapshot) => sum + snapshot.summary.weakConcepts, 0);
+    const conceptsWeak = snapshots.reduce(
+      (sum, snapshot) => sum + snapshot.summary.weakConcepts,
+      0,
+    );
     const masteryPercent =
       conceptsTotal > 0
         ? Math.round(
@@ -230,7 +229,9 @@ export const studyProgressService = {
       const mine = sessionStats.filter((stat) => stat.packId === pack.id);
       const activeDays = new Set(
         mine
-          .filter((stat) => stat.status === 'completed' && stat.completedAt && stat.answeredCount > 0)
+          .filter(
+            (stat) => stat.status === 'completed' && stat.completedAt && stat.answeredCount > 0,
+          )
           .map((stat) => dayKeyInZone(stat.completedAt!, timeZone))
           .filter((day) => day >= last7Start && day <= today),
       );
@@ -317,7 +318,9 @@ export const studyProgressService = {
     if (!subject || subject.ownerId !== userId) throw errors.notFound('Subject not found');
 
     const timeZone = await resolveTimeZone(db, userId);
-    const packs = (await db.packs.listByOwner(userId)).filter((pack) => pack.subjectId === subjectId);
+    const packs = (await db.packs.listByOwner(userId)).filter(
+      (pack) => pack.subjectId === subjectId,
+    );
     const [snapshots, openSessions, flashcardSessions, recentSessions] = await Promise.all([
       loadPackSnapshots(db, userId, packs, now, timeZone),
       db.learningSessions.listByUser(userId, { statuses: ['not_started', 'active'], limit: 50 }),
@@ -383,7 +386,10 @@ export const studyProgressService = {
         concepts: conceptTotal,
         masteryPercent:
           conceptTotal > 0
-            ? Math.round(rows.reduce((sum, row) => sum + row.masteryPercent * row.concepts, 0) / conceptTotal)
+            ? Math.round(
+                rows.reduce((sum, row) => sum + row.masteryPercent * row.concepts, 0) /
+                  conceptTotal,
+              )
             : null,
         dueCards: rows.reduce((sum, row) => sum + row.dueCards, 0),
         weakConcepts: rows.reduce((sum, row) => sum + row.weakConcepts.length, 0),

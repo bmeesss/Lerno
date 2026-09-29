@@ -10,7 +10,15 @@ vi.mock('../../services/studyPackService', () => ({ studyPackService: { tutor: v
 
 const tutorMock = vi.mocked(studyPackService.tutor);
 
-function Harness({ conceptId = 'c1', conceptName = 'Osmosis', initialMessage }: { conceptId?: string; conceptName?: string; initialMessage?: string }) {
+function Harness({
+  conceptId = 'c1',
+  conceptName = 'Osmosis',
+  initialMessage,
+}: {
+  conceptId?: string;
+  conceptName?: string;
+  initialMessage?: string;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <>
@@ -59,13 +67,19 @@ describe('TutorDrawer', () => {
   });
 
   it('labels an answer that is not from the material as a general explanation', async () => {
-    tutorMock.mockResolvedValue({ reply: 'In general, water moves to balance solutes.', basedOnMaterial: false, citations: [] });
+    tutorMock.mockResolvedValue({
+      reply: 'In general, water moves to balance solutes.',
+      basedOnMaterial: false,
+      citations: [],
+    });
     const user = userEvent.setup();
     render(<Harness />);
     await user.type(screen.getByLabelText('Ask the AI Tutor'), 'Why?');
     await user.click(screen.getByRole('button', { name: /send/i }));
 
-    expect(await screen.findByText('General explanation — not from your material')).toBeInTheDocument();
+    expect(
+      await screen.findByText('General explanation — not from your material'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Based on your material')).not.toBeInTheDocument();
   });
 
@@ -78,7 +92,9 @@ describe('TutorDrawer', () => {
   });
 
   it('shows a clear retry when the tutor cannot answer, and keeps the question', async () => {
-    tutorMock.mockRejectedValueOnce(new ApiError('The AI tutor is unavailable right now.', 'ai_unavailable', 503));
+    tutorMock.mockRejectedValueOnce(
+      new ApiError('The AI tutor is unavailable right now.', 'ai_unavailable', 503),
+    );
     tutorMock.mockResolvedValueOnce({ reply: 'Back again.', basedOnMaterial: true, citations: [] });
     const user = userEvent.setup();
     render(<Harness />);

@@ -37,7 +37,10 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   overviewMock.mockResolvedValue(subjectOverview());
-  setsMock.mockResolvedValue([SET, { ...SET, id: 'set-2', subjectId: 'other', title: 'Other subject' }]);
+  setsMock.mockResolvedValue([
+    SET,
+    { ...SET, id: 'set-2', subjectId: 'other', title: 'Other subject' },
+  ]);
 });
 
 describe('SubjectDetailPage', () => {
@@ -50,7 +53,9 @@ describe('SubjectDetailPage', () => {
 
   it('shows where the student stands: mastery, due work, weak concepts and exams', async () => {
     renderPage();
-    const summary = (await screen.findByRole('heading', { name: 'Where you stand' })).closest('section')!;
+    const summary = (await screen.findByRole('heading', { name: 'Where you stand' })).closest(
+      'section',
+    )!;
     const fact = (label: string) => within(summary).getByText(label).nextElementSibling!;
     expect(fact('Mastery')).toHaveTextContent('62%');
     expect(fact('Due')).toHaveTextContent('12 cards');
@@ -72,14 +77,21 @@ describe('SubjectDetailPage', () => {
   it('lists each pack with mastery, due cards, last activity and its exam', async () => {
     renderPage();
     const list = (await screen.findByRole('heading', { name: 'Study packs' })).closest('section')!;
-    const [first, second] = within(list).getAllByRole('listitem').filter((item) => item.classList.contains('subject-pack'));
+    const [first, second] = within(list)
+      .getAllByRole('listitem')
+      .filter((item) => item.classList.contains('subject-pack'));
 
-    expect(within(first!).getByRole('link', { name: 'Biology H3' })).toHaveAttribute('href', '/study-packs/pack-1');
+    expect(within(first!).getByRole('link', { name: 'Biology H3' })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1',
+    );
     expect(within(first!).getByText('70%')).toBeInTheDocument();
     expect(within(first!).getByText('8 due')).toBeInTheDocument();
     expect(within(first!).getByText('Exam in 9 days')).toBeInTheDocument();
     expect(within(first!).getByText(/Last studied/)).toBeInTheDocument();
-    expect(within(first!).getByRole('link', { name: 'Start practice: Biology H3' })).toBeInTheDocument();
+    expect(
+      within(first!).getByRole('link', { name: 'Start practice: Biology H3' }),
+    ).toBeInTheDocument();
 
     expect(within(second!).getByText(/Not studied yet/)).toBeInTheDocument();
   });
@@ -92,7 +104,9 @@ describe('SubjectDetailPage', () => {
 
   it('offers to resume an open session in a pack, with where it stopped', async () => {
     renderPage();
-    const resume = await screen.findByRole('link', { name: /Continue Biology Practice, Question 6 of 10/ });
+    const resume = await screen.findByRole('link', {
+      name: /Continue Biology Practice, Question 6 of 10/,
+    });
     expect(resume).toHaveAttribute('href', '/study/sessions/s9');
   });
 
@@ -107,8 +121,13 @@ describe('SubjectDetailPage', () => {
 
   it('shows recent activity from finished sessions', async () => {
     renderPage();
-    const activity = (await screen.findByRole('heading', { name: 'Recent activity' })).closest('section')!;
-    expect(within(activity).getByRole('link', { name: 'Biology Practice' })).toHaveAttribute('href', '/study/sessions/s7');
+    const activity = (await screen.findByRole('heading', { name: 'Recent activity' })).closest(
+      'section',
+    )!;
+    expect(within(activity).getByRole('link', { name: 'Biology Practice' })).toHaveAttribute(
+      'href',
+      '/study/sessions/s7',
+    );
     expect(within(activity).getByText('80%')).toBeInTheDocument();
     expect(within(activity).getByText(/10 answered/)).toBeInTheDocument();
   });
@@ -122,9 +141,15 @@ describe('SubjectDetailPage', () => {
   it('still lists the flashcard sets of this subject, and only this subject', async () => {
     renderPage();
     const sets = (await screen.findByRole('heading', { name: 'Study sets' })).closest('section')!;
-    expect(within(sets).getByRole('link', { name: /Cell cards/ })).toHaveAttribute('href', '/sets/set-1');
+    expect(within(sets).getByRole('link', { name: /Cell cards/ })).toHaveAttribute(
+      'href',
+      '/sets/set-1',
+    );
     expect(within(sets).queryByText('Other subject')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create set in Biology' })).toHaveAttribute('href', '/sets/new?subjectId=sub-1');
+    expect(screen.getByRole('link', { name: 'Create set in Biology' })).toHaveAttribute(
+      'href',
+      '/sets/new?subjectId=sub-1',
+    );
   });
 
   it('shows an honest empty state for a subject without material', async () => {
@@ -139,19 +164,33 @@ describe('SubjectDetailPage', () => {
     );
     setsMock.mockResolvedValue([]);
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Nothing in this subject yet' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add study material/i })).toHaveAttribute('href', '/study-packs/new');
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing in this subject yet' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add study material/i })).toHaveAttribute(
+      'href',
+      '/study-packs/new',
+    );
     expect(screen.queryByRole('heading', { name: 'Where you stand' })).not.toBeInTheDocument();
   });
 
   it('does not claim a mastery percentage that does not exist yet', async () => {
     overviewMock.mockResolvedValue(
-      subjectOverview({ totals: { packs: 1, concepts: 3, masteryPercent: null, dueCards: 0, weakConcepts: 0 }, next: null }),
+      subjectOverview({
+        totals: { packs: 1, concepts: 3, masteryPercent: null, dueCards: 0, weakConcepts: 0 },
+        next: null,
+      }),
     );
     renderPage();
-    const summary = (await screen.findByRole('heading', { name: 'Where you stand' })).closest('section')!;
-    expect(within(summary).getByText('Mastery').nextElementSibling).toHaveTextContent('Not started');
-    expect(within(summary).getByText('Nothing needs your attention right now.')).toBeInTheDocument();
+    const summary = (await screen.findByRole('heading', { name: 'Where you stand' })).closest(
+      'section',
+    )!;
+    expect(within(summary).getByText('Mastery').nextElementSibling).toHaveTextContent(
+      'Not started',
+    );
+    expect(
+      within(summary).getByText('Nothing needs your attention right now.'),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /continue studying/i })).not.toBeInTheDocument();
   });
 
@@ -159,7 +198,10 @@ describe('SubjectDetailPage', () => {
     overviewMock.mockRejectedValue(new ApiError('Subject not found', 'not_found', 404));
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Subject not found' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to My Study' })).toHaveAttribute('href', '/study');
+    expect(screen.getByRole('link', { name: 'Back to My Study' })).toHaveAttribute(
+      'href',
+      '/study',
+    );
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
@@ -167,7 +209,9 @@ describe('SubjectDetailPage', () => {
     overviewMock.mockRejectedValueOnce(new Error('Server down'));
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Could not load this subject' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Could not load this subject' }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Biology' })).toBeInTheDocument();
   });

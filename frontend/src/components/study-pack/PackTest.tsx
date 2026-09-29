@@ -33,8 +33,12 @@ export function PackTest({
         description="A test is built from the practice questions in this pack, so Lerno can score it and detect weak concepts."
         action={
           pack.isOwner ? (
-            <Button onClick={() => void generate()} disabled={generating || pack.counts.readySources === 0}>
-              <IconSparkles size={17} /> {generating ? 'Generating…' : 'Generate practice questions'}
+            <Button
+              onClick={() => void generate()}
+              disabled={generating || pack.counts.readySources === 0}
+            >
+              <IconSparkles size={17} />{' '}
+              {generating ? 'Generating…' : 'Generate practice questions'}
             </Button>
           ) : undefined
         }
@@ -59,12 +63,14 @@ export function PackTest({
           <h3 id="pack-test-attempts">Previous attempts</h3>
           <ul className="pack-attempt-list">
             {pack.recentAttempts.map((attempt) => {
-              const percent = attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0;
+              const percent =
+                attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0;
               return (
                 <li key={attempt.id}>
                   <span className="pack-attempt-score">{percent}%</span>
                   <span className="muted">
-                    {attempt.score}/{attempt.total} · {new Date(attempt.createdAt).toLocaleDateString()}
+                    {attempt.score}/{attempt.total} ·{' '}
+                    {new Date(attempt.createdAt).toLocaleDateString()}
                   </span>
                   <Badge>{attempt.packTitle ?? 'This pack'}</Badge>
                 </li>
@@ -74,7 +80,8 @@ export function PackTest({
         </section>
       ) : (
         <p className="muted">
-          <IconLightbulb size={15} /> Tip: an exam simulation uses the most relevant questions in the pack.
+          <IconLightbulb size={15} /> Tip: an exam simulation uses the most relevant questions in
+          the pack.
         </p>
       )}
     </div>

@@ -86,7 +86,11 @@ describe('My Study: today', () => {
     expect(data.plan.minutes).toBeLessThanOrEqual(25 + 3);
     // One primary action: the first step. Everything else is secondary.
     expect(data.primary).toEqual(data.plan.steps[0]);
-    expect(data.primary).toMatchObject({ type: 'practice', conceptName: 'Osmosis', sessionType: 'practice' });
+    expect(data.primary).toMatchObject({
+      type: 'practice',
+      conceptName: 'Osmosis',
+      sessionType: 'practice',
+    });
     expect(data.primary.reasonText).toMatch(/Mastery is 20%/);
     // The long-standing fields are still there for existing clients.
     expect(data.recommended.type).toBe('practice');
@@ -138,9 +142,15 @@ describe('My Study: today', () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { examDate: daysFromNow(20) });
     expect((await today(student)).plan.budgetMinutes).toBe(25);
-    await request(app).patch(`/api/study-packs/${pack.id}`).set(auth(student.token)).send({ examDate: daysFromNow(6) });
+    await request(app)
+      .patch(`/api/study-packs/${pack.id}`)
+      .set(auth(student.token))
+      .send({ examDate: daysFromNow(6) });
     expect((await today(student)).plan.budgetMinutes).toBe(35);
-    await request(app).patch(`/api/study-packs/${pack.id}`).set(auth(student.token)).send({ examDate: daysFromNow(1) });
+    await request(app)
+      .patch(`/api/study-packs/${pack.id}`)
+      .set(auth(student.token))
+      .send({ examDate: daysFromNow(1) });
     const near = await today(student);
     expect(near.plan.budgetMinutes).toBe(45);
     expect(near.exam.message).toBe('Biology exam is tomorrow');
@@ -152,7 +162,11 @@ describe('My Study: today', () => {
     const student = await signup(app);
     const pack = await createPack(app, student);
     await setMastery(student.id, conceptId(pack, 'Osmosis'), 0.1, { attempts: 4 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 2,
+    });
     const data = await today(student);
     expect(data.primary).toMatchObject({
       type: 'continue',
@@ -198,14 +212,20 @@ describe('multi-pack today', () => {
   it('groups the plan per subject and orders subjects by the engine — the exam decides', async () => {
     const first = await twoSubjects('Biology');
     const biologyFirst = await today(first.student);
-    expect(biologyFirst.subjects.map((s: { subjectName: string }) => s.subjectName)).toEqual(['Biology', 'History']);
+    expect(biologyFirst.subjects.map((s: { subjectName: string }) => s.subjectName)).toEqual([
+      'Biology',
+      'History',
+    ]);
     expect(biologyFirst.subjects[0]).toMatchObject({ packs: 1, weakConcepts: 1, examDaysLeft: 5 });
     expect(biologyFirst.subjects[0].next).toMatchObject({ packTitle: 'Biology pack' });
 
     // Same data, exam moved to the other subject: the order follows. Nothing is hardcoded.
     const second = await twoSubjects('History');
     const historyFirst = await today(second.student);
-    expect(historyFirst.subjects.map((s: { subjectName: string }) => s.subjectName)).toEqual(['History', 'Biology']);
+    expect(historyFirst.subjects.map((s: { subjectName: string }) => s.subjectName)).toEqual([
+      'History',
+      'Biology',
+    ]);
   });
 
   it('numbers one plan across subjects and gives each step to its subject', async () => {
@@ -214,14 +234,19 @@ describe('multi-pack today', () => {
     const stepsBySubject = data.subjects.flatMap((subject: { steps: { order: number }[] }) =>
       subject.steps.map((step) => step.order),
     );
-    expect(stepsBySubject.sort()).toEqual(data.plan.steps.map((step: { order: number }) => step.order).sort());
+    expect(stepsBySubject.sort()).toEqual(
+      data.plan.steps.map((step: { order: number }) => step.order).sort(),
+    );
   });
 });
 
 describe('exam planner', () => {
   it('builds a day-by-day plan with concrete activities that ends in an exam simulation', async () => {
     const student = await signup(app);
-    const pack = await createPack(app, student, { examDate: daysFromNow(6), questionsPerConcept: 4 });
+    const pack = await createPack(app, student, {
+      examDate: daysFromNow(6),
+      questionsPerConcept: 4,
+    });
     await today(student); // the plan of a pack with an exam exists without pressing anything
 
     const res = await request(app).get(`/api/study-packs/${pack.id}/plan`).set(auth(student.token));
@@ -232,7 +257,12 @@ describe('exam planner', () => {
     expect(plan.sessions[5].date).toBe(daysFromNow(5));
     for (const day of plan.sessions) {
       expect(day.tasks.length).toBeGreaterThan(0);
-      expect(day.tasks.every((task: { label: string; minutes: number; type: string }) => task.label && task.minutes > 0 && task.type)).toBe(true);
+      expect(
+        day.tasks.every(
+          (task: { label: string; minutes: number; type: string }) =>
+            task.label && task.minutes > 0 && task.type,
+        ),
+      ).toBe(true);
     }
     const last = plan.sessions.at(-1);
     expect(last.focus).toBe('Exam simulation and final review');
@@ -243,8 +273,14 @@ describe('exam planner', () => {
   it('is deterministic and needs no AI', async () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { examDate: daysFromNow(5) });
-    const a = await request(app).post(`/api/study-packs/${pack.id}/plan`).set(auth(student.token)).send({});
-    const b = await request(app).post(`/api/study-packs/${pack.id}/plan`).set(auth(student.token)).send({});
+    const a = await request(app)
+      .post(`/api/study-packs/${pack.id}/plan`)
+      .set(auth(student.token))
+      .send({});
+    const b = await request(app)
+      .post(`/api/study-packs/${pack.id}/plan`)
+      .set(auth(student.token))
+      .send({});
     expect(a.status).toBe(201);
     expect(a.body.data.sessions).toEqual(b.body.data.sessions);
     expect(createCompletion).not.toHaveBeenCalled();
@@ -259,7 +295,9 @@ describe('exam planner', () => {
       .send({ days: 4, minutesPerDay: 40 });
     expect(res.status).toBe(201);
     expect(res.body.data.sessions).toHaveLength(4);
-    expect(res.body.data.sessions.every((day: { budgetMinutes: number }) => day.budgetMinutes === 40)).toBe(true);
+    expect(
+      res.body.data.sessions.every((day: { budgetMinutes: number }) => day.budgetMinutes === 40),
+    ).toBe(true);
     expect(res.body.data.sessions[0].activities.length).toBeGreaterThan(0);
   });
 
@@ -267,13 +305,23 @@ describe('exam planner', () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { examDate: daysFromNow(6) });
     await today(student);
-    await request(app).patch(`/api/study-packs/${pack.id}`).set(auth(student.token)).send({ examDate: daysFromNow(3) });
-    const shorter = await request(app).get(`/api/study-packs/${pack.id}/plan`).set(auth(student.token));
+    await request(app)
+      .patch(`/api/study-packs/${pack.id}`)
+      .set(auth(student.token))
+      .send({ examDate: daysFromNow(3) });
+    const shorter = await request(app)
+      .get(`/api/study-packs/${pack.id}/plan`)
+      .set(auth(student.token));
     expect(shorter.body.data.sessions).toHaveLength(3);
     expect(shorter.body.data.examDate).toBe(daysFromNow(3));
 
-    await request(app).patch(`/api/study-packs/${pack.id}`).set(auth(student.token)).send({ examDate: null });
-    const gone = await request(app).get(`/api/study-packs/${pack.id}/plan`).set(auth(student.token));
+    await request(app)
+      .patch(`/api/study-packs/${pack.id}`)
+      .set(auth(student.token))
+      .send({ examDate: null });
+    const gone = await request(app)
+      .get(`/api/study-packs/${pack.id}/plan`)
+      .set(auth(student.token));
     expect(gone.body.data).toBeNull();
   });
 
@@ -300,7 +348,9 @@ describe('exam planner', () => {
     expect((await today(amsterdam)).exam.daysLeft).toBe(8);
     // The plan starts on the student's own date too.
     const packs = await request(app).get('/api/study-packs').set(auth(amsterdam.token));
-    const plan = await request(app).get(`/api/study-packs/${packs.body.data[0].id}/plan`).set(auth(amsterdam.token));
+    const plan = await request(app)
+      .get(`/api/study-packs/${packs.body.data[0].id}/plan`)
+      .set(auth(amsterdam.token));
     expect(plan.body.data.sessions[0].date).toBe('2026-09-30');
   });
 });
@@ -326,7 +376,11 @@ describe('progress', () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { questionsPerConcept: 3 });
     await finishPractice(student, pack, 4);
-    const test = await startSession(app, student, { packId: pack.id, type: 'test', mode: 'quick10' });
+    const test = await startSession(app, student, {
+      packId: pack.id,
+      type: 'test',
+      mode: 'quick10',
+    });
     await completeSession(app, student, test.session.id, {
       answers: test.session.items.map((item) => ({ itemId: item.id, answer: RIGHT })),
     });
@@ -353,7 +407,8 @@ describe('progress', () => {
     const pack = await createPack(app, student, { questionsPerConcept: 6 });
 
     const trendOf = async () =>
-      (await request(app).get('/api/progress/study').set(auth(student.token))).body.data.packs[0].trend;
+      (await request(app).get('/api/progress/study').set(auth(student.token))).body.data.packs[0]
+        .trend;
 
     await finishPractice(student, pack);
     expect(await trendOf()).toMatchObject({ hasEnoughData: false, daysRecorded: 1, points: [] });
@@ -366,7 +421,11 @@ describe('progress', () => {
     await finishPractice(student, pack);
     const trend = await trendOf();
     expect(trend.hasEnoughData).toBe(true);
-    expect(trend.points.map((point: { day: string }) => point.day)).toEqual(['2026-09-25', '2026-09-26', '2026-09-27']);
+    expect(trend.points.map((point: { day: string }) => point.day)).toEqual([
+      '2026-09-25',
+      '2026-09-26',
+      '2026-09-27',
+    ]);
     expect(trend.changePercent).toBeGreaterThan(0);
     expect(trend.direction).toBe('up');
 
@@ -423,7 +482,10 @@ describe('progress', () => {
     });
     for (const item of session.items) await answerItem(app, student, session.id, item.id, RIGHT);
     const done = await completeSession(app, student, session.id);
-    expect(done.result!.concepts.find((c) => c.name === 'Osmosis')).toMatchObject({ beforePercent: 42, afterPercent: 100 });
+    expect(done.result!.concepts.find((c) => c.name === 'Osmosis')).toMatchObject({
+      beforePercent: 42,
+      afterPercent: 100,
+    });
 
     const res = await request(app).get('/api/progress/study').set(auth(student.token));
     expect(res.body.data.overall.improvedConcepts[0]).toMatchObject({
@@ -448,16 +510,27 @@ describe('progress', () => {
 describe('subject overview', () => {
   it('shows packs, mastery, due work, weak concepts, exams and one call to action', async () => {
     const student = await signup(app);
-    const subject = (await request(app).post('/api/subjects').set(auth(student.token)).send({ name: 'Biology' })).body.data;
-    const cells = await createPack(app, student, { title: 'Cells', subjectId: subject.id, examDate: daysFromNow(7) });
+    const subject = (
+      await request(app).post('/api/subjects').set(auth(student.token)).send({ name: 'Biology' })
+    ).body.data;
+    const cells = await createPack(app, student, {
+      title: 'Cells',
+      subjectId: subject.id,
+      examDate: daysFromNow(7),
+    });
     await createPack(app, student, { title: 'Genetics', subjectId: subject.id });
     await setMastery(student.id, conceptId(cells, 'Osmosis'), 0.15, { attempts: 4 });
 
-    const res = await request(app).get(`/api/subjects/${subject.id}/overview`).set(auth(student.token));
+    const res = await request(app)
+      .get(`/api/subjects/${subject.id}/overview`)
+      .set(auth(student.token));
     expect(res.status).toBe(200);
     const overview = res.body.data;
     expect(overview.subject).toEqual({ id: subject.id, name: 'Biology' });
-    expect(overview.packs.map((pack: { title: string }) => pack.title).sort()).toEqual(['Cells', 'Genetics']);
+    expect(overview.packs.map((pack: { title: string }) => pack.title).sort()).toEqual([
+      'Cells',
+      'Genetics',
+    ]);
     expect(overview.totals).toMatchObject({ packs: 2, weakConcepts: 1 });
     expect(overview.exams).toEqual([expect.objectContaining({ title: 'Cells', daysLeft: 7 })]);
     const cellsRow = overview.packs.find((pack: { title: string }) => pack.title === 'Cells');
@@ -467,9 +540,14 @@ describe('subject overview', () => {
 
   it('is private to the subject owner', async () => {
     const student = await signup(app);
-    const subject = (await request(app).post('/api/subjects').set(auth(student.token)).send({ name: 'Biology' })).body.data;
+    const subject = (
+      await request(app).post('/api/subjects').set(auth(student.token)).send({ name: 'Biology' })
+    ).body.data;
     const other = await signup(app);
-    expect((await request(app).get(`/api/subjects/${subject.id}/overview`).set(auth(other.token))).status).toBe(404);
+    expect(
+      (await request(app).get(`/api/subjects/${subject.id}/overview`).set(auth(other.token)))
+        .status,
+    ).toBe(404);
     expect((await request(app).get(`/api/subjects/${subject.id}/overview`)).status).toBe(401);
   });
 });
@@ -480,7 +558,8 @@ describe('AI Tutor context and "Show source"', () => {
   }
   const sent = () =>
     JSON.parse(
-      (createCompletion.mock.calls.at(-1)![0] as { messages: { content: string }[] }).messages[1]!.content,
+      (createCompletion.mock.calls.at(-1)![0] as { messages: { content: string }[] }).messages[1]!
+        .content,
     ) as Record<string, unknown> & {
       focus?: {
         concept: { name: string };
@@ -494,7 +573,12 @@ describe('AI Tutor context and "Show source"', () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { questionsPerConcept: 3 });
     const osmosis = conceptId(pack, 'Osmosis');
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', conceptId: osmosis, count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      conceptId: osmosis,
+      count: 2,
+    });
     await answerItem(app, student, session.id, session.items[0]!.id, WRONG);
     createCompletion.mockResolvedValueOnce(
       modelReply('Osmosis is water moving through a membrane. [Source: Biology.md · source]'),
@@ -529,7 +613,9 @@ describe('AI Tutor context and "Show source"', () => {
   it('labels an answer without a real citation as a general explanation', async () => {
     const student = await signup(app);
     const pack = await createPack(app, student);
-    createCompletion.mockResolvedValueOnce(modelReply('In general, membranes are selective. [Source: Made Up Book · page 99]'));
+    createCompletion.mockResolvedValueOnce(
+      modelReply('In general, membranes are selective. [Source: Made Up Book · page 99]'),
+    );
     const res = await request(app)
       .post(`/api/study-packs/${pack.id}/tutor`)
       .set(auth(student.token))
@@ -541,7 +627,11 @@ describe('AI Tutor context and "Show source"', () => {
   it('is switched off while a test is running, and reveals no answer afterwards it should not', async () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { questionsPerConcept: 3 });
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'test', mode: 'quick10' });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'test',
+      mode: 'quick10',
+    });
     const blocked = await request(app)
       .post(`/api/study-packs/${pack.id}/tutor`)
       .set(auth(student.token))
@@ -557,7 +647,11 @@ describe('AI Tutor context and "Show source"', () => {
   it("does not accept another student's session as context", async () => {
     const student = await signup(app);
     const pack = await createPack(app, student);
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'practice', count: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'practice',
+      count: 2,
+    });
     const other = await signup(app);
     const otherPack = await createPack(app, other);
     const res = await request(app)
@@ -591,7 +685,9 @@ describe('Study Pack regression: the classic endpoints keep working', () => {
   it('classic practice answers feed the same mastery the sessions use', async () => {
     const student = await signup(app);
     const pack = await createPack(app, student, { questionsPerConcept: 2 });
-    const queue = await request(app).get(`/api/study-packs/${pack.id}/practice`).set(auth(student.token));
+    const queue = await request(app)
+      .get(`/api/study-packs/${pack.id}/practice`)
+      .set(auth(student.token));
     expect(queue.status).toBe(200);
     const question = queue.body.data.questions[0];
     const graded = await request(app)
@@ -599,14 +695,20 @@ describe('Study Pack regression: the classic endpoints keep working', () => {
       .set(auth(student.token))
       .send({ questionId: question.id, answer: RIGHT });
     expect(graded.status).toBe(200);
-    expect(graded.body.data).toMatchObject({ verdict: 'correct', previousMasteryPercent: 0, conceptMasteryPercent: 20 });
+    expect(graded.body.data).toMatchObject({
+      verdict: 'correct',
+      previousMasteryPercent: 0,
+      conceptMasteryPercent: 20,
+    });
 
     // A session started afterwards sees that mastery.
     const preview = await request(app)
       .get('/api/study-sessions/preview')
       .query({ packId: pack.id, type: 'learn' })
       .set(auth(student.token));
-    const seen = preview.body.data.concepts.find((c: { id: string }) => c.id === question.conceptId);
+    const seen = preview.body.data.concepts.find(
+      (c: { id: string }) => c.id === question.conceptId,
+    );
     expect(seen).toMatchObject({ masteryPercent: 20 });
   });
 
@@ -630,18 +732,25 @@ describe('Study Pack regression: the classic endpoints keep working', () => {
       .send({ answers: questions.map((question) => ({ questionId: question.id, answer: RIGHT })) });
     expect(submitted.status).toBe(200);
     expect(submitted.body.data.accuracy).toBe(100);
-    expect(submitted.body.data.results[0]).toMatchObject({ verdict: 'correct', correctAnswer: RIGHT });
+    expect(submitted.body.data.results[0]).toMatchObject({
+      verdict: 'correct',
+      correctAnswer: RIGHT,
+    });
     expect(submitted.body.data.results[0].explanation).toMatch(/Because/);
 
     // Classic attempts are visible next to session attempts.
-    const list = await request(app).get(`/api/study-packs/${pack.id}/tests`).set(auth(student.token));
+    const list = await request(app)
+      .get(`/api/study-packs/${pack.id}/tests`)
+      .set(auth(student.token));
     expect(list.body.data.attempts).toHaveLength(1);
   });
 
   it('classic learn: next concept and self-rating still move mastery', async () => {
     const student = await signup(app);
     const pack = await createPack(app, student);
-    const next = await request(app).get(`/api/study-packs/${pack.id}/learn/next`).set(auth(student.token));
+    const next = await request(app)
+      .get(`/api/study-packs/${pack.id}/learn/next`)
+      .set(auth(student.token));
     expect(next.status).toBe(200);
     expect(next.body.data.reason).toBe('new');
     const rated = await request(app)
@@ -660,7 +769,9 @@ describe('Study Pack regression: the classic endpoints keep working', () => {
     expect(detail.body.data.counts.concepts).toBe(4);
     const list = await request(app).get('/api/study-packs').set(auth(student.token));
     expect(list.body.data[0]).toMatchObject({ title: 'Biology', examDaysLeft: 9 });
-    const progress = await request(app).get(`/api/study-packs/${pack.id}/progress`).set(auth(student.token));
+    const progress = await request(app)
+      .get(`/api/study-packs/${pack.id}/progress`)
+      .set(auth(student.token));
     expect(progress.status).toBe(200);
   });
 
@@ -668,9 +779,14 @@ describe('Study Pack regression: the classic endpoints keep working', () => {
     const student = await signup(app);
     const pack = await createPack(app, student);
     const listed = async () =>
-      (await request(app).get('/api/study-packs').set(auth(student.token))).body.data[0].lastStudiedAt;
+      (await request(app).get('/api/study-packs').set(auth(student.token))).body.data[0]
+        .lastStudiedAt;
     expect(await listed()).toBeNull();
-    const { session } = await startSession(app, student, { packId: pack.id, type: 'learn', count: 1 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 1,
+    });
     const rated = await request(app)
       .post(`/api/study-sessions/${session.id}/items/${session.items[0]!.id}/rating`)
       .set(auth(student.token))

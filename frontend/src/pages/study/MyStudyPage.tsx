@@ -55,7 +55,12 @@ function byRecentActivity(a: StudyPackSummary, b: StudyPackSummary): number {
 }
 
 function hasStarted(pack: StudyPackSummary): boolean {
-  return pack.masteryPercent > 0 || pack.dueCards > 0 || pack.weakConcepts > 0 || pack.lastStudiedAt !== null;
+  return (
+    pack.masteryPercent > 0 ||
+    pack.dueCards > 0 ||
+    pack.weakConcepts > 0 ||
+    pack.lastStudiedAt !== null
+  );
 }
 
 /**
@@ -179,12 +184,15 @@ export function MyStudyPage() {
                     <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
                   </h3>
                   <p className="muted pack-list-meta">
-                    {pack.masteryPercent}% mastered · {pack.concepts} concepts · {pack.flashcards} cards ·{' '}
-                    {pack.practiceQuestions} questions
+                    {pack.masteryPercent}% mastered · {pack.concepts} concepts · {pack.flashcards}{' '}
+                    cards · {pack.practiceQuestions} questions
                   </p>
                   <MasteryMeter percent={pack.masteryPercent} compact />
                   <div className="pack-list-actions">
-                    <Link to={`/study-packs/${pack.id}?tab=learn`} className="btn btn-sm btn-secondary">
+                    <Link
+                      to={`/study-packs/${pack.id}?tab=learn`}
+                      className="btn btn-sm btn-secondary"
+                    >
                       {started ? 'Continue learning' : 'Start learning'}
                     </Link>
                     <span className="muted pack-list-open">
@@ -249,8 +257,20 @@ export function MyStudyPage() {
             {recentSets.slice(0, 6).map((set) => (
               <StudySetCard key={set.id} set={set} />
             ))}
-            <Link to="/study-packs/new" className="card card-interactive" style={{ minHeight: 190 }}>
-              <div className="stack" style={{ gap: 10, height: '100%', justifyContent: 'center', alignItems: 'flex-start' }}>
+            <Link
+              to="/study-packs/new"
+              className="card card-interactive"
+              style={{ minHeight: 190 }}
+            >
+              <div
+                className="stack"
+                style={{
+                  gap: 10,
+                  height: '100%',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                }}
+              >
                 <span className="quick-icon quick-icon-blue">
                   <IconPlus />
                 </span>
@@ -285,7 +305,9 @@ export function MyStudyPage() {
           <div className="section-title">
             <div>
               <h2 id="my-study-subjects-list">Subjects</h2>
-              <p className="muted">Open a subject to see mastery, due work and exams in one place.</p>
+              <p className="muted">
+                Open a subject to see mastery, due work and exams in one place.
+              </p>
             </div>
             <Link to="/subjects">
               Manage subjects <IconArrowRight size={15} />
@@ -293,7 +315,11 @@ export function MyStudyPage() {
           </div>
           <div className="set-grid">
             {subjects.slice(0, 6).map((subject) => (
-              <Link key={subject.id} to={`/subjects/${subject.id}`} className="card card-interactive">
+              <Link
+                key={subject.id}
+                to={`/subjects/${subject.id}`}
+                className="card card-interactive"
+              >
                 <div className="set-card-top">
                   <span className="set-card-symbol">
                     <IconBook size={22} />
