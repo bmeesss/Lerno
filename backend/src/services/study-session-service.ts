@@ -1100,6 +1100,22 @@ export const studySessionService = {
       );
       applied = recorded.applied[0] ?? null;
     }
+    const isQuestionItem = item.kind === 'question';
+    const updatedItem: LearningSessionItemRecord = {
+      ...item,
+      // A Learn concept is finished by its self-rating; the check is only one step of it.
+      status: isQuestionItem ? 'answered' : item.status,
+      answer: displayAnswer(question, input.answer),
+      verdict: graded.verdict,
+      masteryBefore: applied ? applied.before.mastery : item.masteryBefore,
+      masteryAfter: applied ? applied.after.mastery : item.masteryAfter,
+      responseTimeMs: input.responseTimeMs ?? null,
+      answeredAt: now.toISOString(),
+    };
+    // The item is marked right after the mastery change it caused. Every write is its own
+    // request, so if a later one fails and the student retries, the repeat finds the verdict
+    // above and returns it, instead of applying the mastery change a second time.
+    await db.learningSessionItems.saveMany([updatedItem]);
     await db.practiceAttempts.create({
       userId,
       packId: pack.id,
@@ -1118,20 +1134,6 @@ export const studySessionService = {
       responseTimeMs: input.responseTimeMs ?? null,
       metadata: { verdict: graded.verdict, sessionId: session.id, sessionType: session.type },
     });
-
-    const isQuestionItem = item.kind === 'question';
-    const updatedItem: LearningSessionItemRecord = {
-      ...item,
-      // A Learn concept is finished by its self-rating; the check is only one step of it.
-      status: isQuestionItem ? 'answered' : item.status,
-      answer: displayAnswer(question, input.answer),
-      verdict: graded.verdict,
-      masteryBefore: applied ? applied.before.mastery : item.masteryBefore,
-      masteryAfter: applied ? applied.after.mastery : item.masteryAfter,
-      responseTimeMs: input.responseTimeMs ?? null,
-      answeredAt: now.toISOString(),
-    };
-    await db.learningSessionItems.saveMany([updatedItem]);
     const nextItems = replaceItem(items, updatedItem);
     const updatedSession = await db.learningSessions.update(session.id, {
       ...startPatch(session, now),
@@ -1182,6 +1184,17 @@ export const studySessionService = {
       new Map([[item.conceptId, masteryFromRecord(previous)]]),
     );
     const applied = recorded.applied[0]!;
+    const updatedItem: LearningSessionItemRecord = {
+      ...item,
+      status: 'answered',
+      rating: input.rating,
+      // If the check ran first, "before" is the mastery before the check.
+      masteryBefore: item.masteryBefore ?? applied.before.mastery,
+      masteryAfter: applied.after.mastery,
+      answeredAt: now.toISOString(),
+    };
+    // Marked right after the mastery change, like an answer: a retry returns this rating.
+    await db.learningSessionItems.saveMany([updatedItem]);
     await db.learningEvents.create({
       userId,
       packId: pack.id,
@@ -1196,17 +1209,6 @@ export const studySessionService = {
       responseTimeMs: input.responseTimeMs ?? null,
       metadata: { rating: input.rating, sessionId: session.id, sessionType: 'learn' },
     });
-
-    const updatedItem: LearningSessionItemRecord = {
-      ...item,
-      status: 'answered',
-      rating: input.rating,
-      // If the check ran first, "before" is the mastery before the check.
-      masteryBefore: item.masteryBefore ?? applied.before.mastery,
-      masteryAfter: applied.after.mastery,
-      answeredAt: now.toISOString(),
-    };
-    await db.learningSessionItems.saveMany([updatedItem]);
     const nextItems = replaceItem(items, updatedItem);
     const updatedSession = await db.learningSessions.update(session.id, {
       ...startPatch(session, now),
@@ -1318,7 +1320,9 @@ export const studySessionService = {
     if (session.status === 'abandoned') throw conflict('This session was abandoned');
 
     let items = await db.learningSessionItems.listBySession(session.id);
-    if (session.type === 'test' && input.answers) {
+    // A test that an earlier, interrupted try already graded keeps the answers it was graded on.
+    const gradedBefore = items.some((item) => item.verdict !== null);
+    if (session.type === 'test' && input.answers && !gradedBefore) {
       const merged = mergeTestAnswers(items, input.answers);
       if (merged.changed.length > 0) await db.learningSessionItems.saveMany(merged.changed);
       items = merged.items;
@@ -1561,10 +1565,110 @@ export function mergeTestAnswers(
   return { items: items.map((item) => byId.get(item.id)!), changed: [...changed.values()] };
 }
 
+/** One graded question of a test, with the concept it counts for. */
+interface GradedEntry {
+  item: LearningSessionItemRecord;
+  question: PracticeQuestionRecord;
+  answer: string;
+  verdict: AnswerVerdict;
+  concept: ConceptRecord | null;
+}
+
+/** Score and verdict counts of a graded test (a partial answer is worth half). */
+function tallyTest(graded: GradedEntry[]) {
+  let score = 0;
+  let correctCount = 0;
+  let partialCount = 0;
+  let incorrectCount = 0;
+  for (const entry of graded) {
+    if (entry.verdict === 'correct') {
+      score += 1;
+      correctCount += 1;
+    } else if (entry.verdict === 'partial') {
+      score += 0.5;
+      partialCount += 1;
+    } else {
+      incorrectCount += 1;
+    }
+  }
+  return { score, correctCount, partialCount, incorrectCount };
+}
+
 /**
- * Grades a whole test in one pass: verdicts, mastery (one batched write), the
- * `test_attempts` row the classic flow uses, learning events, and the graded
- * items. Unanswered questions count as missed, like on a real exam.
+ * What a graded test leaves behind besides mastery and the items: one learning event per
+ * question and the `test_attempts` row the classic flow uses. `existing` says what an earlier,
+ * interrupted try already wrote, so a retry only adds what is missing and nothing is doubled.
+ */
+async function recordTestTrail(
+  db: Database,
+  userId: string,
+  pack: StudyPackRecord,
+  session: LearningSessionRecord,
+  graded: GradedEntry[],
+  final: ReadonlyMap<string, MasteryState>,
+  existing: { hasEvents: boolean; attemptId: string | null },
+): Promise<string | null> {
+  if (!existing.hasEvents && graded.length > 0) {
+    await db.learningEvents.createMany(
+      graded.map((entry) => ({
+        userId,
+        packId: pack.id,
+        conceptId: entry.concept?.id ?? null,
+        questionId: entry.question.id,
+        eventType: 'test' as const,
+        isCorrect: entry.verdict === 'partial' ? null : entry.verdict === 'correct',
+        responseTimeMs: null,
+        metadata: { verdict: entry.verdict, testId: session.testId, sessionId: session.id },
+      })),
+    );
+  }
+
+  let attemptId = existing.attemptId;
+  if (attemptId === null && session.testId) {
+    const touched = new Set<string>();
+    for (const entry of graded) if (entry.concept) touched.add(entry.concept.id);
+    const strongConceptIds: string[] = [];
+    const weakConceptIds: string[] = [];
+    for (const conceptId of touched) {
+      const state = final.get(conceptId);
+      if (!state) continue;
+      if (isWeakConcept(state)) weakConceptIds.push(conceptId);
+      if (state.mastery >= 0.85) strongConceptIds.push(conceptId);
+    }
+    const attempt = await db.testAttempts.create({
+      testId: session.testId,
+      packId: pack.id,
+      userId,
+      ...tallyTest(graded),
+      total: graded.length,
+      answers: graded.map((entry) => ({
+        questionId: entry.question.id,
+        prompt: entry.question.prompt,
+        questionType: entry.question.questionType,
+        yourAnswer: entry.answer,
+        correctAnswer: entry.question.correctAnswer,
+        verdict: entry.verdict,
+        explanation: entry.question.explanation,
+        conceptId: entry.concept?.id ?? null,
+        conceptName: entry.concept?.name ?? null,
+      })),
+      strongConceptIds,
+      weakConceptIds,
+    });
+    attemptId = attempt.id;
+  }
+  await db.packs.update(pack.id, {});
+  return attemptId;
+}
+
+/**
+ * Grades a whole test in one pass: verdicts, mastery (one batched write), the graded items, the
+ * learning events and the `test_attempts` row the classic flow uses. Unanswered questions count
+ * as missed, like on a real exam.
+ *
+ * Nothing here is a transaction, so finishing can be interrupted half-way. The graded items are
+ * written right after the mastery change and mark the test as graded: a retry then keeps that
+ * grading (see `resumeGradedTest`) instead of counting every answer a second time.
  */
 async function gradeTest(
   db: Database,
@@ -1582,7 +1686,11 @@ async function gradeTest(
   const questionById = new Map(questions.map((question) => [question.id, withOptions(question)]));
   const conceptById = new Map(concepts.map((concept) => [concept.id, concept]));
 
-  const graded = items.flatMap((item) => {
+  if (items.some((item) => item.verdict !== null)) {
+    return resumeGradedTest(db, userId, pack, session, items, questionById, conceptById);
+  }
+
+  const graded: GradedEntry[] = items.flatMap((item) => {
     const question = item.questionId ? questionById.get(item.questionId) : undefined;
     if (!question) return [];
     const answer = item.answer ?? '';
@@ -1606,25 +1714,10 @@ async function gradeTest(
 
   let appliedIndex = 0;
   const gradedItems = new Map<string, LearningSessionItemRecord>();
-  let score = 0;
-  let correctCount = 0;
-  let partialCount = 0;
-  let incorrectCount = 0;
-  const touched = new Set<string>();
   for (const entry of graded) {
-    if (entry.verdict === 'correct') {
-      score += 1;
-      correctCount += 1;
-    } else if (entry.verdict === 'partial') {
-      score += 0.5;
-      partialCount += 1;
-    } else {
-      incorrectCount += 1;
-    }
     let before: number | null = null;
     let after: number | null = null;
     if (entry.concept) {
-      touched.add(entry.concept.id);
       const step = applied[appliedIndex++]!;
       before = step.before.mastery;
       after = step.after.mastery;
@@ -1641,59 +1734,51 @@ async function gradeTest(
   }
   await db.learningSessionItems.saveMany([...gradedItems.values()]);
 
-  await db.learningEvents.createMany(
-    graded.map((entry) => ({
-      userId,
-      packId: pack.id,
-      conceptId: entry.concept?.id ?? null,
-      questionId: entry.question.id,
-      eventType: 'test' as const,
-      isCorrect: entry.verdict === 'partial' ? null : entry.verdict === 'correct',
-      responseTimeMs: null,
-      metadata: { verdict: entry.verdict, testId: session.testId, sessionId: session.id },
-    })),
-  );
-
-  const strongConceptIds: string[] = [];
-  const weakConceptIds: string[] = [];
-  for (const conceptId of touched) {
-    const state = final.get(conceptId);
-    if (!state) continue;
-    if (isWeakConcept(state)) weakConceptIds.push(conceptId);
-    if (state.mastery >= 0.85) strongConceptIds.push(conceptId);
-  }
-  const attempt = session.testId
-    ? await db.testAttempts.create({
-        testId: session.testId,
-        packId: pack.id,
-        userId,
-        score,
-        total: graded.length,
-        correctCount,
-        partialCount,
-        incorrectCount,
-        answers: graded.map((entry) => ({
-          questionId: entry.question.id,
-          prompt: entry.question.prompt,
-          questionType: entry.question.questionType,
-          yourAnswer: entry.answer,
-          correctAnswer: entry.question.correctAnswer,
-          verdict: entry.verdict,
-          explanation: entry.question.explanation,
-          conceptId: entry.concept?.id ?? null,
-          conceptName: entry.concept?.name ?? null,
-        })),
-        strongConceptIds,
-        weakConceptIds,
-      })
-    : null;
-  await db.packs.update(pack.id, {});
-
+  const attemptId = await recordTestTrail(db, userId, pack, session, graded, final, {
+    hasEvents: false,
+    attemptId: null,
+  });
   return {
     items: items.map((item) => gradedItems.get(item.id) ?? item),
-    attemptId: attempt?.id ?? null,
+    attemptId,
     finalStates: final,
   };
+}
+
+/**
+ * A retry of finishing a test whose items were already graded: the mastery change is in, so it
+ * is not applied again. The stored verdicts stay as they were; only the learning events and the
+ * `test_attempts` row are added if the interrupted try never got to them.
+ */
+async function resumeGradedTest(
+  db: Database,
+  userId: string,
+  pack: StudyPackRecord,
+  session: LearningSessionRecord,
+  items: LearningSessionItemRecord[],
+  questionById: ReadonlyMap<string, PracticeQuestionRecord>,
+  conceptById: ReadonlyMap<string, ConceptRecord>,
+) {
+  const [final, events, attempts] = await Promise.all([
+    masteryService.loadStates(db, userId, pack.id),
+    db.learningEvents.listByUser(userId, session.startedAt ?? session.createdAt),
+    db.testAttempts.listByUserAndPack(userId, pack.id),
+  ]);
+  const graded: GradedEntry[] = items.flatMap((item) => {
+    const question = item.questionId ? questionById.get(item.questionId) : undefined;
+    if (!question || item.verdict === null) return [];
+    const concept = question.conceptId ? (conceptById.get(question.conceptId) ?? null) : null;
+    return [{ item, question, answer: item.answer ?? '', verdict: item.verdict, concept }];
+  });
+  const attemptId = await recordTestTrail(db, userId, pack, session, graded, final, {
+    hasEvents: events.some(
+      (event) => event.eventType === 'test' && event.metadata['sessionId'] === session.id,
+    ),
+    attemptId: session.testId
+      ? (attempts.find((attempt) => attempt.testId === session.testId)?.id ?? null)
+      : null,
+  });
+  return { items, attemptId, finalStates: final };
 }
 
 export type { SessionProgress };

@@ -56,8 +56,15 @@ moves through `not_started → active → completed | abandoned`.
 - Items are planned **once**, in one batched pass from the recommendation engine. The pre-start
   screen (`GET /preview`) uses the same planner, so what it promises is what the session gets,
   and it writes nothing.
-- Answering an item is **idempotent** per item. The response is deliberately small (the item
-  with its feedback, the progress); the learn material is only in the full session.
+- Answering an item is **idempotent** per item: a repeat returns the verdict given the first
+  time. The response is deliberately small (the item with its feedback, the progress); the learn
+  material is only in the full session.
+- **Retrying after a failure does not count an answer twice.** Every write is its own request to the
+  database (there is no transaction), so an answer or rating marks its item right after the mastery
+  change it caused. If a later write fails and the student retries, the repeat returns the stored
+  verdict instead of applying the change again. The price of that order is that the practice
+  attempt or learning event of that one answer can be missing after such a failure. The only gap
+  left is the single request between the mastery change and the mark.
 - **Learn** per concept: explanation → example (from the student's own material, or an honest
   “no example yet”) → a short check question → a self-rating (Again / Hard / Good / Easy).
 - **Practice / Review**: one question at a time with instant feedback, the explanation, the
@@ -66,6 +73,9 @@ moves through `not_started → active → completed | abandoned`.
   hints and no per-question grading** while it runs. Answers are autosaved with one `PUT`, and
   everything is graded when the test is handed in. The AI Tutor answers `409` during a test.
   Tests are for the pack's owner and need at least three questions.
+- **Finishing a test can be retried.** If it fails after the test was graded, the retry keeps
+  that grading (the answers it was graded on are final), does not apply mastery again, and adds
+  the learning events and the `test_attempts` row only if they are missing.
 - **Completing** builds the result from the real mastery change: score, per-concept
   `old% → new%`, concepts that are still weak, and the recommended next step. A test also
   produces the “You know well / Needs practice” analysis and stores a `test_attempt`.
@@ -186,6 +196,17 @@ step with the Supabase repository (`lib/db/migration-0011.test.ts`). Frontend:
 the learn, practice and test runners, results, review mistakes, My Study, resume, subject and
 progress pages, empty and error states, the AI Tutor drawer, route helpers and the CSS/a11y
 basics.
+
+## Known limits
+
+- Sessions are not written in a database transaction, because the repository layer has none. The
+  retry rules above remove the double counting, but a failure can still leave a practice attempt
+  or learning event missing for one answer. Moving session completion into a Postgres function
+  would make it atomic.
+- The row-level security of migration 0011 and its constraints were checked on a real Postgres
+  engine, but the Supabase repository code itself has not been run against a live Supabase
+  project; the column names it uses are checked against the migration by
+  `lib/db/migration-0011.test.ts`.
 
 ## Not in this change
 
