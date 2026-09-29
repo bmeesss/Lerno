@@ -1,9 +1,9 @@
-import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
-import multer, { MulterError } from 'multer';
+import { Router, type RequestHandler } from 'express';
 import { aiController } from '../controllers/ai.controller.js';
 import { aiLearningController } from '../controllers/ai-learning.controller.js';
 import { aiStudioController } from '../controllers/ai-studio.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { handlePdfUpload } from '../middleware/pdf-upload.js';
 import { aiIpRateLimit, aiRateLimit } from '../middleware/rate-limit.js';
 import { validate } from '../middleware/validate.js';
 import { aiChatSchema } from '../validators/ai.validators.js';
@@ -22,7 +22,6 @@ import {
 } from '../validators/ai-set.validators.js';
 import { MAX_AI_BODY_CHARS } from '../lib/ai-limits.js';
 import { errors } from '../lib/errors.js';
-import { MAX_STUDIO_PDF_BYTES } from '../services/ai-studio-pdf.js';
 import {
   studioCardsRequestSchema,
   studioChatRequestSchema,
@@ -52,26 +51,6 @@ export function bodySizeGuard(maxChars: number): RequestHandler {
 function aiGuards(): RequestHandler[] {
   return [requireAuth, aiIpRateLimit, aiRateLimit, bodySizeGuard(MAX_AI_BODY_CHARS)];
 }
-
-const pdfUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_STUDIO_PDF_BYTES, files: 1, fields: 1, fieldNameSize: 40, fieldSize: 256 },
-}).single('file');
-
-/** Multipart PDF handling stays in memory and has independent byte limits. */
-const handlePdfUpload: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
-  pdfUpload(req, res, (error: unknown) => {
-    if (!error) {
-      next();
-      return;
-    }
-    if (error instanceof MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      next(errors.validation('PDFs must be 15 MB or smaller.'));
-      return;
-    }
-    next(errors.validation('The PDF upload could not be processed. Choose one PDF and try again.'));
-  });
-};
 
 /** /api/ai — built-in Lerno AI (website only, independent of MCP). */
 export function aiRoutes(): Router {

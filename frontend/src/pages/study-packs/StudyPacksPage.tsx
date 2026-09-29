@@ -34,7 +34,7 @@ export function StudyPacksPage() {
           <p>Each pack holds your material, concepts, flashcards, practice and progress.</p>
         </div>
         <div className="pack-actions-row">
-          <ButtonLink to="/ai/studio">
+          <ButtonLink to="/study-packs/new">
             <IconSparkles size={17} /> Add study material
           </ButtonLink>
           <Button variant="secondary" onClick={() => setCreating(true)}>
@@ -87,24 +87,24 @@ export function StudyPacksPage() {
             </article>
           ))}
 
-          <Link to="/ai/studio" className="card card-interactive pack-list-card pack-list-new">
+          <Link to="/study-packs/new" className="card card-interactive pack-list-card pack-list-new">
             <span className="quick-icon quick-icon-blue">
               <IconPlus />
             </span>
             <strong>Add study material</strong>
             <span className="muted">
-              Upload notes, a PDF or a set and Lerno builds the complete pack.
+              Paste notes, upload a PDF or import a set — Lerno builds the complete pack.
             </span>
           </Link>
         </div>
       ) : (
         <EmptyState
           icon={<IconLayers />}
-          title="Your first study pack starts with your material"
-          description="Add notes or a PDF. Lerno finds the concepts, builds flashcards and practice questions, and keeps track of what you have mastered."
+          title="Start your first Study Pack"
+          description="Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system."
           action={
             <div className="pack-actions-row">
-              <ButtonLink to="/ai/studio">
+              <ButtonLink to="/study-packs/new">
                 <IconSparkles size={17} /> Add study material
               </ButtonLink>
               <Button variant="secondary" onClick={() => setCreating(true)}>

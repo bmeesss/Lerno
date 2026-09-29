@@ -53,7 +53,7 @@ export function PackOverview({ pack, onChanged }: { pack: StudyPackDetail; onCha
   }
 
   return (
-    <div className="pack-overview">
+    <div className="pack-overview" id="pack-overview">
       <section className="card pack-next" aria-labelledby="pack-next-heading">
         <div className="pack-next-copy">
           <span className="eyebrow-label">Recommended next</span>

@@ -15,15 +15,14 @@ import {
   generatePackFlashcards,
   generatePackPractice,
   generatePackSummary,
+  isReadableSource,
   type PackAiInput,
 } from './study-pack-ai.js';
 import type { GenerateBody, TutorBody } from '../validators/study-pack.validators.js';
 
 /** The pack must contain readable material before any generation can happen. */
 function requireUsableSource(input: PackAiInput): void {
-  const ready = input.sources.filter(
-    (source) => source.status === 'ready' && (source.content ?? '').trim().length >= 20,
-  );
+  const ready = input.sources.filter((source) => isReadableSource(source, 20));
   if (ready.length === 0) {
     throw errors.validation('Add a source with readable text before generating study material.');
   }

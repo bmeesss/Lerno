@@ -167,10 +167,7 @@ export interface Database {
      * Replaces all questions of an existing quiz (keeps the quiz row, so
      * attempts stay linked). Used when regenerating after invalidation.
      */
-    replaceQuestions(
-      quizId: string,
-      questions: NewQuizQuestion[],
-    ): Promise<QuizQuestionRecord[]>;
+    replaceQuestions(quizId: string, questions: NewQuizQuestion[]): Promise<QuizQuestionRecord[]>;
   };
 
   attempts: {
@@ -259,6 +256,11 @@ export interface Database {
   packSources: {
     get(id: string): Promise<StudyPackSourceRecord | null>;
     listByPack(packId: string): Promise<StudyPackSourceRecord[]>;
+    /**
+     * Every source of one student, across their packs. Used to spot an
+     * accidental re-import of the same material (content fingerprint).
+     */
+    listByOwner(ownerId: string): Promise<StudyPackSourceRecord[]>;
     countByPacks(packIds: string[]): Promise<Record<string, number>>;
     create(data: {
       packId: string;

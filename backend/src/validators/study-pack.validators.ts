@@ -94,6 +94,30 @@ export const addSourceSchema = z.discriminatedUnion('type', [
   setSourceSchema,
 ]);
 
+/* ------------------------------- import flow ------------------------------- */
+/*
+ * The import endpoint creates a pack *and* starts processing its first source.
+ * It reuses the same source shapes as `createPackSchema`, plus the explicit
+ * `allowDuplicate` switch the duplicate dialog needs.
+ */
+
+export const importPackSchema = z.object({
+  title: titleSchema,
+  subjectId: z.string().uuid('Invalid subject').nullable().optional(),
+  description: z.string().trim().max(2000).default(''),
+  level: z.string().trim().max(60).default(''),
+  examDate: examDateSchema.optional(),
+  /** Material the pack is built from; one source per import. */
+  source: z.discriminatedUnion('type', [textSourceSchema, pdfSourceSchema, setSourceSchema]),
+  /** Set by "Import anyway" after the duplicate warning. */
+  allowDuplicate: z.boolean().default(false),
+});
+
+/** Starting (or retrying) generation for material that is already stored. */
+export const processPackSchema = z.object({
+  sourceId: z.string().uuid('Invalid source id').nullable().optional(),
+});
+
 export const createConceptSchema = z.object({
   name: z.string().trim().min(2, 'Concept name is too short').max(200),
   explanation: z.string().trim().max(1200).default(''),
@@ -210,6 +234,8 @@ export const tutorSchema = z.object({
 });
 
 export type CreatePackBody = z.infer<typeof createPackSchema>;
+export type ImportPackBody = z.infer<typeof importPackSchema>;
+export type ProcessPackBody = z.infer<typeof processPackSchema>;
 export type UpdatePackBody = z.infer<typeof updatePackSchema>;
 export type AddSourceBody = z.infer<typeof addSourceSchema>;
 export type GenerateBody = z.infer<typeof generateSchema>;

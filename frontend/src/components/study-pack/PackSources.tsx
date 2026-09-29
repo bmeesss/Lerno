@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { ImportProcessing } from './ImportProcessing';
 import { Badge, EmptyState } from '../ui/Primitives';
 import { IconLayers, IconPlus, IconTrash } from '../ui/Icons';
 import { useToast } from '../ui/Toast';
 import { ApiError } from '../../lib/api';
 import { aiStudioService } from '../../services/aiStudioService';
+import { studyPackImportService } from '../../services/studyPackImportService';
 import { studyPackService } from '../../services/studyPackService';
 import { studySetService } from '../../services/studySetService';
 import { useAsync } from '../../hooks/useAsync';
@@ -26,6 +28,8 @@ export function PackSources({ pack, onChanged }: { pack: StudyPackDetail; onChan
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [setId, setSetId] = useState('');
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const processing = pack.sources.find((source) => source.status === 'processing') ?? null;
   const { data: sets } = useAsync(() => (pack.isOwner ? studySetService.listMine() : Promise.resolve([])), [
     pack.isOwner,
   ]);
@@ -82,6 +86,26 @@ export function PackSources({ pack, onChanged }: { pack: StudyPackDetail; onChan
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Real retry: asks the backend to process the stored material again. */
+  async function retry(source: StudyPackSource) {
+    if (retryingId) return;
+    setRetryingId(source.id);
+    try {
+      await studyPackImportService.process(pack.id, source.id);
+      toast.show('Lerno is working on your material again', 'success');
+      onChanged();
+    } catch (error) {
+      toast.show(
+        error instanceof ApiError
+          ? error.message
+          : 'We could not start again. Your material is saved — try again in a moment.',
+        'error',
+      );
+    } finally {
+      setRetryingId(null);
     }
   }
 
@@ -195,6 +219,14 @@ export function PackSources({ pack, onChanged }: { pack: StudyPackDetail; onChan
         </form>
       ) : null}
 
+      {processing ? (
+        <ImportProcessing
+          inline
+          packId={pack.id}
+          onFinished={() => onChanged()}
+        />
+      ) : null}
+
       {pack.sources.length > 0 ? (
         <ul className="pack-source-list">
           {pack.sources.map((source) => (
@@ -214,6 +246,16 @@ export function PackSources({ pack, onChanged }: { pack: StudyPackDetail; onChan
                 ) : null}
               </div>
               <SourceStatusBadge status={source.status} />
+              {pack.isOwner && (source.status === 'failed' || source.status === 'processing') ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void retry(source)}
+                  disabled={retryingId === source.id}
+                >
+                  {retryingId === source.id ? 'Starting…' : 'Try again'}
+                </Button>
+              ) : null}
               {pack.isOwner ? (
                 <button
                   type="button"

@@ -748,6 +748,11 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           .filter((source) => source.packId === packId)
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       },
+      async listByOwner(ownerId) {
+        return [...state.packSources.values()]
+          .filter((source) => source.ownerId === ownerId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
       async countByPacks(packIds) {
         const counts: Record<string, number> = {};
         for (const id of packIds) counts[id] = 0;

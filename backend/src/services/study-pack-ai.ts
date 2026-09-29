@@ -48,6 +48,15 @@ export interface PackContext {
   characters: number;
 }
 
+/**
+ * A source can ground AI work when it has readable text and is not failed.
+ * `processing` sources stay usable: that status only says Lerno is still
+ * working on the content around them, not that the material is unreadable.
+ */
+export function isReadableSource(source: StudyPackSourceRecord, minChars = 1): boolean {
+  return source.status !== 'failed' && (source.content ?? '').trim().length >= minChars;
+}
+
 function sourceLabel(source: StudyPackSourceRecord): string {
   const kind =
     source.kind === 'set'
@@ -65,9 +74,7 @@ function sourceLabel(source: StudyPackSourceRecord): string {
  * Numbering makes `sourceRef` in generated concepts verifiable.
  */
 export function buildPackContext(input: PackAiInput, maxChars = MAX_CONTEXT_CHARS): PackContext {
-  const usable = input.sources.filter(
-    (source) => source.status === 'ready' && (source.content ?? '').trim().length > 0,
-  );
+  const usable = input.sources.filter((source) => isReadableSource(source));
 
   const header = [
     `STUDY PACK: ${normalizeText(input.pack.title, 160)}`,

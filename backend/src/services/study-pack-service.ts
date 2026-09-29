@@ -12,6 +12,7 @@
  *    student confirmation, and only appends — never silently overwrites.
  *  - Grading and mastery live in `study-pack-rules.ts` (pure, testable).
  */
+import { config } from '../config.js';
 import type { Database } from '../lib/db/repository.js';
 import type {
   AnswerVerdict,
@@ -352,6 +353,11 @@ export const studyPackService = {
       summary: pack.summary,
       summarySourceId: pack.summarySourceId,
       summaryUpdatedAt: pack.summaryUpdatedAt,
+      /**
+       * Whether Lerno AI can generate content right now. Shown as a calm
+       * notice instead of an error: the pack and its material always work.
+       */
+      aiAvailable: Boolean(config.groqApiKey),
       legacySetId: pack.legacySetId,
       schoolMethod:
         pack.method || pack.publisher || pack.methodEdition || pack.methodChapter

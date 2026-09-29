@@ -146,13 +146,13 @@ function DashboardContent({ data }: { data: DashboardData }) {
           </span>
           <IconArrowRight size={17} />
         </Link>
-        <Link to="/ai/studio">
+        <Link to="/study-packs/new">
           <span className="quick-icon quick-icon-blue">
             <IconSparkles />
           </span>
           <span>
-            <strong>Open Study Studio</strong>
-            <small>Work from your own material</small>
+            <strong>Add study material</strong>
+            <small>PDF, notes or a set → study pack</small>
           </span>
           <IconArrowRight size={17} />
         </Link>

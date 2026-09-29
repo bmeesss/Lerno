@@ -223,3 +223,51 @@ export const IconLightbulb = icon(
     <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5.9 1.1 1 1.8l.1.8h4.8l.1-.8c.1-.7.4-1.3 1-1.8A6 6 0 0 0 12 3z" />
   </>,
 );
+
+export const IconAlert = icon(
+  <>
+    <path d="M12 4 2.5 20h19L12 4z" />
+    <path d="M12 10v4" />
+    <path d="M12 17.5h.01" />
+  </>,
+);
+
+export const IconUpload = icon(
+  <>
+    <path d="M12 16V4" />
+    <path d="m7 9 5-5 5 5" />
+    <path d="M4 20h16" />
+  </>,
+);
+
+export const IconFile = icon(
+  <>
+    <path d="M7 3h7l5 5v13H7z" />
+    <path d="M14 3v5h5" />
+  </>,
+);
+
+export const IconImage = icon(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="m5 18 4.5-5 4 4.5 2.5-2.5L20 18" />
+  </>,
+);
+
+export const IconAudio = icon(
+  <>
+    <path d="M4 10v4" />
+    <path d="M8 7v10" />
+    <path d="M12 4v16" />
+    <path d="M16 8v8" />
+    <path d="M20 11v2" />
+  </>,
+);
+
+export const IconVideo = icon(
+  <>
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="m11 9.5 4 2.5-4 2.5z" />
+  </>,
+);

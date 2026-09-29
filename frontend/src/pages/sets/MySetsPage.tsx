@@ -39,8 +39,8 @@ export function MySetsPage() {
           <p>Small collections. Big understanding.</p>
         </div>
         <div className="page-header-actions">
-          <ButtonLink to="/ai/studio" variant="secondary">
-            <IconSparkles size={17} /> Study Studio
+          <ButtonLink to="/study-packs/new" variant="secondary">
+            <IconSparkles size={17} /> Add study material
           </ButtonLink>
           <Button variant="secondary" onClick={() => setGenerateOpen(true)}>
             <IconSparkles size={17} /> Generate with AI

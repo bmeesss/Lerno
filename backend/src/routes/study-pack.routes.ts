@@ -2,9 +2,16 @@ import { Router, type RequestHandler } from 'express';
 import { studyPackController } from '../controllers/study-pack.controller.js';
 import { bodySizeGuard } from './ai.routes.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
-import { aiIpRateLimit, aiRateLimit, publicRateLimit, writeRateLimit } from '../middleware/rate-limit.js';
+import {
+  aiIpRateLimit,
+  aiRateLimit,
+  publicRateLimit,
+  writeRateLimit,
+} from '../middleware/rate-limit.js';
 import { validate } from '../middleware/validate.js';
 import { MAX_AI_BODY_CHARS } from '../lib/ai-limits.js';
+import { handlePdfUpload } from '../middleware/pdf-upload.js';
+import { STUDY_PACK_IMPORT_RATE_LIMIT } from '../middleware/rate-limit.js';
 import {
   addSourceSchema,
   applyContentSchema,
@@ -14,10 +21,12 @@ import {
   createPlanSchema,
   createTestSchema,
   generateSchema,
+  importPackSchema,
   packParamsSchema,
   packSourceParamsSchema,
   practiceAttemptSchema,
   practiceQueueQuerySchema,
+  processPackSchema,
   rateConceptSchema,
   submitTestSchema,
   testParamsSchema,
@@ -36,6 +45,22 @@ export function studyPackRoutes(): Router {
   const router = Router();
 
   // Static paths first so they cannot be swallowed by /:packId.
+  router.post(
+    '/import/pdf',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    aiIpRateLimit,
+    handlePdfUpload,
+    studyPackController.importPdfPreview,
+  );
+  router.post(
+    '/import',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    validate({ body: importPackSchema }),
+    studyPackController.importPack,
+  );
+
   router.get('/today', requireAuth, studyPackController.today);
   router.get('/review-queue', requireAuth, studyPackController.reviewQueue);
   router.get('/', requireAuth, studyPackController.list);
@@ -45,6 +70,21 @@ export function studyPackRoutes(): Router {
     writeRateLimit,
     validate({ body: createPackSchema }),
     studyPackController.create,
+  );
+
+  // Processing status + (re)generate content for stored material (owner only).
+  router.get(
+    '/:packId/processing',
+    requireAuth,
+    validate({ params: packParamsSchema }),
+    studyPackController.processingStatus,
+  );
+  router.post(
+    '/:packId/process',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    validate({ params: packParamsSchema, body: processPackSchema }),
+    studyPackController.processPack,
   );
 
   // Pack detail (owner or public pack; guests may read public packs).

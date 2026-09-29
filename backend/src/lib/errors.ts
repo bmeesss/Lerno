@@ -32,12 +32,19 @@ const statusByCode: Record<ErrorCode, number> = {
 export class ApiError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
+  /**
+   * Optional machine-readable context for the client (never upstream detail).
+   * Only added to the error envelope when present, so existing responses keep
+   * exactly `{ code, message }`.
+   */
+  readonly details: Record<string, unknown> | null;
 
-  constructor(code: ErrorCode, message: string) {
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = statusByCode[code];
+    this.details = details ?? null;
   }
 }
 
@@ -48,7 +55,8 @@ export const errors = {
     new ApiError('FORBIDDEN', message),
   notFound: (message = 'Resource not found') => new ApiError('NOT_FOUND', message),
   methodNotAllowed: (message = 'Method not allowed') => new ApiError('METHOD_NOT_ALLOWED', message),
-  conflict: (message = 'Resource already exists') => new ApiError('CONFLICT', message),
+  conflict: (message = 'Resource already exists', details?: Record<string, unknown>) =>
+    new ApiError('CONFLICT', message, details),
   rateLimited: (message = 'Too many requests, please slow down') =>
     new ApiError('RATE_LIMITED', message),
   /** Lerno AI is not configured (no GROQ_API_KEY) — safe, pre-checked message. */
@@ -58,9 +66,8 @@ export const errors = {
   aiError: (message = 'The AI is temporarily unavailable. Please try again in a moment.') =>
     new ApiError('AI_ERROR', message),
   /** The AI answered, but the content failed validation. */
-  aiInvalidContent: (
-    message = 'The AI returned a response we could not use. Please try again.',
-  ) => new ApiError('AI_INVALID_CONTENT', message),
+  aiInvalidContent: (message = 'The AI returned a response we could not use. Please try again.') =>
+    new ApiError('AI_INVALID_CONTENT', message),
   /** The AI provider did not answer in time. */
   aiTimeout: (message = 'The AI took too long to answer. Please try again.') =>
     new ApiError('AI_TIMEOUT', message),

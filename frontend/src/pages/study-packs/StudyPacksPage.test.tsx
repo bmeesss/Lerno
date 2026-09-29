@@ -91,9 +91,16 @@ describe('StudyPacksPage', () => {
     listMock.mockResolvedValue([]);
     renderPage();
 
+    expect(await screen.findByText('Start your first Study Pack')).toBeInTheDocument();
     expect(
-      await screen.findByText('Your first study pack starts with your material'),
+      screen.getByText(
+        'Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system.',
+      ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /add study material/i }).length).toBeGreaterThan(0);
+    const actions = screen.getAllByRole('link', { name: /add study material/i });
+    expect(actions.length).toBeGreaterThan(0);
+    for (const action of actions) {
+      expect(action).toHaveAttribute('href', '/study-packs/new');
+    }
   });
 });

@@ -121,7 +121,7 @@ export function AppShell() {
             <span className="brand-caption">Study material into real learning.</span>
           </div>
 
-          <Link to="/ai/studio" className="btn btn-primary sidebar-create">
+          <Link to="/study-packs/new" className="btn btn-primary sidebar-create">
             <IconPlus size={17} /> Add study material
           </Link>
 

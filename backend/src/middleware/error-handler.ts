@@ -10,7 +10,13 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (err instanceof ApiError) {
-    res.status(err.status).json({ error: { code: err.code, message: err.message } });
+    res.status(err.status).json({
+      error: {
+        code: err.code,
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      },
+    });
     return;
   }
 
@@ -21,9 +27,7 @@ export function errorHandler(
 
   // Malformed JSON bodies (thrown by the JSON parser with status 400).
   if (err instanceof SyntaxError && (err as { status?: unknown }).status === 400) {
-    res
-      .status(400)
-      .json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' } });
+    res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' } });
     return;
   }
 
