@@ -132,6 +132,37 @@ describe('SubjectDetailPage', () => {
     expect(within(activity).getByText(/10 answered/)).toBeInTheDocument();
   });
 
+  it('shows no score for a learn session, which has no right and wrong answers', async () => {
+    const base = subjectOverview();
+    overviewMock.mockResolvedValue(
+      subjectOverview({
+        recentActivity: [
+          ...base.recentActivity,
+          {
+            sessionId: 's8',
+            packId: 'pack-1',
+            label: 'Biology Learn',
+            type: 'learn',
+            completedAt: '2026-09-28T11:00:00.000Z',
+            percent: null,
+            answered: 3,
+          },
+        ],
+      }),
+    );
+    renderPage();
+    const activity = (await screen.findByRole('heading', { name: 'Recent activity' })).closest(
+      'section',
+    )!;
+    const learn = within(activity).getByRole('link', { name: 'Biology Learn' }).closest('li')!;
+    expect(within(learn).getByText(/Learn · 3 answered/)).toBeInTheDocument();
+    expect(within(learn).queryByText(/%/)).not.toBeInTheDocument();
+    const practice = within(activity)
+      .getByRole('link', { name: 'Biology Practice' })
+      .closest('li')!;
+    expect(within(practice).getByText('80%')).toBeInTheDocument();
+  });
+
   it('says there is no activity yet instead of leaving a gap', async () => {
     overviewMock.mockResolvedValue(subjectOverview({ recentActivity: [] }));
     renderPage();
