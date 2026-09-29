@@ -88,3 +88,15 @@ export const aiIpRateLimit = createLimiter({
   max: config.aiRateLimitIpMax,
   name: 'ai-ip',
 });
+
+/**
+ * Material imports: one import can trigger a full AI generation run (several
+ * upstream calls), so the limit is per student per hour — stricter than a
+ * normal write, looser than a single AI request.
+ */
+export const STUDY_PACK_IMPORT_RATE_LIMIT = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  name: 'import',
+  keyBy: aiLimiterKey,
+});

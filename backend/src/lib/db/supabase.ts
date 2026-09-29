@@ -1194,6 +1194,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return (data as Row[]).map(packSourceRow);
       },
+      async listByOwner(ownerId) {
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .select('*')
+          .eq('owner_id', ownerId)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        throwIfError(error);
+        return (data as Row[]).map(packSourceRow);
+      },
       async countByPacks(packIds) {
         const counts: Record<string, number> = {};
         for (const id of packIds) counts[id] = 0;

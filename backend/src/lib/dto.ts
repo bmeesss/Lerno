@@ -70,6 +70,12 @@ export const dto = {
     question: record.question,
     answer: record.answer,
     position: record.position,
+    /**
+     * Provenance: which source this card came from and which concept it belongs
+     * to. Null for classic set/card flows, so nothing existing changes.
+     */
+    sourceId: record.sourceId,
+    conceptId: record.conceptId,
   }),
 
   progress: (record: CardProgressRecord) => ({

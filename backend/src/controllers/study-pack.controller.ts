@@ -3,12 +3,16 @@ import { asyncHandler, sendOk } from '../lib/http.js';
 import { errors } from '../lib/errors.js';
 import { studyPackService } from '../services/study-pack-service.js';
 import { studyPackGenerationService } from '../services/study-pack-generation.js';
+import { studyPackImportService } from '../services/study-pack-import.js';
+import { assertPdfMimeType } from '../middleware/pdf-upload.js';
 import type {
   AddSourceBody,
   ApplyContentBody,
   CreatePackBody,
   CreateTestBody,
   GenerateBody,
+  ImportPackBody,
+  ProcessPackBody,
   SubmitTestBody,
   TutorBody,
   UpdatePackBody,
@@ -51,7 +55,10 @@ export const studyPackController = {
   update: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
-    sendOk(res, await studyPackService.update(req.db, req.auth.id, packId, req.body as UpdatePackBody));
+    sendOk(
+      res,
+      await studyPackService.update(req.db, req.auth.id, packId, req.body as UpdatePackBody),
+    );
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
@@ -59,6 +66,61 @@ export const studyPackController = {
     const { packId } = req.params as { packId: string };
     await studyPackService.remove(req.db, req.auth.id, packId);
     res.status(204).end();
+  }),
+
+  /* ------------------------------ import flow ------------------------------ */
+
+  /**
+   * Reads an uploaded PDF and answers with what Lerno found (pages, words,
+   * concept candidates). Nothing is stored: the student confirms first.
+   */
+  importPdfPreview: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    assertPdfMimeType(req.file);
+    const filename =
+      req.file?.originalname?.trim() ||
+      (typeof req.body?.title === 'string' ? req.body.title : 'document.pdf');
+    sendOk(res, await studyPackImportService.previewPdf(req.file!.buffer, filename), 201);
+  }),
+
+  /** Creates the pack with its source and starts the real processing pipeline. */
+  importPack: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const started = await studyPackImportService.startImport(
+      req.db,
+      req.auth.id,
+      req.body as ImportPackBody,
+    );
+    sendOk(
+      res,
+      {
+        packId: started.packId,
+        jobId: started.jobId,
+        status: await studyPackImportService.status(req.db, req.auth.id, started.packId),
+      },
+      201,
+    );
+  }),
+
+  /** Real, per-stage processing status of a study pack (owner only). */
+  processingStatus: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    sendOk(res, await studyPackImportService.status(req.db, req.auth.id, packId));
+  }),
+
+  /** Starts or retries generation for material that is already stored. */
+  processPack: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const body = req.body as ProcessPackBody;
+    sendOk(
+      res,
+      await studyPackImportService.startProcessing(req.db, req.auth.id, packId, {
+        sourceId: body.sourceId ?? null,
+      }),
+      202,
+    );
   }),
 
   /* -------------------------------- sources -------------------------------- */
@@ -127,13 +189,30 @@ export const studyPackController = {
   generate: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
-    sendOk(res, await studyPackGenerationService.generate(req.db, req.auth.id, packId, req.body as GenerateBody));
+    sendOk(
+      res,
+      await studyPackGenerationService.generate(
+        req.db,
+        req.auth.id,
+        packId,
+        req.body as GenerateBody,
+      ),
+    );
   }),
 
   applyContent: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
-    sendOk(res, await studyPackService.applyContent(req.db, req.auth.id, packId, req.body as ApplyContentBody), 201);
+    sendOk(
+      res,
+      await studyPackService.applyContent(
+        req.db,
+        req.auth.id,
+        packId,
+        req.body as ApplyContentBody,
+      ),
+      201,
+    );
   }),
 
   /* -------------------------------- practice ------------------------------- */
@@ -153,10 +232,7 @@ export const studyPackController = {
   practiceAttempt: asyncHandler(async (req: Request, res: Response) => {
     const { packId } = req.params as { packId: string };
     const body = req.body as { questionId: string; answer: string };
-    sendOk(
-      res,
-      await studyPackService.gradePractice(req.db, req.auth?.id ?? null, packId, body),
-    );
+    sendOk(res, await studyPackService.gradePractice(req.db, req.auth?.id ?? null, packId, body));
   }),
 
   /* ---------------------------------- tests -------------------------------- */
@@ -170,7 +246,11 @@ export const studyPackController = {
   createTest: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
-    sendOk(res, await studyPackService.createTest(req.db, req.auth.id, packId, req.body as CreateTestBody), 201);
+    sendOk(
+      res,
+      await studyPackService.createTest(req.db, req.auth.id, packId, req.body as CreateTestBody),
+      201,
+    );
   }),
 
   submitTest: asyncHandler(async (req: Request, res: Response) => {
@@ -178,7 +258,13 @@ export const studyPackController = {
     const { packId, testId } = req.params as { packId: string; testId: string };
     sendOk(
       res,
-      await studyPackService.submitTest(req.db, req.auth.id, packId, testId, req.body as SubmitTestBody),
+      await studyPackService.submitTest(
+        req.db,
+        req.auth.id,
+        packId,
+        testId,
+        req.body as SubmitTestBody,
+      ),
     );
   }),
 
@@ -208,6 +294,9 @@ export const studyPackController = {
   tutor: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
-    sendOk(res, await studyPackGenerationService.tutor(req.db, req.auth.id, packId, req.body as TutorBody));
+    sendOk(
+      res,
+      await studyPackGenerationService.tutor(req.db, req.auth.id, packId, req.body as TutorBody),
+    );
   }),
 };
