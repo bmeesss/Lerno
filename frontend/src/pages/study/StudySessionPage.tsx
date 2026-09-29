@@ -11,7 +11,22 @@ import { SessionError } from '../../components/study-session/SessionCtaBar';
 import { TestRunner } from '../../components/study-session/TestRunner';
 import { ApiError } from '../../lib/api';
 import { studySessionService } from '../../services/studySessionService';
-import type { LearningSession, SelfRating, SessionItemResponse } from '../../types';
+import type { LearningSession, SelfRating, SessionItem, SessionItemResponse } from '../../types';
+
+/**
+ * The answer/rating response is deliberately small: it carries what changed (status,
+ * answer, feedback, rating), not the material the student is reading. That material
+ * does not change while answering, so it is kept from the full session — otherwise the
+ * Learn screen would go blank after the check.
+ */
+function mergeItem(existing: SessionItem, updated: SessionItem): SessionItem {
+  return {
+    ...existing,
+    ...updated,
+    learn: updated.learn ?? existing.learn,
+    question: updated.question ?? existing.question,
+  };
+}
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
@@ -86,7 +101,9 @@ export function StudySessionPage() {
       currentPosition: response.session.currentPosition,
       durationSeconds: response.session.durationSeconds,
       progress: response.progress,
-      items: current.items.map((item) => (item.id === response.item.id ? response.item : item)),
+      items: current.items.map((item) =>
+        item.id === response.item.id ? mergeItem(item, response.item) : item,
+      ),
     };
     setSession(updated);
     return updated;

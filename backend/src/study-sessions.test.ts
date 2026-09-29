@@ -605,6 +605,31 @@ describe('learn session preview', () => {
 });
 
 describe('learn sessions', () => {
+  it('answers with a small item, while the full session keeps the learn material', async () => {
+    // The client merges the small response into the session it already has, so the response
+    // carries what changed (answer, feedback, rating) and never the material being read.
+    const { student, pack } = await ready({ questionsPerConcept: 2 });
+    const { session } = await startSession(app, student, {
+      packId: pack.id,
+      type: 'learn',
+      count: 2,
+    });
+    const first = session.items[0]!;
+    expect(first.learn).not.toBeNull();
+
+    const answered = await answerItem(app, student, session.id, first.id, RIGHT);
+    expect(answered.item.learn).toBeNull();
+    expect(answered.item.question).not.toBeNull();
+    expect(answered.item.feedback).toMatchObject({ verdict: 'correct' });
+
+    const rated = await rateItem(app, student, session.id, first.id, 'good');
+    expect(rated.item.learn).toBeNull();
+    expect(rated.item.rating).toBe('good');
+
+    const reloaded = await getSession(app, student, session.id);
+    expect(reloaded.items[0]!.learn).toMatchObject({ explanation: expect.any(String) });
+  });
+
   it('goes weak → new and gives each concept an explanation, an example and a check', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 2 });
     await setMastery(student.id, conceptId(pack, 'Meiosis'), 0.1, { attempts: 3 });

@@ -58,6 +58,10 @@ const FEEDBACK: ItemFeedback = {
   source: null,
 };
 
+/**
+ * Like the real server: the item that comes back from answering or rating is small and
+ * carries no `learn` material (only the full session does).
+ */
 function response(
   item: SessionItem,
   patch: Partial<SessionItem>,
@@ -65,7 +69,7 @@ function response(
   total: number,
 ): SessionItemResponse {
   return {
-    item: { ...item, ...patch },
+    item: { ...item, ...patch, learn: null },
     progress: {
       position: answered,
       total,
@@ -143,6 +147,25 @@ describe('learn session', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Diffusion' })).toBeInTheDocument();
     expect(screen.getByText('Concept 2 of 2')).toBeInTheDocument();
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
+  });
+
+  it('keeps the learn material on screen after the check, even though the server answers with a small item', async () => {
+    const user = userEvent.setup();
+    const first = conceptItem('i1', 'Osmosis');
+    svc.get.mockResolvedValue(learnSession([first]));
+    svc.answer.mockResolvedValue(
+      response(first, { answer: 'The right answer', feedback: FEEDBACK }, 0, 1),
+    );
+    renderRunner();
+    await user.click(await screen.findByRole('button', { name: /check yourself/i }));
+    await user.click(screen.getByRole('radio', { name: 'The right answer' }));
+    await user.click(screen.getByRole('button', { name: /check answer/i }));
+
+    // The feedback, the concept heading and the way on are all still there (no blank screen).
+    expect(await screen.findByText('Well done')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Osmosis' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^continue/i }));
+    expect(screen.getByRole('group', { name: 'How well do you know this?' })).toBeInTheDocument();
   });
 
   it('says so instead of inventing an example when the material has none', async () => {
