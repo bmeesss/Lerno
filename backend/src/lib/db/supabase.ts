@@ -19,7 +19,13 @@ import type {
   ConceptRecord,
   LearningEventCreate,
   LearningEventRecord,
+  LearningSessionItemRecord,
+  LearningSessionRecord,
+  LearningSessionStat,
+  LearningSessionStatus,
+  LearningSessionType,
   FavoriteRecord,
+  MasterySnapshotRecord,
   NewCard,
   NewConcept,
   NewPracticeQuestion,
@@ -397,6 +403,72 @@ function studyPlanRow(row: Row): StudyPlanRecord {
     examDate: field<string | null>(row, 'exam_date') ?? null,
     overview: field<string>(row, 'overview') ?? '',
     sessions: field<StudyPlanRecord['sessions']>(row, 'sessions') ?? [],
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function learningSessionRow(row: Row): LearningSessionRecord {
+  return {
+    id: field(row, 'id'),
+    userId: field(row, 'user_id'),
+    packId: field(row, 'pack_id'),
+    type: field(row, 'type') as LearningSessionRecord['type'],
+    status: field(row, 'status') as LearningSessionRecord['status'],
+    mode: field<LearningSessionRecord['mode']>(row, 'mode') ?? null,
+    title: field<string>(row, 'title') ?? '',
+    focusConceptId: field<string | null>(row, 'focus_concept_id') ?? null,
+    targetConceptIds: field<string[] | null>(row, 'target_concept_ids') ?? [],
+    testId: field<string | null>(row, 'test_id') ?? null,
+    itemCount: field<number>(row, 'item_count') ?? 0,
+    answeredCount: field<number>(row, 'answered_count') ?? 0,
+    currentPosition: field<number>(row, 'current_position') ?? 0,
+    startedAt: field<string | null>(row, 'started_at') ?? null,
+    completedAt: field<string | null>(row, 'completed_at') ?? null,
+    lastActivityAt: field(row, 'last_activity_at'),
+    durationSeconds: field<number>(row, 'duration_seconds') ?? 0,
+    result: field<LearningSessionRecord['result']>(row, 'result') ?? null,
+    createdAt: field(row, 'created_at'),
+    updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function nullableNumber(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function learningSessionItemRow(row: Row): LearningSessionItemRecord {
+  return {
+    id: field(row, 'id'),
+    sessionId: field(row, 'session_id'),
+    userId: field(row, 'user_id'),
+    packId: field(row, 'pack_id'),
+    position: field<number>(row, 'position') ?? 0,
+    kind: field(row, 'kind') as LearningSessionItemRecord['kind'],
+    conceptId: field<string | null>(row, 'concept_id') ?? null,
+    questionId: field<string | null>(row, 'question_id') ?? null,
+    status: field(row, 'status') as LearningSessionItemRecord['status'],
+    answer: field<string | null>(row, 'answer') ?? null,
+    verdict: field<LearningSessionItemRecord['verdict']>(row, 'verdict') ?? null,
+    rating: field<LearningSessionItemRecord['rating']>(row, 'rating') ?? null,
+    masteryBefore: nullableNumber(row.mastery_before),
+    masteryAfter: nullableNumber(row.mastery_after),
+    responseTimeMs: field<number | null>(row, 'response_time_ms') ?? null,
+    answeredAt: field<string | null>(row, 'answered_at') ?? null,
+    createdAt: field(row, 'created_at'),
+  };
+}
+
+function masterySnapshotRow(row: Row): MasterySnapshotRecord {
+  return {
+    id: field(row, 'id'),
+    userId: field(row, 'user_id'),
+    packId: field(row, 'pack_id'),
+    day: String(field(row, 'day')).slice(0, 10),
+    masteryPercent: field<number>(row, 'mastery_percent') ?? 0,
+    conceptsTotal: field<number>(row, 'concepts_total') ?? 0,
+    weakConcepts: field<number>(row, 'weak_concepts') ?? 0,
+    masteredConcepts: field<number>(row, 'mastered_concepts') ?? 0,
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -1479,6 +1551,28 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return conceptMasteryRow(data as Row);
       },
+      async upsertMany(records) {
+        if (records.length === 0) return [];
+        const updatedAt = new Date().toISOString();
+        const payload = records.map((record) => ({
+          user_id: record.userId,
+          concept_id: record.conceptId,
+          mastery: record.mastery,
+          confidence: record.confidence,
+          attempts: record.attempts,
+          correct_count: record.correctCount,
+          incorrect_count: record.incorrectCount,
+          last_practiced_at: record.lastPracticedAt,
+          next_review_at: record.nextReviewAt,
+          updated_at: updatedAt,
+        }));
+        const { data, error } = await client
+          .from('concept_mastery')
+          .upsert(payload, { onConflict: 'user_id,concept_id' })
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(conceptMasteryRow);
+      },
     },
 
     learningEvents: {
@@ -1502,6 +1596,28 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return learningEventRow(data as Row);
       },
+      async createMany(events: LearningEventCreate[]) {
+        if (events.length === 0) return [];
+        const { data, error } = await client
+          .from('learning_events')
+          .insert(
+            events.map((event) => ({
+              user_id: event.userId,
+              pack_id: event.packId ?? null,
+              concept_id: event.conceptId ?? null,
+              card_id: event.cardId ?? null,
+              question_id: event.questionId ?? null,
+              event_type: event.eventType,
+              is_correct: event.isCorrect ?? null,
+              response_time_ms: event.responseTimeMs ?? null,
+              metadata: event.metadata ?? {},
+              ...(event.createdAt ? { created_at: event.createdAt } : {}),
+            })),
+          )
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(learningEventRow);
+      },
       async listByUser(userId, since) {
         let query = client
           .from('learning_events')
@@ -1513,6 +1629,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         const { data, error } = await query;
         throwIfError(error);
         return (data as Row[]).map(learningEventRow);
+      },
+      async countByUser(userId, eventTypes) {
+        if (eventTypes.length === 0) return 0;
+        const { count, error } = await client
+          .from('learning_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('event_type', eventTypes);
+        throwIfError(error);
+        return count ?? 0;
       },
     },
 
@@ -1624,6 +1750,32 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .single();
         throwIfError(error);
         return practiceAttemptRow(row as Row);
+      },
+      async createMany(rows) {
+        if (rows.length === 0) return [];
+        const { data, error } = await client
+          .from('practice_attempts')
+          .insert(
+            rows.map((row) => ({
+              user_id: row.userId,
+              pack_id: row.packId,
+              question_id: row.questionId,
+              concept_id: row.conceptId,
+              answer: row.answer,
+              verdict: row.verdict,
+            })),
+          )
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(practiceAttemptRow);
+      },
+      async countByUser(userId) {
+        const { count, error } = await client
+          .from('practice_attempts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        throwIfError(error);
+        return count ?? 0;
       },
       async listByUser(userId) {
         const { data, error } = await client
@@ -1759,6 +1911,25 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return (data as Row[]).map(testAttemptRow);
       },
+      async totalsByUser(userId) {
+        // Only the tiny `total` column is read, so this stays cheap and uncapped
+        // (paged): the number of finished tests is small for one student.
+        let attempts = 0;
+        let answers = 0;
+        for (let from = 0; from < 20_000; from += 1000) {
+          const { data, error } = await client
+            .from('test_attempts')
+            .select('total')
+            .eq('user_id', userId)
+            .range(from, from + 999);
+          throwIfError(error);
+          const rows = data as Row[];
+          attempts += rows.length;
+          answers += rows.reduce((sum, row) => sum + (field<number>(row, 'total') ?? 0), 0);
+          if (rows.length < 1000) break;
+        }
+        return { attempts, answers };
+      },
     },
 
     studyPlans: {
@@ -1791,6 +1962,220 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
       async deleteByPack(packId) {
         const { error } = await client.from('study_plans').delete().eq('pack_id', packId);
         throwIfError(error);
+      },
+    },
+
+    /* ------------------------- study sessions (0011) ------------------------ */
+
+    learningSessions: {
+      async get(id) {
+        const { data, error } = await client
+          .from('learning_sessions')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        throwIfError(error);
+        return data ? learningSessionRow(data as Row) : null;
+      },
+      async create(data) {
+        const { data: row, error } = await client
+          .from('learning_sessions')
+          .insert({
+            user_id: data.userId,
+            pack_id: data.packId,
+            type: data.type,
+            status: data.status ?? 'not_started',
+            mode: data.mode ?? null,
+            title: data.title,
+            focus_concept_id: data.focusConceptId ?? null,
+            target_concept_ids: data.targetConceptIds ?? [],
+            test_id: data.testId ?? null,
+            item_count: data.itemCount,
+            started_at: data.startedAt ?? null,
+          })
+          .select()
+          .single();
+        throwIfError(error);
+        return learningSessionRow(row as Row);
+      },
+      async update(id, patch) {
+        const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (patch.status !== undefined) payload.status = patch.status;
+        if (patch.answeredCount !== undefined) payload.answered_count = patch.answeredCount;
+        if (patch.currentPosition !== undefined) payload.current_position = patch.currentPosition;
+        if (patch.startedAt !== undefined) payload.started_at = patch.startedAt;
+        if (patch.completedAt !== undefined) payload.completed_at = patch.completedAt;
+        if (patch.lastActivityAt !== undefined) payload.last_activity_at = patch.lastActivityAt;
+        if (patch.durationSeconds !== undefined) payload.duration_seconds = patch.durationSeconds;
+        if (patch.result !== undefined) payload.result = patch.result;
+        const { data, error } = await client
+          .from('learning_sessions')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        throwIfError(error);
+        return learningSessionRow(data as Row);
+      },
+      async listByUser(userId, filter = {}) {
+        let query = client
+          .from('learning_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('last_activity_at', { ascending: false })
+          .limit(Math.min(filter.limit ?? 500, 1000));
+        if (filter.statuses && filter.statuses.length > 0) query = query.in('status', filter.statuses);
+        if (filter.packId) query = query.eq('pack_id', filter.packId);
+        if (filter.since) query = query.gte('last_activity_at', filter.since);
+        const { data, error } = await query;
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionRow);
+      },
+      async statsByUser(userId) {
+        // Only the small columns are read and the result is paged, so totals and
+        // the streak stay exact without loading whole sessions.
+        const stats: LearningSessionStat[] = [];
+        for (let from = 0; from < 20_000; from += 1000) {
+          const { data, error } = await client
+            .from('learning_sessions')
+            .select('pack_id,type,status,answered_count,duration_seconds,completed_at,last_activity_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true })
+            .range(from, from + 999);
+          throwIfError(error);
+          const rows = data as Row[];
+          for (const row of rows) {
+            stats.push({
+              packId: field<string>(row, 'pack_id') ?? '',
+              type: field<LearningSessionType>(row, 'type') ?? 'practice',
+              status: field<LearningSessionStatus>(row, 'status') ?? 'active',
+              answeredCount: field<number>(row, 'answered_count') ?? 0,
+              durationSeconds: field<number>(row, 'duration_seconds') ?? 0,
+              completedAt: field<string>(row, 'completed_at') ?? null,
+              lastActivityAt: field<string>(row, 'last_activity_at') ?? '',
+            });
+          }
+          if (rows.length < 1000) break;
+        }
+        return stats;
+      },
+    },
+
+    learningSessionItems: {
+      async createMany(items) {
+        if (items.length === 0) return [];
+        const { data, error } = await client
+          .from('learning_session_items')
+          .insert(
+            items.map((item) => ({
+              session_id: item.sessionId,
+              user_id: item.userId,
+              pack_id: item.packId,
+              position: item.position,
+              kind: item.kind,
+              concept_id: item.conceptId ?? null,
+              question_id: item.questionId ?? null,
+            })),
+          )
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionItemRow).sort((a, b) => a.position - b.position);
+      },
+      async listBySession(sessionId) {
+        const { data, error } = await client
+          .from('learning_session_items')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionItemRow);
+      },
+      async listBySessions(sessionIds) {
+        if (sessionIds.length === 0) return [];
+        const { data, error } = await client
+          .from('learning_session_items')
+          .select('*')
+          .in('session_id', sessionIds)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionItemRow);
+      },
+      async listSeenByUserAndPack(userId, packId) {
+        const { data, error } = await client
+          .from('learning_session_items')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('pack_id', packId)
+          .neq('status', 'pending')
+          .order('answered_at', { ascending: false })
+          .limit(1000);
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionItemRow);
+      },
+      async saveMany(items) {
+        if (items.length === 0) return [];
+        const { data, error } = await client
+          .from('learning_session_items')
+          .upsert(
+            items.map((item) => ({
+              id: item.id,
+              session_id: item.sessionId,
+              user_id: item.userId,
+              pack_id: item.packId,
+              position: item.position,
+              kind: item.kind,
+              concept_id: item.conceptId,
+              question_id: item.questionId,
+              status: item.status,
+              answer: item.answer,
+              verdict: item.verdict,
+              rating: item.rating,
+              mastery_before: item.masteryBefore,
+              mastery_after: item.masteryAfter,
+              response_time_ms: item.responseTimeMs,
+              answered_at: item.answeredAt,
+            })),
+            { onConflict: 'id' },
+          )
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(learningSessionItemRow).sort((a, b) => a.position - b.position);
+      },
+    },
+
+    masterySnapshots: {
+      async upsertMany(rows) {
+        if (rows.length === 0) return [];
+        const { data, error } = await client
+          .from('mastery_snapshots')
+          .upsert(
+            rows.map((row) => ({
+              user_id: row.userId,
+              pack_id: row.packId,
+              day: row.day,
+              mastery_percent: row.masteryPercent,
+              concepts_total: row.conceptsTotal,
+              weak_concepts: row.weakConcepts,
+              mastered_concepts: row.masteredConcepts,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: 'user_id,pack_id,day' },
+          )
+          .select();
+        throwIfError(error);
+        return (data as Row[]).map(masterySnapshotRow);
+      },
+      async listByUser(userId, sinceDay) {
+        let query = client
+          .from('mastery_snapshots')
+          .select('*')
+          .eq('user_id', userId)
+          .order('day', { ascending: true })
+          .limit(1000);
+        if (sinceDay) query = query.gte('day', sinceDay);
+        const { data, error } = await query;
+        throwIfError(error);
+        return (data as Row[]).map(masterySnapshotRow);
       },
     },
   };

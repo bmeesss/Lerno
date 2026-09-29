@@ -15,7 +15,17 @@ import type {
   ConceptRecord,
   LearningEventCreate,
   LearningEventRecord,
+  LearningEventType,
+  LearningSessionCreate,
+  LearningSessionItemCreate,
+  LearningSessionItemRecord,
+  LearningSessionPatch,
+  LearningSessionRecord,
+  LearningSessionStat,
+  LearningSessionStatus,
   FavoriteRecord,
+  MasterySnapshotRecord,
+  MasterySnapshotUpsert,
   NewCard,
   NewConcept,
   NewPracticeQuestion,
@@ -328,11 +338,16 @@ export interface Database {
     listByUser(userId: string): Promise<ConceptMasteryRecord[]>;
     listByUserAndPack(userId: string, packId: string): Promise<ConceptMasteryRecord[]>;
     upsert(record: ConceptMasteryUpsert): Promise<ConceptMasteryRecord>;
+    /** One round trip for a whole session (one row per concept). */
+    upsertMany(records: ConceptMasteryUpsert[]): Promise<ConceptMasteryRecord[]>;
   };
 
   learningEvents: {
     create(event: LearningEventCreate): Promise<LearningEventRecord>;
+    createMany(events: LearningEventCreate[]): Promise<LearningEventRecord[]>;
     listByUser(userId: string, since?: string): Promise<LearningEventRecord[]>;
+    /** Exact number of events of the given types (no row cap). */
+    countByUser(userId: string, eventTypes: LearningEventType[]): Promise<number>;
   };
 
   practiceQuestions: {
@@ -365,8 +380,20 @@ export interface Database {
       answer: string;
       verdict: PracticeAttemptRecord['verdict'];
     }): Promise<PracticeAttemptRecord>;
+    createMany(
+      rows: {
+        userId: string;
+        packId: string;
+        questionId: string;
+        conceptId: string | null;
+        answer: string;
+        verdict: PracticeAttemptRecord['verdict'];
+      }[],
+    ): Promise<PracticeAttemptRecord[]>;
     listByUser(userId: string): Promise<PracticeAttemptRecord[]>;
     listByUserAndPack(userId: string, packId: string): Promise<PracticeAttemptRecord[]>;
+    /** Exact number of graded practice answers (no row cap). */
+    countByUser(userId: string): Promise<number>;
   };
 
   tests: {
@@ -400,6 +427,8 @@ export interface Database {
     }): Promise<TestAttemptRecord>;
     listByUserAndPack(userId: string, packId: string): Promise<TestAttemptRecord[]>;
     listByUser(userId: string): Promise<TestAttemptRecord[]>;
+    /** Exact number of finished tests and answered test questions (no row cap). */
+    totalsByUser(userId: string): Promise<{ attempts: number; answers: number }>;
   };
 
   studyPlans: {
@@ -412,5 +441,44 @@ export interface Database {
       sessions: StudyPlanRecord['sessions'];
     }): Promise<StudyPlanRecord>;
     deleteByPack(packId: string): Promise<void>;
+  };
+
+  /* --------------------------- study sessions (0011) --------------------------- */
+
+  learningSessions: {
+    get(id: string): Promise<LearningSessionRecord | null>;
+    create(data: LearningSessionCreate): Promise<LearningSessionRecord>;
+    update(id: string, patch: LearningSessionPatch): Promise<LearningSessionRecord>;
+    /** Newest activity first. Every filter is optional. */
+    listByUser(
+      userId: string,
+      filter?: {
+        statuses?: LearningSessionStatus[];
+        packId?: string;
+        /** Only sessions with activity at or after this instant. */
+        since?: string;
+        limit?: number;
+      },
+    ): Promise<LearningSessionRecord[]>;
+    /** Every session of the student as slim rows (no row cap): totals, streak, activity. */
+    statsByUser(userId: string): Promise<LearningSessionStat[]>;
+  };
+
+  learningSessionItems: {
+    createMany(items: LearningSessionItemCreate[]): Promise<LearningSessionItemRecord[]>;
+    /** Ordered by position. */
+    listBySession(sessionId: string): Promise<LearningSessionItemRecord[]>;
+    /** One query for a whole list of sessions (resume list, subject overview). */
+    listBySessions(sessionIds: string[]): Promise<LearningSessionItemRecord[]>;
+    /** Items the student has already been shown in this pack (answered or skipped). */
+    listSeenByUserAndPack(userId: string, packId: string): Promise<LearningSessionItemRecord[]>;
+    /** Replaces the mutable state of whole items in one round trip. */
+    saveMany(items: LearningSessionItemRecord[]): Promise<LearningSessionItemRecord[]>;
+  };
+
+  masterySnapshots: {
+    upsertMany(rows: MasterySnapshotUpsert[]): Promise<MasterySnapshotRecord[]>;
+    /** Oldest day first. `sinceDay` is an inclusive YYYY-MM-DD lower bound. */
+    listByUser(userId: string, sinceDay?: string): Promise<MasterySnapshotRecord[]>;
   };
 }

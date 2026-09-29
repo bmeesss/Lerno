@@ -439,13 +439,30 @@ export interface TestAttemptRecord {
   createdAt: string;
 }
 
+/** One concrete, launchable activity inside a plan day (added in 0011, optional). */
+export interface StudyPlanTask {
+  type: 'learn' | 'practice' | 'review' | 'test' | 'cards';
+  label: string;
+  minutes: number;
+  conceptId?: string | null;
+  conceptName?: string | null;
+  mode?: TestMode | null;
+  /** Number of concepts / questions / cards the task covers. */
+  count?: number;
+}
+
 export interface StudyPlanSession {
   day: number;
   /** Calendar day (YYYY-MM-DD) when the plan starts from an exam date. */
   date: string | null;
   focus: string;
+  /** Human readable lines. Always present so plans written before 0011 keep working. */
   activities: string[];
   minutes: number;
+  /** Structured version of `activities`; absent on plans written before 0011. */
+  tasks?: StudyPlanTask[];
+  /** Daily study budget the plan was built for; kept so a refresh does not reset it. */
+  budgetMinutes?: number;
 }
 
 export interface StudyPlanRecord {
@@ -493,4 +510,188 @@ export interface ConceptMasteryUpsert {
   incorrectCount: number;
   lastPracticedAt: string | null;
   nextReviewAt?: string | null;
+}
+
+/* ------------------------------ study sessions ------------------------------ */
+
+export type LearningSessionType = 'learn' | 'practice' | 'review' | 'test';
+export type LearningSessionStatus = 'not_started' | 'active' | 'completed' | 'abandoned';
+export type LearningSessionItemStatus = 'pending' | 'answered' | 'skipped';
+export type LearningSessionItemKind = 'concept' | 'question';
+export type SelfRating = 'again' | 'hard' | 'good' | 'easy';
+
+/** How one concept moved during a session (percentages, 0..100). */
+export interface SessionConceptChange {
+  conceptId: string;
+  name: string;
+  beforePercent: number;
+  afterPercent: number;
+  /** Answers on this concept inside the session (self-ratings count as one). */
+  answered: number;
+  correct: number;
+  incorrect: number;
+}
+
+/** A concept in the Test analysis: how the student did on it in this test. */
+export interface SessionConceptOutcome {
+  conceptId: string;
+  name: string;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  total: number;
+  /** Test score for this concept, 0..100. */
+  percent: number;
+  masteryPercent: number;
+}
+
+export interface SessionNextStep {
+  type: 'learn' | 'practice' | 'review' | 'test';
+  label: string;
+  description: string;
+  conceptId: string | null;
+  conceptName: string | null;
+}
+
+/** Stored on the session when it completes; the server is the source of truth. */
+export interface LearningSessionResult {
+  total: number;
+  answered: number;
+  skipped: number;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  /** Points: correct = 1, partial = 0.5. */
+  score: number;
+  /** 0..100 over all items of the session (unanswered items count as missed in a test). */
+  percent: number;
+  durationSeconds: number;
+  concepts: SessionConceptChange[];
+  /** Concepts touched by this session that are still weak afterwards. */
+  stillWeak: { conceptId: string; name: string; masteryPercent: number }[];
+  /** Weak concepts across the whole pack after the session. */
+  packWeakCount: number;
+  packMasteryPercent: number;
+  /** Test only: concepts the student handled well / has to practise. */
+  knownWell: SessionConceptOutcome[];
+  needsPractice: SessionConceptOutcome[];
+  mistakeCount: number;
+  next: SessionNextStep;
+  /** Test attempt written for a test session (reuses test_attempts). */
+  testAttemptId: string | null;
+}
+
+export interface LearningSessionRecord {
+  id: string;
+  userId: string;
+  packId: string;
+  type: LearningSessionType;
+  status: LearningSessionStatus;
+  mode: TestMode | null;
+  title: string;
+  focusConceptId: string | null;
+  targetConceptIds: string[];
+  testId: string | null;
+  itemCount: number;
+  answeredCount: number;
+  currentPosition: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastActivityAt: string;
+  durationSeconds: number;
+  result: LearningSessionResult | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LearningSessionCreate {
+  userId: string;
+  packId: string;
+  type: LearningSessionType;
+  status?: LearningSessionStatus;
+  mode?: TestMode | null;
+  title: string;
+  focusConceptId?: string | null;
+  targetConceptIds?: string[];
+  testId?: string | null;
+  itemCount: number;
+  startedAt?: string | null;
+}
+
+export interface LearningSessionPatch {
+  status?: LearningSessionStatus;
+  answeredCount?: number;
+  currentPosition?: number;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  lastActivityAt?: string;
+  durationSeconds?: number;
+  result?: LearningSessionResult | null;
+}
+
+/** Slim row of every session a student ever had, for exact totals and streaks. */
+export interface LearningSessionStat {
+  packId: string;
+  type: LearningSessionType;
+  status: LearningSessionStatus;
+  answeredCount: number;
+  durationSeconds: number;
+  completedAt: string | null;
+  lastActivityAt: string;
+}
+
+export interface LearningSessionItemRecord {
+  id: string;
+  sessionId: string;
+  userId: string;
+  packId: string;
+  position: number;
+  kind: LearningSessionItemKind;
+  conceptId: string | null;
+  /** Question items: the question. Concept items: the "check yourself" question. */
+  questionId: string | null;
+  status: LearningSessionItemStatus;
+  answer: string | null;
+  verdict: AnswerVerdict | null;
+  rating: SelfRating | null;
+  /** 0..1, like concept_mastery.mastery. */
+  masteryBefore: number | null;
+  masteryAfter: number | null;
+  responseTimeMs: number | null;
+  answeredAt: string | null;
+  createdAt: string;
+}
+
+export interface LearningSessionItemCreate {
+  sessionId: string;
+  userId: string;
+  packId: string;
+  position: number;
+  kind: LearningSessionItemKind;
+  conceptId?: string | null;
+  questionId?: string | null;
+}
+
+export interface MasterySnapshotRecord {
+  id: string;
+  userId: string;
+  packId: string;
+  /** The student's local calendar day (YYYY-MM-DD). */
+  day: string;
+  masteryPercent: number;
+  conceptsTotal: number;
+  weakConcepts: number;
+  masteredConcepts: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MasterySnapshotUpsert {
+  userId: string;
+  packId: string;
+  day: string;
+  masteryPercent: number;
+  conceptsTotal: number;
+  weakConcepts: number;
+  masteredConcepts: number;
 }
