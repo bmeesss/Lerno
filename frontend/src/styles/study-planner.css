@@ -54,6 +54,21 @@
 
 /* ---------------------------------- today ---------------------------------- */
 
+.my-study {
+  gap: 28px;
+}
+
+@media (max-width: 559px) {
+  /* The plan and its button should be on the first screen of a phone, not below the header. */
+  .my-study {
+    gap: var(--space-5);
+  }
+
+  .my-study .page-header > div > p {
+    display: none;
+  }
+}
+
 .today {
   display: flex;
   flex-direction: column;
@@ -267,6 +282,11 @@
   min-width: 0;
 }
 
+.subject-today .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .subject-today-copy h3 {
   margin: 0;
 }
@@ -334,6 +354,10 @@
 
 .subject-summary-head p {
   margin: 0;
+}
+
+.subject-summary-head p strong {
+  color: var(--text);
 }
 
 .subject-facts {
@@ -447,6 +471,26 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-4);
+}
+
+/* Two compact columns on a phone instead of eight full-width cards. */
+@media (max-width: 559px) {
+  .study-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .study-stats .stat-card {
+    padding: var(--space-4);
+  }
+
+  .study-stats .stat-card .stat-value {
+    font-size: 1.55rem;
+  }
+
+  .study-stats .stat-card .stat-label {
+    margin-bottom: var(--space-2);
+  }
 }
 
 .study-stats .stat-card .stat-value {

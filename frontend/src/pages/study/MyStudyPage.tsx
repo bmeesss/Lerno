@@ -12,7 +12,6 @@ import {
   IconPlus,
   IconSparkles,
 } from '../../components/ui/Icons';
-import { ExamBanner } from '../../components/my-study/ExamBanner';
 import { SubjectsToday } from '../../components/my-study/SubjectsToday';
 import { TodaySection, type FallbackAction } from '../../components/my-study/TodaySection';
 import { SessionError } from '../../components/study-session/SessionCtaBar';
@@ -133,7 +132,7 @@ export function MyStudyPage() {
   };
 
   return (
-    <div className="stack my-study" style={{ gap: 28 }}>
+    <div className="stack my-study">
       <div className="page-header">
         <div>
           <span className="eyebrow-label">My Study</span>
@@ -152,8 +151,6 @@ export function MyStudyPage() {
           retryLabel="Try again"
         />
       ) : null}
-
-      {today.exam ? <ExamBanner exam={today.exam} /> : null}
 
       {hasMaterial ? <TodaySection today={today} fallback={fallback} /> : null}
 
@@ -324,7 +321,9 @@ export function MyStudyPage() {
                   <span className="set-card-symbol">
                     <IconBook size={22} />
                   </span>
-                  <Badge>{subject.setCount} packs</Badge>
+                  <Badge>
+                    {subject.setCount} pack{subject.setCount === 1 ? '' : 's'}
+                  </Badge>
                 </div>
                 <div className="set-card-body">
                   <span className="set-card-subject">Subject</span>

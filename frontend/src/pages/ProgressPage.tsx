@@ -88,7 +88,11 @@ export function ProgressPage() {
               />
               <Stat
                 label="Study time"
-                value={formatMinutes(overall.studyMinutes)}
+                value={
+                  overall.studySeconds > 0 && overall.studyMinutes === 0
+                    ? '< 1 min'
+                    : formatMinutes(overall.studyMinutes)
+                }
                 sub="Active time, idle gaps excluded"
               />
               <Stat

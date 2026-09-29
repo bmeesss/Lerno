@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ButtonLink } from '../ui/Button';
 import { Badge } from '../ui/Primitives';
 import { IconArrowRight } from '../ui/Icons';
+import { ExamBanner } from './ExamBanner';
 import {
   sessionHref,
   taskActionLabel,
@@ -99,7 +100,7 @@ export function TodaySection({
   today: NormalizedToday;
   fallback: FallbackAction | null;
 }) {
-  const { steps, primary, minutes, resume, streak } = today;
+  const { steps, primary, minutes, resume, streak, exam } = today;
   const packCount = new Set(steps.map((step) => step.packId).filter(Boolean)).size;
 
   return (
@@ -124,6 +125,8 @@ export function TodaySection({
       ) : fallback ? (
         <FallbackHero action={fallback} />
       ) : null}
+
+      {exam ? <ExamBanner exam={exam} /> : null}
 
       {steps.length > 0 ? (
         <div className="today-plan">

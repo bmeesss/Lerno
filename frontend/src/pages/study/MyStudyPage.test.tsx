@@ -457,10 +457,40 @@ describe('My Study — packs, material and first run', () => {
     expect(primaryActions(container)[0]).toHaveTextContent('Add study material');
   });
 
-  it('lists subjects so each can be opened', async () => {
-    subjectsMock.mockResolvedValue([{ id: 'sub-1', name: 'Biologie', setCount: 2 } as never]);
+  it('lists subjects so each can be opened, with a correct pack count', async () => {
+    subjectsMock.mockResolvedValue([
+      { id: 'sub-1', name: 'Biologie', setCount: 2 } as never,
+      { id: 'sub-2', name: 'Wiskunde', setCount: 1 } as never,
+    ]);
     renderPage();
     const link = (await screen.findByRole('heading', { name: 'Biologie' })).closest('a')!;
     expect(link).toHaveAttribute('href', '/subjects/sub-1');
+    expect(within(link).getByText('2 packs')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('heading', { name: 'Wiskunde' }).closest('a')!).getByText('1 pack'),
+    ).toBeInTheDocument();
+  });
+
+  it('puts the exam banner inside Today, under the recommended step', async () => {
+    todayMock.mockResolvedValue(
+      today({
+        exam: {
+          packId: 'pack-1',
+          title: 'Biology',
+          examDate: '2026-10-08',
+          daysLeft: 9,
+          message: 'Biology exam in 9 days',
+          note: 'Your plan is adjusted for the exam.',
+        },
+      }),
+    );
+    renderPage();
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Today' })).closest(
+      'section',
+    )!;
+    const banner = within(section).getByRole('region', { name: 'Upcoming exam' });
+    const hero = within(section).getByRole('heading', { name: 'Practice Osmosis' });
+    // The next step comes first; the banner follows it.
+    expect(hero.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

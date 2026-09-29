@@ -110,6 +110,17 @@ describe('ProgressPage — overview', () => {
     expect(stat('Concepts mastered')).toHaveTextContent('of 40 · 85% or higher');
   });
 
+  it('says "< 1 min" for a few seconds of study, not a misleading "0 min"', async () => {
+    studyMock.mockResolvedValue(
+      studyProgress({ overall: { ...studyProgress().overall, studySeconds: 20, studyMinutes: 0 } }),
+    );
+    renderPage();
+    await screen.findByRole('heading', { level: 1, name: 'Progress' });
+    expect(
+      screen.getByText('Study time', { selector: '.stat-label' }).parentElement,
+    ).toHaveTextContent('< 1 min');
+  });
+
   it('reports recent improvement and a streak made of finished sessions', async () => {
     renderPage();
     await screen.findByRole('heading', { level: 1, name: 'Progress' });
