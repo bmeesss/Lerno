@@ -556,6 +556,54 @@ describe('adaptive selection', () => {
   });
 });
 
+describe('learn session preview', () => {
+  async function learnFocus(levels: Record<string, { mastery: number; nextReviewAt?: string }>) {
+    const { student, pack } = await ready({ questionsPerConcept: 2 });
+    for (const [name, level] of Object.entries(levels)) {
+      await setMastery(student.id, conceptId(pack, name), level.mastery, {
+        attempts: 5,
+        nextReviewAt: level.nextReviewAt,
+      });
+    }
+    const res = await request(app)
+      .get('/api/study-sessions/preview')
+      .query({ packId: pack.id, type: 'learn', count: 4 })
+      .set(auth(student.token));
+    expect(res.status).toBe(200);
+    return res.body.data as {
+      focus: { label: string };
+      concepts: { name: string; reason: string }[];
+    };
+  }
+
+  const all = (mastery: number, nextReviewAt?: string) =>
+    Object.fromEntries(
+      ['Osmosis', 'Diffusion', 'Mitosis', 'Meiosis'].map((name) => [
+        name,
+        { mastery, nextReviewAt },
+      ]),
+    );
+
+  it('names the focus after the most urgent tier, so it never says "confirming" for concepts still being learned', async () => {
+    const weak = await learnFocus({ ...all(0.9), Meiosis: { mastery: 0.1 } });
+    expect(weak.focus.label).toBe('Focus: weak and new concepts');
+    expect(weak.concepts[0]).toMatchObject({ name: 'Meiosis', reason: 'weak' });
+
+    const learning = await learnFocus(all(0.45));
+    expect(learning.focus.label).toBe('Focus: concepts you are still learning');
+    expect(learning.concepts.every((concept) => concept.reason === 'learning')).toBe(true);
+
+    const due = await learnFocus(all(0.7, new Date(Date.now() - 86_400_000).toISOString()));
+    expect(due.focus.label).toBe('Focus: concepts that are due');
+
+    const confirming = await learnFocus(
+      all(0.9, new Date(Date.now() + 5 * 86_400_000).toISOString()),
+    );
+    expect(confirming.focus.label).toBe('Focus: confirming what you know');
+    expect(confirming.concepts.every((concept) => concept.reason === 'confirmation')).toBe(true);
+  });
+});
+
 describe('learn sessions', () => {
   it('goes weak → new and gives each concept an explanation, an example and a check', async () => {
     const { student, pack } = await ready({ questionsPerConcept: 2 });

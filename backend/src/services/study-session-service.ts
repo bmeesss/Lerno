@@ -807,9 +807,11 @@ export const studySessionService = {
       if (focus) return `Focus: ${focus.name}`;
       const reasons = [...plan.reasons.values()];
       if (input.type === 'learn') {
-        return reasons.some((r) => r === 'weak' || r === 'new')
-          ? 'Focus: weak and new concepts'
-          : 'Focus: confirming what you know';
+        // Named after the most urgent tier in the session, in the same order the concepts are ranked.
+        if (reasons.some((r) => r === 'weak' || r === 'new')) return 'Focus: weak and new concepts';
+        if (reasons.includes('learning')) return 'Focus: concepts you are still learning';
+        if (reasons.includes('due')) return 'Focus: concepts that are due';
+        return 'Focus: confirming what you know';
       }
       if (input.type === 'review') return 'Focus: concepts due for review';
       if (reasons.includes('weak')) return 'Focus: weak concepts';
