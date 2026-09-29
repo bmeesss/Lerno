@@ -1,5 +1,18 @@
 /** Shared domain types mirroring the API (see docs/LERNO_SPEC.md §12). */
 
+import type {
+  ExamBanner,
+  ResumeCard,
+  SessionType,
+  StudyStreak,
+  SubjectToday,
+  TestMode,
+  TodayPlan,
+  TutorCitation,
+} from './studySession';
+
+export * from './studySession';
+
 export type Visibility = 'private' | 'public';
 
 export type Role = 'user' | 'admin';
@@ -586,12 +599,25 @@ export interface PackTestAttempt {
   createdAt: string;
 }
 
+export interface StudyPlanTask {
+  type: 'learn' | 'practice' | 'review' | 'test' | 'cards';
+  label: string;
+  minutes: number;
+  conceptId?: string | null;
+  conceptName?: string | null;
+  mode?: 'quick10' | 'quick20' | 'exam' | null;
+  count?: number;
+}
+
 export interface StudyPlanSession {
   day: number;
   date: string | null;
   focus: string;
   activities: string[];
   minutes: number;
+  /** Concrete, launchable activities (plans written before study sessions have none). */
+  tasks?: StudyPlanTask[];
+  budgetMinutes?: number;
 }
 
 export interface StudyPlan {
@@ -757,6 +783,18 @@ export interface StudyPackTodayTask {
   packId: string | null;
   conceptId: string | null;
   conceptName: string | null;
+  /** Study-session fields (absent on responses from before study sessions). */
+  reasonText?: string;
+  reason?: string;
+  packTitle?: string | null;
+  subjectId?: string | null;
+  subjectName?: string | null;
+  sessionType?: SessionType | null;
+  sessionId?: string | null;
+  mode?: TestMode | null;
+  count?: number | null;
+  minutes?: number;
+  examDaysLeft?: number | null;
 }
 
 export interface StudyPackToday {
@@ -774,6 +812,13 @@ export interface StudyPackToday {
   }[];
   totalDue: number;
   packs: StudyPackSummary[];
+  /** The daily plan, per-subject sections, resume cards, exam banner and streak. */
+  plan?: TodayPlan;
+  primary?: (StudyPackTodayTask & { order?: number }) | null;
+  exam?: ExamBanner | null;
+  subjects?: SubjectToday[];
+  resume?: ResumeCard[];
+  streak?: StudyStreak;
 }
 
 export interface PackReviewSummary {
@@ -840,6 +885,10 @@ export type PackPreview =
 
 export interface PackTutorReply {
   reply: string;
+  /** True only when the reply cites a real source of this pack. */
+  basedOnMaterial?: boolean;
+  citations?: TutorCitation[];
+  focus?: { conceptId: string; conceptName: string } | null;
 }
 
 /* ----------------------- material import (ingestion) ----------------------- */

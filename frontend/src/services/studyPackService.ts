@@ -23,6 +23,7 @@ import type {
   StudyPackSummary,
   StudyPackToday,
   StudyPlan,
+  TutorContext,
   Visibility,
 } from '../types';
 
@@ -203,6 +204,15 @@ export const studyPackService = {
   plan: (packId: string) => api.get<StudyPlan | null>(`/study-packs/${packId}/plan`),
   createPlan: (packId: string, options: { days?: number; minutesPerDay?: number } = {}) =>
     api.post<StudyPlan>(`/study-packs/${packId}/plan`, options),
-  tutor: (packId: string, message: string, history: { role: 'user' | 'assistant'; content: string }[]) =>
-    api.post<PackTutorReply>(`/study-packs/${packId}/tutor`, { message, history }),
+  tutor: (
+    packId: string,
+    message: string,
+    history: { role: 'user' | 'assistant'; content: string }[],
+    context?: TutorContext,
+  ) =>
+    api.post<PackTutorReply>(`/study-packs/${packId}/tutor`, {
+      message,
+      history,
+      ...(context ? { context } : {}),
+    }),
 };
