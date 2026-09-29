@@ -335,15 +335,21 @@ export function rankRecommendations<T extends RankedRecommendation>(candidates: 
  * explainable — good enough for "related flashcards/questions", and easy to
  * replace with an explicit AI reference later.
  */
-export function matchConcept(
+/** The two fields matching needs, so freshly generated concepts work too. */
+export interface MatchableConcept {
+  name: string;
+  explanation: string;
+}
+
+export function matchConcept<T extends MatchableConcept>(
   text: string,
-  concepts: ConceptRecord[],
+  concepts: T[],
   minimumScore = 0.34,
-): ConceptRecord | null {
+): T | null {
   const textWords = new Set(keywords(text));
   if (textWords.size === 0) return null;
 
-  let best: { concept: ConceptRecord; score: number } | null = null;
+  let best: { concept: T; score: number } | null = null;
   for (const concept of concepts) {
     const conceptBase = keywords(concept.name);
     if (conceptBase.length === 0) continue;

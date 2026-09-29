@@ -19,6 +19,11 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
      concepts, mastery, practice and test storage.
    - `database/migrations/0009_adaptive_learning.sql` — confidence, concept review dates and
      the shared learning-event ledger used by adaptive recommendations.
+   - `database/migrations/0010_source_expansion.sql` — **required for the AI content engine**:
+     normalized source metadata, per-source processing stage, concept provenance
+     (`ref_label`, importance, difficulty, conflicts) and the stored pack analysis.
+     It is additive: existing Study Packs, sets and cards keep working and no data is
+     rewritten or removed.
 3. Collect the credentials from _Project Settings → API_:
    - `Project URL` → `SUPABASE_URL`
    - `anon public` key → `SUPABASE_ANON_KEY` (safe for the browser; never used
@@ -65,6 +70,12 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
   | `AI_RATE_LIMIT_IP_MAX`      | AI messages per IP per window, default `60`         |
 
 | `GROQ_JSON_MODE` | default `true` |
+| `GROQ_VISION_MODEL` | vision model for image OCR, default `meta-llama/llama-4-scout-17b-16e-instruct` |
+| `YOUTUBE_API_KEY` | optional official YouTube Data API key (public metadata only; captions are never scraped) |
+| `SOURCE_MAX_PDF_BYTES` | PDF upload ceiling, default 15 MB |
+| `SOURCE_MAX_PPTX_BYTES` | PowerPoint upload ceiling, default 25 MB |
+| `SOURCE_MAX_IMAGE_BYTES` | image upload ceiling, default 10 MB |
+| `SOURCE_MAX_AUDIO_BYTES` | audio upload ceiling, default 25 MB |
 | `AI_CONTEXT_MAX_CARDS` | AI set context card cap, default `60` |
 | `AI_CONTEXT_MAX_CHARS` | AI set context character cap, default `12000` |
 

@@ -5,14 +5,20 @@ import { studyPackService } from '../services/study-pack-service.js';
 import { studyPackGenerationService } from '../services/study-pack-generation.js';
 import { studyPackImportService } from '../services/study-pack-import.js';
 import { assertPdfMimeType } from '../middleware/pdf-upload.js';
+import { assertUploadedSource } from '../middleware/source-upload.js';
 import type {
   AddSourceBody,
   ApplyContentBody,
   CreatePackBody,
   CreateTestBody,
   GenerateBody,
+  GenerateBundleBody,
   ImportPackBody,
+  ImportUploadBody,
   ProcessPackBody,
+  RegenerateItemBody,
+  SourceUploadBody,
+  SourceYouTubeBody,
   SubmitTestBody,
   TutorBody,
   UpdatePackBody,
@@ -102,6 +108,92 @@ export const studyPackController = {
     );
   }),
 
+  /**
+   * Multipart import: PowerPoint, image (OCR), audio (transcription) and PDFs are
+   * read *server-side*, so nothing has to be extracted in the browser.
+   */
+  importUpload: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const body = req.body as ImportUploadBody;
+    assertUploadedSource(body.kind, req.file, body.kind);
+    const started = await studyPackImportService.startImport(req.db, req.auth.id, {
+      title: body.title,
+      subjectId: body.subjectId ?? null,
+      description: body.description,
+      level: body.level,
+      examDate: body.examDate ?? null,
+      allowDuplicate: body.allowDuplicate,
+      settings: {
+        ...(body.flashcards ? { flashcards: body.flashcards } : {}),
+        ...(body.practice ? { practice: body.practice } : {}),
+        ...(body.difficulty ? { difficulty: body.difficulty } : {}),
+        ...(body.language ? { language: body.language } : {}),
+      },
+      source: {
+        type: body.kind,
+        title: req.file?.originalname?.trim() || body.title,
+        file: {
+          buffer: req.file!.buffer,
+          filename: req.file!.originalname?.trim() || body.title,
+          mimeType: req.file!.mimetype || 'application/octet-stream',
+        },
+      },
+    });
+    sendOk(
+      res,
+      {
+        packId: started.packId,
+        jobId: started.jobId,
+        status: await studyPackImportService.status(req.db, req.auth.id, started.packId),
+      },
+      201,
+    );
+  }),
+
+  /** Adds one uploaded file source to an existing pack and processes it. */
+  addSourceUpload: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const body = req.body as SourceUploadBody;
+    assertUploadedSource(body.kind, req.file, body.kind);
+    sendOk(
+      res,
+      await studyPackImportService.addSourceFromUpload(req.db, req.auth.id, packId, {
+        kind: body.kind,
+        title: body.title,
+        file: {
+          buffer: req.file!.buffer,
+          filename: req.file!.originalname?.trim() || body.title || body.kind,
+          mimeType: req.file!.mimetype || 'application/octet-stream',
+        },
+        settings: {
+          ...(body.flashcards ? { flashcards: body.flashcards } : {}),
+          ...(body.practice ? { practice: body.practice } : {}),
+          ...(body.difficulty ? { difficulty: body.difficulty } : {}),
+          ...(body.language ? { language: body.language } : {}),
+        },
+      }),
+      202,
+    );
+  }),
+
+  /** Adds a YouTube source (public metadata + the student's own transcript). */
+  addSourceYouTube: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const body = req.body as SourceYouTubeBody;
+    sendOk(
+      res,
+      await studyPackImportService.addYouTubeSource(req.db, req.auth.id, packId, {
+        url: body.url,
+        ...(body.transcript ? { transcript: body.transcript } : {}),
+        ...(body.title ? { title: body.title } : {}),
+        settings: body.settings ?? null,
+      }),
+      202,
+    );
+  }),
+
   /** Real, per-stage processing status of a study pack (owner only). */
   processingStatus: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
@@ -109,7 +201,7 @@ export const studyPackController = {
     sendOk(res, await studyPackImportService.status(req.db, req.auth.id, packId));
   }),
 
-  /** Starts or retries generation for material that is already stored. */
+  /** Starts, retries or re-runs one pipeline stage for stored material. */
   processPack: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
@@ -118,6 +210,8 @@ export const studyPackController = {
       res,
       await studyPackImportService.startProcessing(req.db, req.auth.id, packId, {
         sourceId: body.sourceId ?? null,
+        stage: body.stage ?? null,
+        settings: body.settings ?? null,
       }),
       202,
     );
@@ -134,6 +228,18 @@ export const studyPackController = {
     if (!req.auth) throw errors.unauthorized();
     const { packId } = req.params as { packId: string };
     const body = req.body as AddSourceBody;
+    if (body.type === 'youtube') {
+      sendOk(
+        res,
+        await studyPackImportService.addYouTubeSource(req.db, req.auth.id, packId, {
+          url: body.url,
+          ...(body.transcript ? { transcript: body.transcript } : {}),
+          ...(body.title ? { title: body.title } : {}),
+        }),
+        202,
+      );
+      return;
+    }
     sendOk(
       res,
       await studyPackService.addSource(req.db, req.auth.id, packId, {
@@ -203,6 +309,36 @@ export const studyPackController = {
         packId,
         req.body as GenerateBody,
       ),
+    );
+  }),
+
+  /** The full review bundle: summary, concepts, flashcards and practice at once. */
+  generateBundle: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const body = req.body as GenerateBundleBody;
+    sendOk(
+      res,
+      await studyPackGenerationService.previewStudyContent(req.db, req.auth.id, packId, {
+        sourceId: body.sourceId ?? null,
+        settings: body.settings ?? null,
+      }),
+    );
+  }),
+
+  /** Regenerates one item; the replacement is validated exactly like a new one. */
+  regenerateItem: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const body = req.body as RegenerateItemBody;
+    sendOk(
+      res,
+      await studyPackGenerationService.regenerateItem(req.db, req.auth.id, packId, {
+        kind: body.kind,
+        current: body.current,
+        sourceId: body.sourceId ?? null,
+        settings: body.settings ?? null,
+      }),
     );
   }),
 

@@ -413,7 +413,24 @@ export interface AiStudySummary {
 /* -------------------------------- Study Packs ------------------------------- */
 
 export type PackSourceKind = 'text' | 'pdf' | 'set' | 'powerpoint' | 'youtube' | 'image' | 'audio';
-export type PackSourceStatus = 'uploading' | 'processing' | 'ready' | 'failed';
+export type PackSourceStatus = 'pending' | 'uploading' | 'processing' | 'ready' | 'failed';
+
+/** How a source was turned into text (extraction provenance, never model output). */
+export type SourceExtractionMethod =
+  | 'user'
+  | 'pdf-text'
+  | 'pptx-xml'
+  | 'ocr'
+  | 'transcription'
+  | 'youtube-captions'
+  | 'set';
+
+export interface PackSourceReference {
+  marker: string;
+  kind: 'page' | 'slide' | 'timestamp' | 'section' | 'card' | 'video' | 'none';
+  /** Human label: "page 6", "slide 8", "03:42". */
+  label: string;
+}
 
 export interface StudyPackSource {
   id: string;
@@ -426,6 +443,19 @@ export interface StudyPackSource {
   failureReason: string | null;
   legacySetId: string | null;
   origin: 'user' | 'ai' | 'imported';
+  /** Detected language of the material ("unknown" when Lerno could not tell). */
+  language: 'nl' | 'en' | 'unknown';
+  /** Internal pipeline stage the source is in (null when it is done). */
+  stage: 'extract' | 'normalize' | 'analyze' | 'generate' | 'review' | null;
+  extractedBy: SourceExtractionMethod | null;
+  slideCount: number | null;
+  durationSeconds: number | null;
+  channel: string | null;
+  url: string | null;
+  /** Honest notes about what extraction could or could not do. */
+  warnings: string[];
+  /** Bounded reference labels so provenance stays real, not decorative. */
+  references: PackSourceReference[];
   createdAt: string;
   updatedAt: string;
 }
@@ -458,6 +488,12 @@ export interface StudyPackConcept {
   sourceTitle: string | null;
   origin: 'user' | 'ai' | 'imported';
   position: number;
+  /** Provenance inside the source: "page 6", "slide 8", "03:42 in recording". */
+  refLabel: string | null;
+  importance: number | null;
+  difficulty: 'easy' | 'medium' | 'hard' | null;
+  /** Set when this concept disagrees with another source (conflict marker). */
+  conflictWith: string[] | null;
   masteryPercent: number;
   attempts: number;
   cardCount: number;
@@ -594,6 +630,10 @@ export interface StudyPackDetail {
   } | null;
   createdAt: string;
   updatedAt: string;
+  /** Source-grounded analysis of the pack's material (null while unanalyzed). */
+  analysis: PackAnalysis | null;
+  /** Transparent, rule-based study time estimate in minutes (no AI involved). */
+  estimatedStudyTime: number;
   counts: {
     sources: number;
     readySources: number;
@@ -821,7 +861,7 @@ export interface MaterialPdfPreview {
   concepts: MaterialConceptCandidate[];
 }
 
-export type ImportStageId = 'concepts' | 'summary' | 'flashcards' | 'practice' | 'plan';
+export type ImportStageId = 'extract' | 'normalize' | 'analyze' | 'generate' | 'review' | 'plan';
 
 export type ImportStepState = 'pending' | 'active' | 'done' | 'skipped' | 'failed';
 
@@ -829,6 +869,20 @@ export interface ImportProcessingStep {
   id: ImportStageId;
   label: string;
   state: ImportStepState;
+}
+
+/** One source of a pack, with its own lifecycle state and retry affordance. */
+export interface ImportSourceStatus {
+  id: string;
+  title: string;
+  kind: PackSourceKind;
+  status: PackSourceStatus;
+  stage: string | null;
+  failureReason: string | null;
+  referenceLabel: string | null;
+  retryable: boolean;
+  /** Canonical source URL (YouTube); null for everything else. */
+  url: string | null;
 }
 
 /**
@@ -849,15 +903,133 @@ export interface ImportProcessingStatus {
     practiceQuestions: number;
     hasSummary: boolean;
     hasPlan: boolean;
+    hasAnalysis: boolean;
+    /** Sources in the pack, and how many of them are ready to study from. */
+    sources: number;
+    readySources: number;
+    conflicts: number;
+    rejected: number;
   };
   failure: { stage: ImportStageId | null; message: string; details: string | null } | null;
   processing: boolean;
+  /** Every source of this pack, so the UI can retry exactly the failed one. */
+  sources: ImportSourceStatus[];
+  estimatedMinutes: number | null;
+  estimatedStudyTimeLabel: string | null;
+  /** True when the pack has material the student can actually study. */
+  ready: boolean;
 }
 
 export interface ImportStarted {
   packId: string;
   jobId: string;
   status: ImportProcessingStatus;
+}
+
+/** The three knobs a student gets over generation (kept deliberately small). */
+export interface GenerationSettings {
+  flashcards: number;
+  practice: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  language: 'nl' | 'en';
+}
+
+export interface SourceConflictClaim {
+  statement: string;
+  sourceId: string;
+  marker: string;
+  referenceLabel: string;
+  /** Short quote verified against the source text. */
+  quote: string;
+}
+
+/** Two sources that say different things — Lerno never merges them silently. */
+export interface SourceConflict {
+  topic: string;
+  explanation: string;
+  claims: SourceConflictClaim[];
+}
+
+/** The stored, source-grounded analysis every generation reuses. */
+export interface PackAnalysis {
+  summary: string;
+  keyFacts: string[];
+  relationships: string[];
+  examTopics: string[];
+  difficulty: 'easy' | 'medium' | 'hard';
+  sections: { title: string; marker: string }[];
+  conflicts: SourceConflict[];
+  sourceIds: string[];
+  createdAt: string;
+}
+
+export interface RejectedContentItem {
+  kind: 'summary' | 'concept' | 'flashcard' | 'question';
+  index: number;
+  reason: string;
+  /** Short, student-readable explanation. */
+  detail: string;
+}
+
+/** The full, editable review bundle: everything the review screen shows at once. */
+export interface StudyContentPreview {
+  packId: string;
+  settings: GenerationSettings;
+  summary: { title: string; summary: string; keyPoints: string[]; sourceId: string | null } | null;
+  concepts: {
+    name: string;
+    explanation: string;
+    sourceId: string;
+    refLabel: string | null;
+    importance: number | null;
+    difficulty: 'easy' | 'medium' | 'hard' | null;
+  }[];
+  flashcards: {
+    front: string;
+    back: string;
+    refLabel: string | null;
+    sourceId: string | null;
+    conceptId: string | null;
+  }[];
+  questions: {
+    questionType: QuestionType;
+    prompt: string;
+    correctAnswer: string;
+    options: string[] | null;
+    explanation: string;
+    sourceId: string | null;
+    refLabel: string | null;
+    conceptId: string | null;
+  }[];
+  rejected: RejectedContentItem[];
+  analysis: PackAnalysis | null;
+  conflicts: SourceConflict[];
+}
+
+export type RegeneratableKind = 'flashcard' | 'question' | 'concept';
+
+export interface RegeneratedItem {
+  kind: RegeneratableKind;
+  item:
+    | { front: string; back: string; refLabel: string | null; sourceId: string | null; conceptId: string | null }
+    | {
+        questionType: QuestionType;
+        prompt: string;
+        correctAnswer: string;
+        options: string[] | null;
+        explanation: string;
+        sourceId: string | null;
+        refLabel: string | null;
+        conceptId: string | null;
+      }
+    | {
+        name: string;
+        explanation: string;
+        sourceId: string;
+        refLabel: string | null;
+        importance: number | null;
+        difficulty: 'easy' | 'medium' | 'hard' | null;
+      };
 }
 
 /** Existing material the duplicate check found (409 CONFLICT details). */

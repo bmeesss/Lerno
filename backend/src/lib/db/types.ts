@@ -1,4 +1,12 @@
 /** Database record types shared by all repository implementations (spec §12). */
+import type {
+  MaterialDifficulty,
+  PackAnalysis,
+  PackSourceKind,
+  PackSourceStatus,
+  SourceMetadata,
+  SourceProcessingStage,
+} from '../source-model.js';
 
 export type Visibility = 'private' | 'public';
 export type Role = 'user' | 'admin';
@@ -211,21 +219,12 @@ export interface StudySessionPatch {
  * and quizzes therefore keep working unchanged for existing users.
  */
 
-/** Kinds of material a pack can be built from. Only the first three are live. */
-export type PackSourceKind =
-  | 'text'
-  | 'pdf'
-  | 'set'
-  | 'powerpoint'
-  | 'youtube'
-  | 'image'
-  | 'audio';
-
 /**
- * Asynchronous processing states. Uploading/processing are real states the UI
- * renders today; synchronous sources move straight to `ready`.
+ * Kinds of material a pack can be built from, and their lifecycle. Both live in
+ * the shared source model (`lib/source-model.ts`) so the pipeline, the database
+ * and the API describe sources in exactly the same words.
  */
-export type PackSourceStatus = 'uploading' | 'processing' | 'ready' | 'failed';
+export type { PackSourceKind, PackSourceStatus, SourceProcessingStage };
 
 /** Who produced a piece of learning content (provenance, not styling). */
 export type ContentOrigin = 'user' | 'ai' | 'imported';
@@ -247,6 +246,9 @@ export interface StudyPackRecord {
   examDate: string | null;
   /** AI/user overview text for the pack. */
   summary: string | null;
+  /** Source-grounded analysis every generation reuses (null until analyzed). */
+  analysis: PackAnalysis | null;
+  analysisUpdatedAt: string | null;
   /** Source the summary was generated from (provenance). */
   summarySourceId: string | null;
   summaryUpdatedAt: string | null;
@@ -282,6 +284,10 @@ export interface StudyPackSourceRecord {
   /** Set when the source is an existing Lerno study set. */
   legacySetId: string | null;
   origin: ContentOrigin;
+  /** Extraction provenance: language, references (page/slide/timestamp), method. */
+  metadata: SourceMetadata;
+  /** Stage the pipeline is (or stopped) at; null when no run happened yet. */
+  processingStage: SourceProcessingStage | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -294,9 +300,19 @@ export interface ConceptRecord {
   explanation: string;
   origin: ContentOrigin;
   position: number;
+  /** Provenance inside the source ("page 6", "slide 8", "03:42 in recording"). */
+  refLabel: string | null;
+  /** Relative importance of this concept for the material (0..1, null = unknown). */
+  importance: number | null;
+  /** Per-concept difficulty as judged from the material. */
+  difficulty: MaterialDifficulty | null;
+  /** Concept name this concept conflicts with, when sources disagree. */
+  conflictWith: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type { MaterialDifficulty };
 
 /** Per-user mastery of one concept — the basis for adaptive learning. */
 export interface ConceptMasteryRecord {
@@ -449,6 +465,10 @@ export interface NewConcept {
   sourceId: string | null;
   origin: ContentOrigin;
   position: number;
+  refLabel?: string | null;
+  importance?: number | null;
+  difficulty?: MaterialDifficulty | null;
+  conflictWith?: string | null;
 }
 
 export interface NewPracticeQuestion {

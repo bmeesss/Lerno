@@ -36,7 +36,15 @@ export type AiTaskName =
   | 'studio-questions'
   | 'studio-concepts'
   | 'studio-plan'
-  | 'studio-chat';
+  | 'studio-chat'
+  | 'source-analysis'
+  | 'source-summary'
+  | 'source-concepts'
+  | 'source-flashcards'
+  | 'source-practice'
+  | 'source-card'
+  | 'source-question'
+  | 'source-ocr';
 
 export interface AiTaskConfig {
   system: string;
@@ -167,9 +175,65 @@ export const AI_TASKS: Record<AiTaskName, AiTaskConfig> = {
     json: true,
   }),
   'studio-chat': task({
-    system: `You are a source-aware study tutor. Answer the student's latest question clearly and briefly. Use the supplied source for claims about this material, and say plainly when the source does not contain an answer. You may add a clearly labeled general explanation to help understanding, but never imply it came from the source. Do not invent textbook, chapter, teacher, or test content.`,
+    system: `You are a source-aware study tutor. Answer the student's latest question clearly and briefly. Use the supplied source for claims about this material, and say plainly when the source does not contain an answer. Every statement that comes from the material must end with its reference in square brackets, copied from the [[n:marker]] tokens, in the form [Source: title · page 6] or [Source: title · slide 8]. You may add a clearly labeled general explanation to help understanding, but never imply it came from the source. Do not invent textbook, chapter, teacher, or test content.`,
     maxOutputTokens: 650,
     temperature: 0.45,
+    reasoning: 'low',
+  }),
+  /* ---------------------- source-grounded content engine --------------------- */
+  'source-analysis': task({
+    system: `Analyze the supplied study material for a secondary-school student. JSON: {"summary":str,"keyFacts":[str],"relationships":[str],"examTopics":[str],"difficulty":"easy|medium|hard","sections":[{"title":str,"ref":"1:p3"}],"conflicts":[{"topic":str,"explanation":str,"claims":[{"statement":str,"ref":"1:p6","quote":str}]}]}. Use only the supplied material; never add outside facts. "ref" must be an [[n:marker]] token from it, "quote" a literal short excerpt from that spot. Only report a conflict when two different sources contradict each other about the same topic, one claim per source; sources that agree → []. Answer in the requested language.`,
+    maxOutputTokens: 2_600,
+    temperature: 0.3,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-summary': task({
+    system: `Write a study summary of the supplied material for a secondary-school student, in the requested language and at the requested difficulty. JSON: {"title":"...","summary":"...","keyPoints":["..."],"keyFacts":["..."]}. Summary 2-5 short paragraphs, plain language, the relationships between ideas kept intact. keyPoints 3-8, keyFacts 2-10 short factual statements that are literally in the material. Use only the supplied material; do not add outside facts.`,
+    maxOutputTokens: 1_400,
+    temperature: 0.3,
+    reasoning: 'low',
+    json: true,
+  }),
+  'source-concepts': task({
+    system: `List the concepts a student must understand from this material, most important first, in the requested language. JSON: {"concepts":[{"name":"...","explanation":"1-3 sentences","ref":"1:p6","importance":0.0,"difficulty":"easy|medium|hard"}]}. "ref" must be one of the [[n:marker]] tokens. Only concepts that really appear in the material, never chapter titles or study advice. Name <=120 chars.`,
+    maxOutputTokens: 2_000,
+    temperature: 0.45,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-flashcards': task({
+    system: `Create the requested number of flashcards from the supplied material, in the requested language and at the requested difficulty. JSON: {"title":"...","description":"...","cards":[{"front":"...","back":"...","ref":"1:s8","conceptRef":1}]}. One learnable idea per card, front <=160 chars, back <=300 chars. Never copy the answer into the question, never make trivia, never repeat a card. "ref" must be one of the [[n:marker]] tokens and "conceptRef" the 1-based number of the concept this card teaches (concepts are numbered in the material).`,
+    maxOutputTokens: 3_600,
+    temperature: 0.55,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-practice': task({
+    system: `Create the requested number of practice questions from the supplied material, in the requested language and at the requested difficulty. JSON: {"questions":[{"type":"multiple_choice|true_false|open","question":"...","options":["..."],"correctIndex":0,"answer":"...","explanation":"...","ref":"1:p6","conceptRef":1}]}. multiple_choice: exactly 4 distinct plausible options and the zero-based index of the correct one. true_false: options ["True","False"]. open: no options, a short expected answer. Every question must be answerable from the material alone, must belong to one of the numbered concepts, and "ref" must be one of the [[n:marker]] tokens. Mix the requested types.`,
+    maxOutputTokens: 3_200,
+    temperature: 0.5,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-card': task({
+    system: `Write exactly one replacement flashcard about the requested concept, in the requested language, different from the listed existing cards. JSON: {"title":"...","description":"...","cards":[{"front":"...","back":"...","ref":"1:p6","conceptRef":1}]}. Front <=160 chars, back <=300 chars, no trivia, never repeat the answer in the question, "ref" must be one of the [[n:marker]] tokens.`,
+    maxOutputTokens: 600,
+    temperature: 0.6,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-question': task({
+    system: `Write exactly one replacement practice question about the requested concept, in the requested language, different from the listed existing questions. JSON: {"questions":[{"type":"multiple_choice|true_false|open","question":"...","options":["..."],"correctIndex":0,"answer":"...","explanation":"...","ref":"1:p6","conceptRef":1}]}. Answerable from the material only; "ref" must be one of the [[n:marker]] tokens.`,
+    maxOutputTokens: 800,
+    temperature: 0.6,
+    reasoning: 'medium',
+    json: true,
+  }),
+  'source-ocr': task({
+    system: `Transcribe the text in the supplied image, verbatim, in reading order, in its original language. Output only the transcribed text: no explanations, no commentary, no markdown fences, no translation. Keep line breaks between blocks of text. If the image contains no readable text, output exactly NO_TEXT.`,
+    maxOutputTokens: 2_000,
+    temperature: 0.1,
     reasoning: 'low',
   }),
   explain: task({

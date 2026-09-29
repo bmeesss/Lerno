@@ -11,10 +11,16 @@ import {
 import { validate } from '../middleware/validate.js';
 import { MAX_AI_BODY_CHARS } from '../lib/ai-limits.js';
 import { handlePdfUpload } from '../middleware/pdf-upload.js';
+import { handleSourceUpload } from '../middleware/source-upload.js';
 import { STUDY_PACK_IMPORT_RATE_LIMIT } from '../middleware/rate-limit.js';
 import {
   addSourceSchema,
   applyContentSchema,
+  generateBundleSchema,
+  importUploadSchema,
+  regenerateItemSchema,
+  sourceUploadSchema,
+  sourceYouTubeSchema,
   conceptParamsSchema,
   createConceptSchema,
   createPackSchema,
@@ -60,6 +66,20 @@ export function studyPackRoutes(): Router {
     STUDY_PACK_IMPORT_RATE_LIMIT,
     validate({ body: importPackSchema }),
     studyPackController.importPack,
+  );
+  /**
+   * Server-side extraction for every binary source kind. The kind-specific
+   * middleware enforces the MIME type, extension and byte limit before the
+   * controller (and later the extractor) sees the file.
+   */
+  router.post(
+    '/import/upload',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    aiIpRateLimit,
+    handleSourceUpload(),
+    validate({ body: importUploadSchema }),
+    studyPackController.importUpload,
   );
 
   router.get('/today', requireAuth, studyPackController.today);
@@ -126,6 +146,23 @@ export function studyPackRoutes(): Router {
     validate({ params: packParamsSchema, body: addSourceSchema }),
     studyPackController.addSource,
   );
+  router.post(
+    '/:packId/sources/upload',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    aiIpRateLimit,
+    handleSourceUpload(),
+    validate({ params: packParamsSchema, body: sourceUploadSchema }),
+    studyPackController.addSourceUpload,
+  );
+  router.post(
+    '/:packId/sources/youtube',
+    requireAuth,
+    STUDY_PACK_IMPORT_RATE_LIMIT,
+    aiIpRateLimit,
+    validate({ params: packParamsSchema, body: sourceYouTubeSchema }),
+    studyPackController.addSourceYouTube,
+  );
   router.delete(
     '/:packId/sources/:sourceId',
     requireAuth,
@@ -170,6 +207,18 @@ export function studyPackRoutes(): Router {
     ...aiGuards(),
     validate({ params: packParamsSchema, body: generateSchema }),
     studyPackController.generate,
+  );
+  router.post(
+    '/:packId/generate/bundle',
+    ...aiGuards(),
+    validate({ params: packParamsSchema, body: generateBundleSchema }),
+    studyPackController.generateBundle,
+  );
+  router.post(
+    '/:packId/generate/regenerate',
+    ...aiGuards(),
+    validate({ params: packParamsSchema, body: regenerateItemSchema }),
+    studyPackController.regenerateItem,
   );
   router.post(
     '/:packId/content',

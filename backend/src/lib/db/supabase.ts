@@ -8,6 +8,7 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../../config.js';
+import { EMPTY_SOURCE_METADATA } from '../source-model.js';
 import type { Database } from './repository.js';
 import type {
   AdminUserRecord,
@@ -219,6 +220,8 @@ function packRow(row: Row): StudyPackRecord {
     visibility: field<string>(row, 'visibility') === 'public' ? 'public' : 'private',
     examDate: field<string | null>(row, 'exam_date') ?? null,
     summary: field<string | null>(row, 'summary') ?? null,
+    analysis: (row['analysis'] as StudyPackRecord['analysis']) ?? null,
+    analysisUpdatedAt: field<string | null>(row, 'analysis_updated_at') ?? null,
     summarySourceId: field<string | null>(row, 'summary_source_id') ?? null,
     summaryUpdatedAt: field<string | null>(row, 'summary_updated_at') ?? null,
     legacySetId: field<string | null>(row, 'legacy_set_id') ?? null,
@@ -230,6 +233,16 @@ function packRow(row: Row): StudyPackRecord {
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
+}
+
+/**
+ * Source metadata is stored as JSONB. Old rows (and any row written before this
+ * migration) read back as an empty source metadata object instead of `null`, so
+ * callers never need a null check for "no provenance".
+ */
+function sourceMetadata(value: unknown): StudyPackSourceRecord['metadata'] {
+  if (!value || typeof value !== 'object') return { ...EMPTY_SOURCE_METADATA };
+  return { ...EMPTY_SOURCE_METADATA, ...(value as Record<string, never>) };
 }
 
 function packSourceRow(row: Row): StudyPackSourceRecord {
@@ -246,6 +259,10 @@ function packSourceRow(row: Row): StudyPackSourceRecord {
     failureReason: field<string | null>(row, 'failure_reason') ?? null,
     legacySetId: field<string | null>(row, 'legacy_set_id') ?? null,
     origin: field<string>(row, 'origin') as StudyPackSourceRecord['origin'],
+    metadata: sourceMetadata(row['metadata']),
+    processingStage:
+      (field<string | null>(row, 'processing_stage') as StudyPackSourceRecord['processingStage']) ??
+      null,
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -260,6 +277,10 @@ function conceptRow(row: Row): ConceptRecord {
     explanation: field<string>(row, 'explanation') ?? '',
     origin: field<string>(row, 'origin') as ConceptRecord['origin'],
     position: field<number>(row, 'position') ?? 0,
+    refLabel: field<string | null>(row, 'ref_label') ?? null,
+    importance: field<number | null>(row, 'importance') ?? null,
+    difficulty: (field<string | null>(row, 'difficulty') as ConceptRecord['difficulty']) ?? null,
+    conflictWith: field<string | null>(row, 'conflict_with') ?? null,
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
   };
@@ -1186,6 +1207,8 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         if (patch.summary !== undefined) payload['summary'] = patch.summary;
         if (patch.summarySourceId !== undefined) payload['summary_source_id'] = patch.summarySourceId;
         if (patch.summaryUpdatedAt !== undefined) payload['summary_updated_at'] = patch.summaryUpdatedAt;
+        if (patch.analysis !== undefined) payload['analysis'] = patch.analysis;
+        if (patch.analysisUpdatedAt !== undefined) payload['analysis_updated_at'] = patch.analysisUpdatedAt;
         if (patch.publisher !== undefined) payload['publisher'] = patch.publisher;
         if (patch.method !== undefined) payload['method'] = patch.method;
         if (patch.methodEdition !== undefined) payload['method_edition'] = patch.methodEdition;
@@ -1272,6 +1295,8 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           failure_reason: data.failureReason,
           legacy_set_id: data.legacySetId,
           origin: data.origin,
+          metadata: data.metadata ?? {},
+          processing_stage: data.processingStage ?? null,
         };
         const { data: row, error } = await client
           .from('study_pack_sources')
@@ -1289,6 +1314,8 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         if (patch.characterCount !== undefined) payload['character_count'] = patch.characterCount;
         if (patch.pageCount !== undefined) payload['page_count'] = patch.pageCount;
         if (patch.failureReason !== undefined) payload['failure_reason'] = patch.failureReason;
+        if (patch.metadata !== undefined) payload['metadata'] = patch.metadata;
+        if (patch.processingStage !== undefined) payload['processing_stage'] = patch.processingStage;
         const { data, error } = await client
           .from('study_pack_sources')
           .update(payload)
@@ -1356,6 +1383,10 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           explanation: concept.explanation,
           origin: concept.origin,
           position: concept.position,
+          ref_label: concept.refLabel ?? null,
+          importance: concept.importance ?? null,
+          difficulty: concept.difficulty ?? null,
+          conflict_with: concept.conflictWith ?? null,
         }));
         const { data, error } = await client.from('concepts').insert(payload).select();
         throwIfError(error);
@@ -1366,6 +1397,10 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         if (patch.name !== undefined) payload['name'] = patch.name;
         if (patch.explanation !== undefined) payload['explanation'] = patch.explanation;
         if (patch.position !== undefined) payload['position'] = patch.position;
+        if (patch.refLabel !== undefined) payload['ref_label'] = patch.refLabel;
+        if (patch.importance !== undefined) payload['importance'] = patch.importance;
+        if (patch.difficulty !== undefined) payload['difficulty'] = patch.difficulty;
+        if (patch.conflictWith !== undefined) payload['conflict_with'] = patch.conflictWith;
         const { data, error } = await client
           .from('concepts')
           .update(payload)

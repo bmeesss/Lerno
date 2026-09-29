@@ -9,8 +9,8 @@ import { recommendedHref } from '../../lib/studyPackRoutes';
 import { studyPackService } from '../../services/studyPackService';
 import { MarkdownLite } from '../ai/MarkdownLite';
 import { MasteryMeter, PackStat, masteryLabel } from './PackBits';
-import { PreviewEditor } from './PreviewEditor';
-import type { PackPreview, StudyPackDetail } from '../../types';
+import { ContentReview } from './ContentReview';
+import type { StudyContentPreview, StudyPackDetail } from '../../types';
 
 /**
  * Overview: "here is what matters, here is what you should do next".
@@ -18,21 +18,31 @@ import type { PackPreview, StudyPackDetail } from '../../types';
  */
 export function PackOverview({ pack, onChanged }: { pack: StudyPackDetail; onChanged: () => void }) {
   const toast = useToast();
-  const [preview, setPreview] = useState<PackPreview | null>(null);
+  const [review, setReview] = useState<StudyContentPreview | null>(null);
   const [busy, setBusy] = useState(false);
 
   const weak = pack.progress.weakConcepts;
   const concepts = [...pack.concepts].sort((a, b) => a.masteryPercent - b.masteryPercent);
   const action = pack.recommended;
 
-  async function generateSummary() {
+  /**
+   * The same generation flow as the sources tab: one bundle from the pack's own
+   * analysis, reviewed and confirmed by the student. Nothing here is stored, and
+   * nothing that already exists is replaced.
+   */
+  async function generateReview() {
     if (busy) return;
     setBusy(true);
     try {
-      const result = await studyPackService.generate(pack.id, 'summary');
-      if (result.target === 'summary') setPreview(result);
+      const result = await studyPackService.generateBundle(pack.id);
+      setReview(result);
     } catch (error) {
-      toast.show(error instanceof ApiError ? error.message : 'Could not generate a summary', 'error');
+      toast.show(
+        error instanceof ApiError
+          ? error.message
+          : 'We could not generate study material right now.',
+        'error',
+      );
     } finally {
       setBusy(false);
     }
@@ -112,22 +122,29 @@ export function PackOverview({ pack, onChanged }: { pack: StudyPackDetail; onCha
               </p>
             </div>
             {pack.summary ? (
-              <Button variant="secondary" size="sm" onClick={() => void generateSummary()} disabled={busy}>
-                <IconSparkles size={16} /> Regenerate
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void generateReview()}
+                disabled={busy}
+              >
+                <IconSparkles size={16} /> {busy ? 'Generating…' : 'Regenerate'}
               </Button>
             ) : null}
           </div>
 
-          {preview && preview.target === 'summary' ? (
-            <PreviewEditor
+          {review ? (
+            <ContentReview
               packId={pack.id}
-              preview={preview}
-              onDiscard={() => setPreview(null)}
+              preview={review}
+              sources={pack.sources}
+              settings={review.settings}
               onApplied={(message) => {
-                setPreview(null);
+                setReview(null);
                 toast.show(message, 'success');
                 onChanged();
               }}
+              onDiscard={() => setReview(null)}
             />
           ) : pack.summary ? (
             <div className="pack-summary-body">
@@ -139,8 +156,8 @@ export function PackOverview({ pack, onChanged }: { pack: StudyPackDetail; onCha
               title="No summary yet"
               description="Lerno can summarise the sources in this pack so you know what matters."
               action={
-                <Button onClick={() => void generateSummary()} disabled={busy || pack.counts.readySources === 0}>
-                  {busy ? 'Generating…' : 'Generate summary'}
+                <Button onClick={() => void generateReview()} disabled={busy || pack.counts.readySources === 0}>
+                  {busy ? 'Generating…' : 'Generate content'}
                 </Button>
               }
             />

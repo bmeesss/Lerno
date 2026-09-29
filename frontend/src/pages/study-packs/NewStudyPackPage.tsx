@@ -1,29 +1,33 @@
 import { useMemo, useRef, useState, type ComponentType } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, ButtonLink } from '../../components/ui/Button';
-import { Badge, LoadingRow } from '../../components/ui/Primitives';
+import { LoadingRow } from '../../components/ui/Primitives';
 import {
-  IconAlert,
   IconArrowRight,
   IconAudio,
   IconBook,
   IconFile,
   IconImage,
   IconLayers,
-  IconSparkles,
   IconUpload,
   IconVideo,
 } from '../../components/ui/Icons';
 import { ImportProcessing } from '../../components/study-pack/ImportProcessing';
+import { PackReadySummary } from '../../components/study-pack/PackReadySummary';
 import { useToast } from '../../components/ui/Toast';
 import { useAsync } from '../../hooks/useAsync';
 import { ApiError } from '../../lib/api';
 import { studyPackImportService } from '../../services/studyPackImportService';
 import { studySetService } from '../../services/studySetService';
 import { subjectService } from '../../services/subjectService';
-import type { DuplicateMaterialRef, ImportProcessingStatus, MaterialPdfPreview } from '../../types';
+import type {
+  DuplicateMaterialRef,
+  GenerationSettings,
+  ImportProcessingStatus,
+  MaterialPdfPreview,
+} from '../../types';
 
-type Mode = 'text' | 'pdf' | 'set';
+type Mode = 'text' | 'pdf' | 'powerpoint' | 'image' | 'audio' | 'youtube' | 'set';
 
 const LEVEL_SUGGESTIONS = [
   '1 VMBO',
@@ -36,9 +40,21 @@ const LEVEL_SUGGESTIONS = [
 ];
 
 const MIN_TEXT_CHARS = 20;
+const COUNT_OPTIONS = [10, 20, 30] as const;
 
-/** Accepted-by-browser hint; the backend validates the real type and content. */
-const PDF_ACCEPT = 'application/pdf,.pdf';
+/** Accepted-by-browser hints; the backend validates the real type and content. */
+const ACCEPT: Record<'pdf' | 'powerpoint' | 'image' | 'audio', string> = {
+  pdf: 'application/pdf,.pdf',
+  powerpoint: '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  image: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp',
+  audio: 'audio/mpeg,audio/wav,audio/mp4,audio/webm,.mp3,.wav,.m4a,.webm',
+};
+
+const UPLOAD_KINDS = ['pdf', 'powerpoint', 'image', 'audio'] as const;
+
+function isUploadMode(mode: Mode): mode is (typeof UPLOAD_KINDS)[number] {
+  return (UPLOAD_KINDS as readonly string[]).includes(mode);
+}
 
 function materialStateLabel(phase: 'uploading' | 'reading', progress: number): string {
   if (phase === 'uploading') {
@@ -46,24 +62,30 @@ function materialStateLabel(phase: 'uploading' | 'reading', progress: number): s
       ? `Uploading your file… ${progress}%`
       : 'Uploading your file…';
   }
-  return 'Reading your PDF…';
+  return 'Reading your file…';
 }
+
+/** The three generation knobs a student gets — deliberately nothing more. */
+const DEFAULT_SETTINGS: GenerationSettings = {
+  flashcards: 20,
+  practice: 10,
+  difficulty: 'medium',
+  language: 'nl',
+};
 
 /**
  * "Add study material" — the one place where a student brings material in.
  *
- * Everything the student sees here is real: the PDF preview comes from a
- * server-side read of the actual file, the concept candidates are found in that
- * text, and the processing screen reports the stages the backend really runs.
- * Options without an adapter are shown as coming soon instead of pretending.
+ * Every accepted kind uses the same pipeline: the server reads the material
+ * (PDF text, PPTX slides, OCR, transcription, YouTube metadata + the student's
+ * own transcript), normalizes it, analyzes it and generates content with
+ * provenance. The processing screen reports the stages the backend really runs,
+ * and the ready screen reports the real counts and the rule-based study time.
  */
 export function NewStudyPackPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { data: subjects, loading: subjectsLoading } = useAsync(
-    () => subjectService.list(),
-    [],
-  );
+  const { data: subjects, loading: subjectsLoading } = useAsync(() => subjectService.list(), []);
   const { data: mySets } = useAsync(() => studySetService.listMine(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +96,10 @@ export function NewStudyPackPage() {
   const [text, setText] = useState('');
   const [setId, setSetId] = useState('');
   const [pdf, setPdf] = useState<{ preview: MaterialPdfPreview; fileName: string } | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [youTubeUrl, setYouTubeUrl] = useState('');
+  const [youTubeTranscript, setYouTubeTranscript] = useState('');
+  const [settings, setSettings] = useState<GenerationSettings>(DEFAULT_SETTINGS);
   const [upload, setUpload] = useState<{ phase: 'idle' | 'uploading' | 'reading'; progress: number }>(
     { phase: 'idle', progress: 0 },
   );
@@ -81,6 +107,9 @@ export function NewStudyPackPage() {
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<(DuplicateMaterialRef & { raw: string }) | null>(null);
   const [started, setStarted] = useState<{ packId: string; status: ImportProcessingStatus } | null>(
+    null,
+  );
+  const [finished, setFinished] = useState<{ packId: string; status: ImportProcessingStatus } | null>(
     null,
   );
 
@@ -92,30 +121,36 @@ export function NewStudyPackPage() {
   const pickedSet = (mySets ?? []).find((set) => set.id === setId) ?? null;
 
   const canCreate =
-    mode === 'set'
-      ? Boolean(setId) && title.trim().length > 0
-      : mode === 'pdf'
-        ? Boolean(pdf) && title.trim().length > 0 && !busy
-        : readableChars >= MIN_TEXT_CHARS && title.trim().length > 0 && !busy;
+    busy || !title.trim()
+      ? false
+      : mode === 'set'
+        ? Boolean(setId)
+        : mode === 'text'
+          ? readableChars >= MIN_TEXT_CHARS
+          : mode === 'youtube'
+            ? youTubeUrl.trim().length > 5
+            : mode === 'pdf'
+              ? Boolean(pdf)
+              : Boolean(file);
 
   function selectMode(next: Mode) {
     setMode(next);
     setError(null);
     setDuplicate(null);
-    if (next === 'pdf' && !pdf) setTitle('');
+    if (next !== mode) setTitle('');
   }
 
-  async function choosePdf(file: File) {
+  async function choosePdf(fileChosen: File) {
     setError(null);
     setDuplicate(null);
     setPdf(null);
     setUpload({ phase: 'uploading', progress: 0 });
     try {
-      const preview = await studyPackImportService.previewPdf(file, {
+      const preview = await studyPackImportService.previewPdf(fileChosen, {
         onProgress: (percent) => setUpload({ phase: 'uploading', progress: percent }),
       });
       setUpload({ phase: 'reading', progress: 100 });
-      setPdf({ preview, fileName: file.name });
+      setPdf({ preview, fileName: fileChosen.name });
       setTitle(preview.title);
     } catch (requestError) {
       setError(
@@ -129,27 +164,66 @@ export function NewStudyPackPage() {
     }
   }
 
+  function chooseFile(fileChosen: File) {
+    setFile(fileChosen);
+    setError(null);
+    setDuplicate(null);
+    if (!title.trim()) setTitle(fileChosen.name.replace(/\.[^.]+$/, '').slice(0, 160));
+  }
+
   async function create(allowDuplicate = false) {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
+      const title_ = title.trim() || pdf?.preview.title || pickedSet?.title || file?.name || 'Study pack';
+
+      // File uploads are read server-side (PDF text, PPTX, OCR, transcription).
+      if (mode !== 'pdf' && isUploadMode(mode) && file) {
+        const result = await studyPackImportService.createFromUpload(
+          {
+            kind: mode,
+            file,
+            title: title_,
+            subjectId: subjectId || null,
+            level: level.trim(),
+            allowDuplicate,
+            settings,
+          },
+          {
+            onProgress: (percent) => setUpload({ phase: 'uploading', progress: percent }),
+          },
+        );
+        setUpload({ phase: 'idle', progress: 0 });
+        setDuplicate(null);
+        setStarted({ packId: result.packId, status: result.status });
+        return;
+      }
+
       const result = await studyPackImportService.create({
-        title: title.trim() || pdf?.preview.title || pickedSet?.title || 'Study pack',
+        title: title_,
         subjectId: subjectId || null,
         level: level.trim(),
         allowDuplicate,
+        settings,
         source:
           mode === 'set'
             ? { type: 'set', setId, title: pickedSet?.title ?? 'Existing Lerno set' }
-            : mode === 'pdf' && pdf
+            : mode === 'youtube'
               ? {
-                  type: 'pdf',
-                  title: pdf.fileName,
-                  text: pdf.preview.text,
-                  pageCount: pdf.preview.pageCount,
+                  type: 'youtube',
+                  title: title_,
+                  url: youTubeUrl.trim(),
+                  ...(youTubeTranscript.trim() ? { transcript: youTubeTranscript.trim() } : {}),
                 }
-              : { type: 'text', title: title.trim() || 'Pasted notes', text },
+              : mode === 'pdf' && pdf
+                ? {
+                    type: 'pdf',
+                    title: pdf.fileName,
+                    text: pdf.preview.text,
+                    pageCount: pdf.preview.pageCount,
+                  }
+                : { type: 'text', title: title_ || 'Pasted notes', text },
       });
       setDuplicate(null);
       setStarted({ packId: result.packId, status: result.status });
@@ -174,34 +248,52 @@ export function NewStudyPackPage() {
   }
 
   /**
-   * A finished import opens the Study Pack — the student should never end on an
-   * empty page. A partial or failed run stays on this screen so the failure and
-   * its "Try again" are visible first, and an import without AI stays just long
-   * enough to explain why the pack has no generated content yet.
+   * The end of an import is a real result screen (counts + study time + Start
+   * Learning). A failed run stays on the processing screen so the failure and
+   * its retry are visible first.
    */
   function finish(status: ImportProcessingStatus) {
-    if (status.status === 'ready' && !status.aiSkipped) {
-      navigate(`/study-packs/${status.packId}`, { replace: true });
+    if (status.status === 'ready' || status.status === 'partial') {
+      setFinished({ packId: status.packId, status });
     }
   }
 
   if (started) {
+    const result = finished && finished.packId === started.packId ? finished : null;
     return (
       <div className="import-page">
         <header className="import-hero">
           <span className="eyebrow-label">Add study material</span>
-          <h1>Lerno is building your study pack</h1>
+          <h1>{result ? 'You are all set' : 'Lerno is building your study pack'}</h1>
           <p>
-            You can leave this page whenever you want: your material is saved and the study pack is
-            already in My Study.
+            {result
+              ? 'Your material is saved and organized. You can add more material at any time.'
+              : 'You can leave this page whenever you want: your material is saved and the study pack is already in My Study.'}
           </p>
         </header>
+
+        {result ? (
+          <PackReadySummary
+            packId={result.packId}
+            status={result.status}
+            onReviewMaterial={() => navigate(`/study-packs/${result.packId}?tab=overview`)}
+          />
+        ) : null}
+
         <ImportProcessing
           packId={started.packId}
           initialStatus={started.status}
           onFinished={finish}
           onOpenPack={() => navigate(`/study-packs/${started.packId}`)}
         />
+
+        {result ? (
+          <div className="import-processing-actions">
+            <ButtonLink variant="secondary" to="/study-packs">
+              Back to My Study
+            </ButtonLink>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -212,8 +304,8 @@ export function NewStudyPackPage() {
         <span className="eyebrow-label">Add study material</span>
         <h1>Turn your material into a study pack</h1>
         <p>
-          Upload notes, a PDF, or paste your material. Lerno will organize it into summaries,
-          concepts, flashcards and practice.
+          Upload notes, slides, a photo or a recording, paste your material, or bring in a video.
+          Lerno reads it, understands it and builds summaries, concepts, flashcards and practice.
         </p>
       </header>
 
@@ -227,26 +319,23 @@ export function NewStudyPackPage() {
           <div className="import-group">
             <span className="import-group-label">Upload</span>
             <div className="import-options">
-              <OptionCard
-                title="PDF"
-                description="A chapter, summary or reader with selectable text."
-                Icon={IconFile}
-                active={mode === 'pdf'}
-                onClick={() => selectMode('pdf')}
-              />
-              <OptionCard
-                title="PowerPoint"
-                description="Slides from a lesson."
-                Icon={IconLayers}
-                comingSoon
-              />
-              <OptionCard
-                title="Image"
-                description="A photo of your notes."
-                Icon={IconImage}
-                comingSoon
-              />
-              <OptionCard title="Audio" description="A recorded lesson." Icon={IconAudio} comingSoon />
+              {(
+                [
+                  ['pdf', 'PDF', 'A chapter, summary or reader with selectable text.', IconFile],
+                  ['powerpoint', 'PowerPoint', 'Slides, including titles and speaker notes.', IconLayers],
+                  ['image', 'Photo of notes', 'PNG, JPG or WEBP — Lerno reads the text (OCR).', IconImage],
+                  ['audio', 'Recording', 'MP3, WAV, M4A or WEBM — Lerno transcribes it.', IconAudio],
+                ] as [Mode, string, string, ComponentType<{ size?: number }>][]
+              ).map(([id, label, description, Icon]) => (
+                <OptionCard
+                  key={id}
+                  title={label}
+                  description={description}
+                  Icon={Icon}
+                  active={mode === id}
+                  onClick={() => selectMode(id)}
+                />
+              ))}
             </div>
           </div>
 
@@ -254,17 +343,18 @@ export function NewStudyPackPage() {
             <span className="import-group-label">Import</span>
             <div className="import-options">
               <OptionCard
+                title="YouTube"
+                description="Public title and channel, plus captions you paste yourself."
+                Icon={IconVideo}
+                active={mode === 'youtube'}
+                onClick={() => selectMode('youtube')}
+              />
+              <OptionCard
                 title="Existing Lerno set"
                 description="Turn a set you already have into a study pack."
                 Icon={IconBook}
                 active={mode === 'set'}
                 onClick={() => selectMode('set')}
-              />
-              <OptionCard
-                title="YouTube"
-                description="A video lesson."
-                Icon={IconVideo}
-                comingSoon
               />
             </div>
           </div>
@@ -279,42 +369,20 @@ export function NewStudyPackPage() {
                 active={mode === 'text'}
                 onClick={() => selectMode('text')}
               />
-              <OptionCard
-                title="Write notes"
-                description="Type it straight into Lerno."
-                Icon={IconSparkles}
-                active={mode === 'text'}
-                onClick={() => selectMode('text')}
-              />
             </div>
           </div>
         </div>
       </section>
 
-      {error ? (
-        <div className="import-error" role="alert">
-          <IconAlert size={18} />
-          <div>
-            <strong>We couldn&apos;t use this material</strong>
-            <p>{error}</p>
-          </div>
-          {mode === 'pdf' ? (
-            <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
-              Choose another file
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-
       {duplicate ? (
-        <section className="card import-duplicate" aria-labelledby="import-duplicate-heading">
-          <span className="eyebrow-label">Already in your library</span>
-          <h2 id="import-duplicate-heading">This material may already exist</h2>
-          <p className="muted">
-            You imported “{duplicate.sourceTitle}” before, in “{duplicate.packTitle}”. Open that study
-            pack or add this material anyway.
+        <section className="card import-panel import-duplicate" role="alert">
+          <h2>You already have this material</h2>
+          <p>{duplicate.raw}</p>
+          <p>
+            “{duplicate.sourceTitle}” is already in <strong>{duplicate.packTitle}</strong>. Importing
+            it again would create a second study pack from the same material.
           </p>
-          <div className="import-actions">
+          <div className="import-processing-actions">
             <ButtonLink to={`/study-packs/${duplicate.packId}`}>Open existing Study Pack</ButtonLink>
             <Button variant="secondary" onClick={() => void create(true)} disabled={busy}>
               {busy ? 'Importing…' : 'Import anyway'}
@@ -329,32 +397,48 @@ export function NewStudyPackPage() {
             <div>
               <h2 id="import-pdf-heading">Upload your PDF</h2>
               <p className="muted">
-                Selectable text only. Scanned pages without text cannot be read yet — paste the text
-                instead.
+                Selectable text only. A scanned PDF has no text layer — use a photo instead and
+                Lerno will read it with OCR.
               </p>
             </div>
           </div>
 
           {!pdf ? (
-            <label className="import-drop">
-              <IconUpload size={22} />
-              <strong>Choose a PDF from your device</strong>
-              <small>Up to 15 MB and 100 pages.</small>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={PDF_ACCEPT}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void choosePdf(file);
-                }}
-              />
-              {upload.phase !== 'idle' ? (
-                <span className="import-upload-status" role="status">
-                  {materialStateLabel(upload.phase, upload.progress)}
-                </span>
+            <>
+              <label className="import-drop">
+                <IconUpload size={22} />
+                <strong>Choose a PDF from your device</strong>
+                <small>Up to 15 MB and 100 pages.</small>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPT.pdf}
+                  onChange={(event) => {
+                    const chosen = event.target.files?.[0];
+                    if (chosen) void choosePdf(chosen);
+                  }}
+                />
+                {upload.phase !== 'idle' ? (
+                  <span className="import-upload-status" role="status">
+                    {materialStateLabel(upload.phase, upload.progress)}
+                  </span>
+                ) : null}
+              </label>
+              {error ? (
+                <>
+                  <p className="import-error" role="alert">
+                    {error}
+                  </p>
+                  <button
+                    type="button"
+                    className="import-link"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Choose another file
+                  </button>
+                </>
               ) : null}
-            </label>
+            </>
           ) : (
             <>
               <div className="import-found">
@@ -407,6 +491,88 @@ export function NewStudyPackPage() {
               </button>
             </>
           )}
+        </section>
+      ) : null}
+
+      {mode === 'powerpoint' || mode === 'image' || mode === 'audio' ? (
+        <section className="card import-panel" aria-labelledby="import-file-heading">
+          <div className="import-panel-head">
+            <div>
+              <h2 id="import-file-heading">
+                {mode === 'powerpoint'
+                  ? 'Upload your PowerPoint'
+                  : mode === 'image'
+                    ? 'Upload a photo of your notes'
+                    : 'Upload a recording'}
+              </h2>
+              <p className="muted">
+                {mode === 'powerpoint'
+                  ? 'Lerno reads the slide text, the titles and the speaker notes.'
+                  : mode === 'image'
+                    ? 'Clear, straight-on photos work best. If Lerno finds no readable text, it says so instead of pretending.'
+                    : 'Lerno transcribes the recording and keeps the timestamps, so generated items can point back to the exact moment.'}
+              </p>
+            </div>
+          </div>
+          <label className="import-drop">
+            <IconUpload size={22} />
+            <strong>Choose a file from your device</strong>
+            <small>{mode === 'image' ? 'PNG, JPG or WEBP' : mode === 'audio' ? 'MP3, WAV, M4A or WEBM' : '.pptx'}</small>
+            <input
+              type="file"
+              accept={ACCEPT[mode]}
+              onChange={(event) => {
+                const chosen = event.target.files?.[0];
+                if (chosen) chooseFile(chosen);
+              }}
+            />
+          </label>
+          {file ? (
+            <p className="import-file-line">
+              <IconFile size={15} /> {file.name}
+            </p>
+          ) : null}
+          {upload.phase !== 'idle' ? (
+            <span className="import-upload-status" role="status">
+              {materialStateLabel(upload.phase, upload.progress)}
+            </span>
+          ) : null}
+        </section>
+      ) : null}
+
+      {mode === 'youtube' ? (
+        <section className="card import-panel" aria-labelledby="import-youtube-heading">
+          <div className="import-panel-head">
+            <div>
+              <h2 id="import-youtube-heading">Add a YouTube lesson</h2>
+              <p className="muted">
+                Lerno reads the public title and channel. It never downloads the video. Generated
+                content can only use captions you have the right to use — paste the transcript from
+                YouTube's own transcript panel.
+              </p>
+            </div>
+          </div>
+          <label className="field">
+            <span>Video link</span>
+            <input
+              className="input"
+              value={youTubeUrl}
+              maxLength={500}
+              placeholder="https://www.youtube.com/watch?v=…"
+              onChange={(event) => setYouTubeUrl(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Transcript (optional — without it, Lerno cannot use the video)</span>
+            <textarea
+              className="textarea"
+              rows={5}
+              value={youTubeTranscript}
+              maxLength={50_000}
+              placeholder="Paste the transcript here…"
+              onChange={(event) => setYouTubeTranscript(event.target.value)}
+            />
+          </label>
         </section>
       ) : null}
 
@@ -530,8 +696,85 @@ export function NewStudyPackPage() {
             </label>
           </div>
 
+          <fieldset className="import-settings">
+            <legend>How much should Lerno generate?</legend>
+            <div className="import-settings-row">
+              <span className="import-settings-label">Flashcards</span>
+              {COUNT_OPTIONS.map((count) => (
+                <button
+                  key={`cards-${count}`}
+                  type="button"
+                  className={`import-chip${settings.flashcards === count ? ' import-chip-active' : ''}`}
+                  aria-pressed={settings.flashcards === count}
+                  onClick={() => setSettings((current) => ({ ...current, flashcards: count }))}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+            <div className="import-settings-row">
+              <span className="import-settings-label">Practice questions</span>
+              {COUNT_OPTIONS.map((count) => (
+                <button
+                  key={`practice-${count}`}
+                  type="button"
+                  className={`import-chip${settings.practice === count ? ' import-chip-active' : ''}`}
+                  aria-pressed={settings.practice === count}
+                  onClick={() => setSettings((current) => ({ ...current, practice: count }))}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+            <div className="import-settings-row">
+              <span className="import-settings-label">Difficulty</span>
+              {(
+                [
+                  ['easy', 'Easy'],
+                  ['medium', 'Medium'],
+                  ['hard', 'Hard'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`import-chip${settings.difficulty === value ? ' import-chip-active' : ''}`}
+                  aria-pressed={settings.difficulty === value}
+                  onClick={() => setSettings((current) => ({ ...current, difficulty: value }))}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="import-settings-row">
+              <span className="import-settings-label">Language</span>
+              {(
+                [
+                  ['nl', 'Nederlands'],
+                  ['en', 'English'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`import-chip${settings.language === value ? ' import-chip-active' : ''}`}
+                  aria-pressed={settings.language === value}
+                  onClick={() => setSettings((current) => ({ ...current, language: value }))}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {error ? (
+            <p className="import-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+
           <div className="import-actions">
-            <Button onClick={() => void create(false)} disabled={!canCreate || busy}>
+            <Button onClick={() => void create(false)} disabled={!canCreate}>
               {busy ? 'Creating your study pack…' : 'Create Study Pack'}
             </Button>
             <span className="muted import-actions-note">
@@ -558,31 +801,14 @@ function OptionCard({
   description,
   Icon,
   active,
-  comingSoon,
   onClick,
 }: {
   title: string;
   description: string;
   Icon: ComponentType<{ size?: number }>;
   active?: boolean;
-  comingSoon?: boolean;
   onClick?: () => void;
 }) {
-  if (comingSoon) {
-    return (
-      <div className="import-option import-option-disabled" aria-disabled="true">
-        <span className="import-option-icon">
-          <Icon size={19} />
-        </span>
-        <span className="import-option-copy">
-          <strong>
-            {title} <Badge>Coming soon</Badge>
-          </strong>
-          <small>{description}</small>
-        </span>
-      </div>
-    );
-  }
   return (
     <button
       type="button"
