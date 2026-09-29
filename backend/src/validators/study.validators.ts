@@ -4,6 +4,7 @@ export const reviewInputSchema = z.object({
   setId: z.string().uuid('Invalid set id'),
   cardId: z.string().uuid('Invalid card id'),
   result: z.enum(['correct', 'incorrect']),
+  responseTimeMs: z.number().int().min(0).max(3_600_000).optional(),
 });
 
 export const startSessionSchema = z.object({

@@ -16,12 +16,16 @@ import { config } from '../config.js';
 import type { Database } from '../lib/db/repository.js';
 import type {
   AnswerVerdict,
+  CardProgressRecord,
   CardRecord,
+  ConceptMasteryRecord,
   ConceptRecord,
+  PracticeAttemptRecord,
   PracticeQuestionRecord,
   StudyPackRecord,
   StudyPackSourceRecord,
   StudySetRecord,
+  TestAttemptRecord,
 } from '../lib/db/types.js';
 import { dto } from '../lib/dto.js';
 import { errors } from '../lib/errors.js';
@@ -34,10 +38,13 @@ import {
   buildStudyPlan,
   daysUntil,
   gradeAnswer,
+  isConceptDue,
   isWeakConcept,
   masteryFromRecord,
   matchConcept,
   packMasteryPercent,
+  rankLearnCandidates,
+  rankRecommendations,
   recommendNextAction,
   STRONG_MASTERY_THRESHOLD,
   todayIso,
@@ -97,11 +104,36 @@ async function loadPackContext(db: Database, pack: StudyPackRecord): Promise<Pac
   return { pack, sources, concepts, questions, cards, set };
 }
 
+interface PackLearningRows {
+  progress: CardProgressRecord[];
+  masteryRows: ConceptMasteryRecord[];
+  attempts: PracticeAttemptRecord[];
+  testAttempts: TestAttemptRecord[];
+}
+
 /** Statistics shared by the detail view, the overview and the recommendation. */
-async function loadPackProgress(db: Database, userId: string | null, context: PackContextData) {
+async function loadPackProgress(
+  db: Database,
+  userId: string | null,
+  context: PackContextData,
+  rows?: PackLearningRows,
+) {
   const { pack, concepts, questions, cards, set } = context;
-  const progress = userId && set ? await db.progress.listByUserAndSet(userId, set.id) : [];
-  const masteryRows = userId ? await db.conceptMastery.listByUserAndPack(userId, pack.id) : [];
+  let loadedRows: PackLearningRows;
+  if (rows) {
+    loadedRows = rows;
+  } else if (userId) {
+    const [progress, masteryRows, attempts, testAttempts] = await Promise.all([
+      set ? db.progress.listByUserAndSet(userId, set.id) : Promise.resolve([] as CardProgressRecord[]),
+      db.conceptMastery.listByUserAndPack(userId, pack.id),
+      db.practiceAttempts.listByUserAndPack(userId, pack.id),
+      db.testAttempts.listByUserAndPack(userId, pack.id),
+    ]);
+    loadedRows = { progress, masteryRows, attempts, testAttempts };
+  } else {
+    loadedRows = { progress: [], masteryRows: [], attempts: [], testAttempts: [] };
+  }
+  const { progress, masteryRows, attempts, testAttempts } = loadedRows;
   const masteryByConcept = new Map(masteryRows.map((row) => [row.conceptId, row]));
   const nowIso = new Date().toISOString();
 
@@ -116,7 +148,6 @@ async function loadPackProgress(db: Database, userId: string | null, context: Pa
 
   const unlearned = conceptStates.filter((entry) => entry.state.attempts === 0).length;
 
-  const attempts = userId ? await db.practiceAttempts.listByUserAndPack(userId, pack.id) : [];
   const graded = attempts.length;
   const accuracy =
     graded > 0
@@ -125,7 +156,6 @@ async function loadPackProgress(db: Database, userId: string | null, context: Pa
         graded
       : null;
 
-  const testAttempts = userId ? await db.testAttempts.listByUserAndPack(userId, pack.id) : [];
   const dueCards = progress.filter(
     (row) => row.nextReviewAt !== null && row.nextReviewAt <= nowIso,
   ).length;
@@ -179,33 +209,131 @@ export interface PackSummaryExtras {
   practiceQuestions: number;
   masteryPercent: number;
   weakConcepts: number;
+  learningConcepts: number;
+  masteredConcepts: number;
   dueCards: number;
+  lastStudiedAt: string | null;
+  cardsReviewed: number;
+  practiceAnswers: number;
+  testsCompleted: number;
 }
 
 function examDaysLeft(pack: StudyPackRecord, now: Date): number | null {
   return pack.examDate ? daysUntil(pack.examDate, now) : null;
 }
 
+interface PackSummarySnapshot {
+  pack: StudyPackRecord;
+  context: PackContextData;
+  progress: Awaited<ReturnType<typeof loadPackProgress>>;
+  summary: ReturnType<typeof dto.studyPackSummary>;
+}
+
+function summarizePack(
+  pack: StudyPackRecord,
+  context: PackContextData,
+  progress: Awaited<ReturnType<typeof loadPackProgress>>,
+  now: Date,
+) {
+  return dto.studyPackSummary(pack, {
+    sources: context.sources.length,
+    flashcards: context.cards.length,
+    concepts: context.concepts.length,
+    practiceQuestions: context.questions.length,
+    masteryPercent: progress.masteryPercent,
+    weakConcepts: progress.stats.weakConcepts.length,
+    learningConcepts: progress.conceptStates.filter(
+      (entry) => entry.state.attempts > 0 && entry.state.mastery >= 0.3 && entry.state.mastery < 0.85,
+    ).length,
+    masteredConcepts: progress.conceptStates.filter(
+      (entry) => entry.state.attempts > 0 && entry.state.mastery >= 0.85,
+    ).length,
+    dueCards: progress.dueCards,
+    lastStudiedAt: progress.activity.slice().sort().at(-1) ?? null,
+    cardsReviewed: progress.progress.length,
+    practiceAnswers: progress.graded,
+    testsCompleted: progress.testAttempts.length,
+    examDaysLeft: examDaysLeft(pack, now),
+  });
+}
+
+function groupRows<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const group = grouped.get(key) ?? [];
+    group.push(row);
+    grouped.set(key, group);
+  }
+  return grouped;
+}
+
+/** Load each pack's learning state once so recommendations reuse the same snapshot. */
+async function loadPackSnapshots(
+  db: Database,
+  userId: string | null,
+  packs: StudyPackRecord[],
+  now: Date,
+): Promise<PackSummarySnapshot[]> {
+  if (packs.length === 0) return [];
+  const packIds = packs.map((pack) => pack.id);
+  const setIds = [...new Set(packs.flatMap((pack) => pack.legacySetId ? [pack.legacySetId] : []))];
+  const [sources, concepts, questions, cards, sets, progressRows, masteryRows, attempts, testAttempts] =
+    await Promise.all([
+      db.packSources.listByPacks(packIds),
+      db.concepts.listByPacks(packIds),
+      db.practiceQuestions.listByPacks(packIds),
+      db.cards.listBySets(setIds),
+      db.sets.listByIds(setIds),
+      userId ? db.progress.listByUser(userId) : Promise.resolve([]),
+      userId ? db.conceptMastery.listByUser(userId) : Promise.resolve([]),
+      userId ? db.practiceAttempts.listByUser(userId) : Promise.resolve([]),
+      userId ? db.testAttempts.listByUser(userId) : Promise.resolve([]),
+    ]);
+
+  const setById = new Map(sets.map((set) => [set.id, set]));
+  const cardsBySet = groupRows(cards, (card) => card.setId);
+  const progressByCard = new Map(progressRows.map((row) => [row.cardId, row]));
+  const masteryByConcept = new Map(masteryRows.map((row) => [row.conceptId, row]));
+  const sourcesByPack = groupRows(sources, (source) => source.packId);
+  const conceptsByPack = groupRows(concepts, (concept) => concept.packId);
+  const questionsByPack = groupRows(questions, (question) => question.packId);
+  const attemptsByPack = groupRows(attempts, (attempt) => attempt.packId);
+  const testsByPack = groupRows(testAttempts, (attempt) => attempt.packId);
+
+  return Promise.all(packs.map(async (pack) => {
+    const set = pack.legacySetId ? (setById.get(pack.legacySetId) ?? null) : null;
+    const packCards = set ? (cardsBySet.get(set.id) ?? []) : [];
+    const context: PackContextData = {
+      pack,
+      sources: sourcesByPack.get(pack.id) ?? [],
+      concepts: conceptsByPack.get(pack.id) ?? [],
+      questions: questionsByPack.get(pack.id) ?? [],
+      cards: packCards,
+      set,
+    };
+    const conceptIds = new Set(context.concepts.map((concept) => concept.id));
+    const rows: PackLearningRows = {
+      progress: packCards.flatMap((card) => {
+        const row = progressByCard.get(card.id);
+        return row ? [row] : [];
+      }),
+      masteryRows: [...conceptIds].flatMap((conceptId) => {
+        const row = masteryByConcept.get(conceptId);
+        return row ? [row] : [];
+      }),
+      attempts: attemptsByPack.get(pack.id) ?? [],
+      testAttempts: testsByPack.get(pack.id) ?? [],
+    };
+    const progress = await loadPackProgress(db, userId, context, rows);
+    return { pack, context, progress, summary: summarizePack(pack, context, progress, now) };
+  }));
+}
+
 /** Summary DTOs for a list of packs (one pass per collection). */
 async function buildPackSummaries(db: Database, userId: string | null, packs: StudyPackRecord[]) {
   if (packs.length === 0) return [];
-  const now = new Date();
-  return Promise.all(
-    packs.map(async (pack) => {
-      const context = await loadPackContext(db, pack);
-      const progress = await loadPackProgress(db, userId, context);
-      return dto.studyPackSummary(pack, {
-        sources: context.sources.length,
-        flashcards: context.cards.length,
-        concepts: context.concepts.length,
-        practiceQuestions: context.questions.length,
-        masteryPercent: progress.masteryPercent,
-        weakConcepts: progress.stats.weakConcepts.length,
-        dueCards: progress.dueCards,
-        examDaysLeft: examDaysLeft(pack, now),
-      });
-    }),
-  );
+  return (await loadPackSnapshots(db, userId, packs, new Date())).map((snapshot) => snapshot.summary);
 }
 
 function setSourceContext(set: StudySetRecord, cards: CardRecord[]) {
@@ -826,7 +954,7 @@ export const studyPackService = {
     db: Database,
     userId: string | null,
     packId: string,
-    input: { questionId: string; answer: string },
+    input: { questionId: string; answer: string; responseTimeMs?: number },
   ) {
     const pack = await requireVisiblePack(db, userId, packId);
     const question = await db.practiceQuestions.get(input.questionId);
@@ -842,10 +970,12 @@ export const studyPackService = {
         userId,
         conceptId: concept.id,
         mastery: next.mastery,
+        confidence: next.confidence,
         attempts: next.attempts,
         correctCount: next.correctCount,
         incorrectCount: next.incorrectCount,
         lastPracticedAt: next.lastPracticedAt,
+        nextReviewAt: next.nextReviewAt,
       });
     }
     if (userId) {
@@ -857,6 +987,16 @@ export const studyPackService = {
         answer: graded.normalized,
         verdict: graded.verdict,
       });
+      await db.learningEvents.create({
+        userId,
+        packId: pack.id,
+        conceptId: concept?.id ?? null,
+        questionId: question.id,
+        eventType: 'practice',
+        isCorrect: graded.verdict === 'partial' ? null : graded.verdict === 'correct',
+        responseTimeMs: input.responseTimeMs ?? null,
+        metadata: { verdict: graded.verdict },
+      });
     }
 
     const source = question.sourceId ? await db.packSources.get(question.sourceId) : null;
@@ -866,7 +1006,10 @@ export const studyPackService = {
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
       concept: concept ? { id: concept.id, name: concept.name } : null,
-      conceptMasteryPercent: userId ? Math.round(next.mastery * 100) : null,
+      previousMasteryPercent: concept && userId
+        ? Math.round((previous?.mastery ?? 0) * 100)
+        : null,
+      conceptMasteryPercent: concept && userId ? Math.round(next.mastery * 100) : null,
       sourceTitle: source?.title ?? null,
     };
   },
@@ -947,7 +1090,7 @@ export const studyPackService = {
     userId: string,
     packId: string,
     testId: string,
-    input: { answers: { questionId: string; answer: string }[] },
+    input: { answers: { questionId: string; answer: string; responseTimeMs?: number }[] },
   ) {
     const pack = await requireOwnedPack(db, userId, packId);
     const test = await db.tests.get(testId);
@@ -985,22 +1128,39 @@ export const studyPackService = {
       }
 
       const concept = question.conceptId ? (conceptById.get(question.conceptId) ?? null) : null;
+      let previousMasteryPercent: number | null = null;
       let masteryPercent: number | null = null;
       if (concept) {
         touchedConcepts.add(concept.id);
         const previous = await db.conceptMastery.get(userId, concept.id);
+        previousMasteryPercent = Math.round((previous?.mastery ?? 0) * 100);
         const next = applyVerdict(masteryFromRecord(previous), graded.verdict, now);
         await db.conceptMastery.upsert({
           userId,
           conceptId: concept.id,
           mastery: next.mastery,
+          confidence: next.confidence,
           attempts: next.attempts,
           correctCount: next.correctCount,
           incorrectCount: next.incorrectCount,
           lastPracticedAt: next.lastPracticedAt,
+          nextReviewAt: next.nextReviewAt,
         });
         masteryPercent = Math.round(next.mastery * 100);
       }
+
+      await db.learningEvents.create({
+        userId,
+        packId: pack.id,
+        conceptId: concept?.id ?? null,
+        questionId: question.id,
+        eventType: 'test',
+        isCorrect: graded.verdict === 'partial' ? null : graded.verdict === 'correct',
+        responseTimeMs: answersGiven.has(question.id)
+          ? input.answers.find((entry) => entry.questionId === question.id)?.responseTimeMs ?? null
+          : null,
+        metadata: { verdict: graded.verdict, testId: test.id },
+      });
 
       results.push({
         questionId: question.id,
@@ -1013,6 +1173,7 @@ export const studyPackService = {
         explanation: question.explanation,
         conceptId: concept?.id ?? null,
         conceptName: concept?.name ?? null,
+        previousMasteryPercent,
         conceptMasteryPercent: masteryPercent,
       });
     }
@@ -1090,6 +1251,67 @@ export const studyPackService = {
 
   /* ---------------------------- learn + mastery ---------------------------- */
 
+  /** Picks one concept from the live mastery state; each response re-ranks the queue. */
+  async nextLearnConcept(
+    db: Database,
+    userId: string,
+    packId: string,
+    excludedIds: string[] = [],
+    focusConceptId?: string,
+  ) {
+    const pack = await requireVisiblePack(db, userId, packId);
+    const [context, masteryRows] = await Promise.all([
+      loadPackContext(db, pack),
+      db.conceptMastery.listByUserAndPack(userId, pack.id),
+    ]);
+    const masteryById = new Map(masteryRows.map((row) => [row.conceptId, row]));
+    const ranked = rankLearnCandidates(
+      context.concepts.map((concept) => ({ concept, state: masteryFromRecord(masteryById.get(concept.id) ?? null) })),
+      excludedIds,
+    );
+    const selected = excludedIds.length === 0 && focusConceptId
+      ? ranked.find((candidate) => candidate.concept.id === focusConceptId) ?? ranked[0]
+      : ranked[0];
+    if (!selected) return { concept: null, remaining: 0, reason: null };
+
+    if (excludedIds.length === 0) {
+      await db.learningEvents.create({
+        userId,
+        packId: pack.id,
+        conceptId: selected.concept.id,
+        eventType: 'learn',
+        metadata: { sessionStarted: true },
+      });
+    }
+
+    const reason = selected.state.attempts > 0 && selected.state.mastery < 0.3
+      ? 'weak'
+      : selected.state.attempts === 0
+        ? 'new'
+        : isConceptDue(selected.state)
+          ? 'due'
+          : selected.state.mastery >= STRONG_MASTERY_THRESHOLD
+            ? 'confirmation'
+            : 'learning';
+
+    return {
+      concept: {
+        id: selected.concept.id,
+        name: selected.concept.name,
+        explanation: selected.concept.explanation,
+        position: selected.concept.position,
+        masteryPercent: Math.round(selected.state.mastery * 100),
+        confidencePercent: Math.round(selected.state.confidence * 100),
+        attempts: selected.state.attempts,
+        lastPracticedAt: selected.state.lastPracticedAt,
+        cardCount: context.cards.filter((card) => card.conceptId === selected.concept.id).length,
+        questionCount: context.questions.filter((question) => question.conceptId === selected.concept.id).length,
+      },
+      remaining: ranked.length,
+      reason,
+    };
+  },
+
   /** Learn mode: one self-rating for one concept, stored as mastery. */
   async rateConcept(
     db: Database,
@@ -1097,6 +1319,7 @@ export const studyPackService = {
     packId: string,
     conceptId: string,
     rating: ConceptRating,
+    responseTimeMs?: number,
   ) {
     const pack = await requireVisiblePack(db, userId, packId);
     const concept = await db.concepts.get(conceptId);
@@ -1108,10 +1331,21 @@ export const studyPackService = {
       userId,
       conceptId: concept.id,
       mastery: next.mastery,
+      confidence: next.confidence,
       attempts: next.attempts,
       correctCount: next.correctCount,
       incorrectCount: next.incorrectCount,
       lastPracticedAt: next.lastPracticedAt,
+      nextReviewAt: next.nextReviewAt,
+    });
+    await db.learningEvents.create({
+      userId,
+      packId: pack.id,
+      conceptId: concept.id,
+      eventType: 'self_rating',
+      isCorrect: rating === 'good' || rating === 'easy' ? true : rating === 'again' ? false : null,
+      responseTimeMs: responseTimeMs ?? null,
+      metadata: { rating },
     });
 
     return {
@@ -1264,23 +1498,32 @@ export const studyPackService = {
       dueByPack.set(key, entry);
     }
 
-    const summaries = await buildPackSummaries(db, userId, packs);
-    const weakConcepts = summaries
-      .flatMap((summary) => {
-        const pack = packs.find((entry) => entry.id === summary.id)!;
-        return { summary, pack };
-      })
-      .filter((entry) => entry.summary.weakConcepts > 0)
-      .map((entry) => ({
-        packId: entry.pack.id,
-        packTitle: entry.pack.title,
-        weakConcepts: entry.summary.weakConcepts,
-        masteryPercent: entry.summary.masteryPercent,
+    const snapshots = await loadPackSnapshots(db, userId, packs, new Date());
+    const summaries = snapshots.map((snapshot) => snapshot.summary);
+    const weakConcepts = snapshots
+      .filter((snapshot) => snapshot.summary.weakConcepts > 0)
+      .map((snapshot) => ({
+        packId: snapshot.pack.id,
+        packTitle: snapshot.pack.title,
+        weakConcepts: snapshot.summary.weakConcepts,
+        masteryPercent: snapshot.summary.masteryPercent,
       }))
       .sort((a, b) => a.masteryPercent - b.masteryPercent);
+    const conceptsDue = snapshots.reduce(
+      (total, snapshot) =>
+        total + snapshot.progress.conceptStates.filter((entry) => isConceptDue(entry.state)).length,
+      0,
+    );
+    const testsToReview = snapshots.reduce(
+      (total, snapshot) =>
+        total + snapshot.progress.testAttempts.filter((attempt) => attempt.weakConceptIds.length > 0).length,
+      0,
+    );
 
     return {
       cardsDue: [...dueByPack.values()].reduce((total, entry) => total + entry.dueCount, 0),
+      conceptsDue,
+      testsToReview,
       packsNeedingReview: [...dueByPack.values()].sort((a, b) => b.dueCount - a.dueCount),
       weakConceptPacks: weakConcepts,
       weakConceptCount: weakConcepts.reduce((total, entry) => total + entry.weakConcepts, 0),
@@ -1294,9 +1537,9 @@ export const studyPackService = {
    */
   async today(db: Database, userId: string, now: Date = new Date()) {
     const packs = await db.packs.listByOwner(userId);
-    const summaries = await buildPackSummaries(db, userId, packs);
+    const snapshots = await loadPackSnapshots(db, userId, packs, now);
+    const summaries = snapshots.map((snapshot) => snapshot.summary);
     const summaryById = new Map(summaries.map((summary) => [summary.id, summary]));
-
     const exams = await db.packs.listUpcomingExams(userId, todayIso(now));
     const examSummary = exams.map((pack) => {
       const summary = summaryById.get(pack.id);
@@ -1311,61 +1554,182 @@ export const studyPackService = {
       };
     });
 
-    const tasks: {
-      type: 'review' | 'learn' | 'practice' | 'test' | 'add-material';
+    const sessions = await db.sessions.listByUser(userId);
+    const mistakesSince = now.getTime() - 7 * 86_400_000;
+    const recentMistakes = new Map<string, number>();
+    for (const snapshot of snapshots) {
+      for (const attempt of snapshot.progress.attempts) {
+        if (
+          attempt.conceptId &&
+          attempt.verdict === 'incorrect' &&
+          Date.parse(attempt.createdAt) >= mistakesSince
+        ) {
+          recentMistakes.set(
+            attempt.conceptId,
+            (recentMistakes.get(attempt.conceptId) ?? 0) + 1,
+          );
+        }
+      }
+      for (const testAttempt of snapshot.progress.testAttempts) {
+        if (Date.parse(testAttempt.createdAt) < mistakesSince) continue;
+        for (const answer of testAttempt.answers) {
+          if (answer.conceptId && answer.verdict === 'incorrect') {
+            recentMistakes.set(
+              answer.conceptId,
+              (recentMistakes.get(answer.conceptId) ?? 0) + 1,
+            );
+          }
+        }
+      }
+    }
+
+    type TodayAction = {
+      type: 'review' | 'learn' | 'practice' | 'test' | 'continue' | 'add-material' | 'generate-concepts' | 'generate-practice';
       label: string;
       description: string;
       packId: string | null;
       conceptId: string | null;
       conceptName: string | null;
-    }[] = [];
-
-    const totalDue = summaries.reduce((total, summary) => total + summary.dueCards, 0);
-    if (totalDue > 0) {
-      const first = summaries
-        .filter((summary) => summary.dueCards > 0)
-        .sort((a, b) => b.dueCards - a.dueCards)[0]!;
-      tasks.push({
-        type: 'review',
-        label: `Review ${totalDue} card${totalDue === 1 ? '' : 's'}`,
-        description: `Spaced repetition says they are ready. Start with ${first.title}.`,
-        packId: first.id,
-        conceptId: null,
-        conceptName: null,
+    };
+    const candidates: (TodayAction & {
+      priority: number;
+      examDaysLeft: number | null;
+      recency?: number;
+    })[] = [];
+    const addCandidate = (
+      task: TodayAction,
+      priority: number,
+      pack: StudyPackRecord | null,
+      recency?: string | null,
+    ) => {
+      candidates.push({
+        ...task,
+        priority,
+        examDaysLeft: pack?.examDate ? daysUntil(pack.examDate, now) : null,
+        recency: recency ? Date.parse(recency) : 0,
       });
-    }
+    };
 
-    for (const summary of summaries) {
-      if (tasks.length >= 4) break;
-      const pack = packs.find((entry) => entry.id === summary.id)!;
-      const context = await loadPackContext(db, pack);
-      const progress = await loadPackProgress(db, userId, context);
-      const action: RecommendedAction = progress.recommended;
-      if (action.type === 'learn' || action.type === 'practice') {
-        tasks.push({
-          type: action.type,
-          label: action.label,
-          description: `${pack.title} · ${action.description}`,
+    for (const snapshot of snapshots) {
+      const { pack, context, progress, summary } = snapshot;
+      const recentSession = sessions
+        .filter((session) => session.setId === pack.legacySetId && !session.endedAt)
+        .filter((session) => now.getTime() - Date.parse(session.startedAt) <= 24 * 60 * 60 * 1000)
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+      if (recentSession) {
+        addCandidate({
+          type: 'continue',
+          label: `Continue ${pack.title}`,
+          description: 'You have an unfinished study session.',
           packId: pack.id,
-          conceptId: action.conceptId,
-          conceptName: action.conceptName,
-        });
+          conceptId: null,
+          conceptName: null,
+        }, 125, pack, recentSession.startedAt);
+      }
+
+      const weak = progress.conceptStates
+        .filter((entry) => entry.state.attempts > 0 && entry.state.mastery < 0.3)
+        .sort((a, b) => a.state.mastery - b.state.mastery)[0];
+      if (weak) {
+        const mistakes = recentMistakes.get(weak.concept.id) ?? 0;
+        const hasPractice = context.questions.some((question) => question.conceptId === weak.concept.id);
+        const type = hasPractice ? 'practice' : 'learn';
+        addCandidate({
+          type,
+          label: `${hasPractice ? 'Practice' : 'Learn'} ${weak.concept.name}`,
+          description: mistakes > 0
+            ? `You answered ${mistakes} question${mistakes === 1 ? '' : 's'} incorrectly recently.`
+            : `Mastery is ${Math.round(weak.state.mastery * 100)}%; this concept needs another pass.`,
+          packId: pack.id,
+          conceptId: weak.concept.id,
+          conceptName: weak.concept.name,
+        }, 110, pack, weak.state.lastPracticedAt);
+      }
+
+      if (summary.dueCards > 0) {
+        addCandidate({
+          type: 'review',
+          label: `Review ${summary.dueCards} card${summary.dueCards === 1 ? '' : 's'} · ${pack.title}`,
+          description: `${summary.dueCards} cards are due today according to spaced repetition.`,
+          packId: pack.id,
+          conceptId: null,
+          conceptName: null,
+        }, 100, pack, progress.activity.slice().sort().at(-1));
+      }
+
+      const fresh = progress.conceptStates.find((entry) => entry.state.attempts === 0);
+      if (fresh) {
+        addCandidate({
+          type: 'learn',
+          label: `Learn ${fresh.concept.name}`,
+          description: 'This concept is new, so start by understanding it.',
+          packId: pack.id,
+          conceptId: fresh.concept.id,
+          conceptName: fresh.concept.name,
+        }, 90, pack);
+      }
+
+      if (context.concepts.length === 0 && context.sources.some((source) => source.status === 'ready')) {
+        addCandidate({
+          type: 'generate-concepts',
+          label: `Extract concepts · ${pack.title}`,
+          description: 'Your material is ready, but it does not have concepts to study yet.',
+          packId: pack.id,
+          conceptId: null,
+          conceptName: null,
+        }, 85, pack);
+      } else if (context.questions.length === 0 && context.concepts.length > 0) {
+        addCandidate({
+          type: 'generate-practice',
+          label: `Create practice questions · ${pack.title}`,
+          description: 'Add practice questions to check what you remember.',
+          packId: pack.id,
+          conceptId: null,
+          conceptName: null,
+        }, 65, pack);
+      } else if (context.questions.length > 0 && progress.conceptStates.every((entry) => entry.state.mastery >= 0.85)) {
+        addCandidate({
+          type: 'test',
+          label: `Prepare for a test · ${pack.title}`,
+          description: 'Your concepts look strong. A test can confirm they have stuck.',
+          packId: pack.id,
+          conceptId: null,
+          conceptName: null,
+        }, 60, pack);
+      }
+
+      // Existing recommendation rules remain the safe fallback for packs with
+      // incomplete material; the global ranking still applies the exam boost.
+      if (progress.recommended.type === 'learn' && !weak && !fresh) {
+        addCandidate({
+          type: 'learn',
+          label: progress.recommended.label,
+          description: progress.recommended.description,
+          packId: pack.id,
+          conceptId: progress.recommended.conceptId,
+          conceptName: progress.recommended.conceptName,
+        }, 55, pack);
       }
     }
 
-    if (tasks.length === 0 && summaries.length === 0) {
-      tasks.push({
+    if (candidates.length === 0) {
+      addCandidate({
         type: 'add-material',
         label: 'Add study material',
-        description: 'Upload notes or a PDF and Lerno builds a study pack for you.',
+        description: 'Upload notes or a PDF and Lerno will build your first study pack.',
         packId: null,
         conceptId: null,
         conceptName: null,
-      });
+      }, 0, null);
     }
+
+    const ranked = rankRecommendations(candidates);
+    const tasks = ranked.slice(0, 4).map(({ priority: _priority, examDaysLeft: _exam, recency: _recency, ...task }) => task);
+    const totalDue = summaries.reduce((total, summary) => total + summary.dueCards, 0);
 
     return {
       date: todayIso(now),
+      recommended: tasks[0]!,
       tasks,
       exams: examSummary,
       totalDue,

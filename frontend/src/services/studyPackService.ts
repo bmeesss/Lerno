@@ -1,5 +1,6 @@
 import { api } from '../lib/api';
 import type {
+  AdaptiveLearnNext,
   PackCardsPreview,
   PackConceptsPreview,
   PackPracticeGrade,
@@ -103,10 +104,20 @@ export const studyPackService = {
     api.patch<StudyPackConcept>(`/study-packs/${packId}/concepts/${conceptId}`, patch),
   removeConcept: (packId: string, conceptId: string) =>
     api.delete<void>(`/study-packs/${packId}/concepts/${conceptId}`),
-  rateConcept: (packId: string, conceptId: string, rating: 'again' | 'hard' | 'good' | 'easy') =>
+  nextLearnConcept: (packId: string, exclude: string[] = [], focusConceptId?: string) =>
+    api.get<AdaptiveLearnNext>(`/study-packs/${packId}/learn/next`, {
+      exclude: exclude.join(','),
+      focusConceptId,
+    }),
+  rateConcept: (
+    packId: string,
+    conceptId: string,
+    rating: 'again' | 'hard' | 'good' | 'easy',
+    responseTimeMs?: number,
+  ) =>
     api.post<{ conceptId: string; masteryPercent: number; attempts: number; weak: boolean }>(
       `/study-packs/${packId}/concepts/${conceptId}/rating`,
-      { rating },
+      { rating, responseTimeMs },
     ),
 
   /* AI previews + confirmed content */
@@ -121,8 +132,12 @@ export const studyPackService = {
   /* practice */
   practiceQueue: (packId: string, options: { conceptId?: string; limit?: number } = {}) =>
     api.get<PackPracticeQueue>(`/study-packs/${packId}/practice`, options),
-  gradePractice: (packId: string, questionId: string, answer: string) =>
-    api.post<PackPracticeGrade>(`/study-packs/${packId}/practice/attempts`, { questionId, answer }),
+  gradePractice: (packId: string, questionId: string, answer: string, responseTimeMs?: number) =>
+    api.post<PackPracticeGrade>(`/study-packs/${packId}/practice/attempts`, {
+      questionId,
+      answer,
+      responseTimeMs,
+    }),
 
   /* tests */
   createTest: (packId: string, mode: 'quick10' | 'quick20' | 'exam') =>

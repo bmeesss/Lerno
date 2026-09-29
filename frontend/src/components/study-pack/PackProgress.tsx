@@ -19,8 +19,8 @@ export function PackProgress({ pack, onChanged }: { pack: StudyPackDetail; onCha
   const concepts = [...pack.concepts].sort(
     (a, b) => a.masteryPercent - b.masteryPercent || a.position - b.position,
   );
-  const weak = concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 60);
-  const strong = concepts.filter((concept) => concept.masteryPercent >= 80);
+  const weak = concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent < 30);
+  const strong = concepts.filter((concept) => concept.attempts > 0 && concept.masteryPercent >= 85);
   const notStarted = concepts.filter((concept) => concept.attempts === 0);
 
   async function rebuildPlan() {

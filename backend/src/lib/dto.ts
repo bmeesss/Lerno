@@ -138,7 +138,13 @@ export const dto = {
       practiceQuestions: number;
       masteryPercent: number;
       weakConcepts: number;
+      learningConcepts: number;
+      masteredConcepts: number;
       dueCards: number;
+      lastStudiedAt: string | null;
+      cardsReviewed: number;
+      practiceAnswers: number;
+      testsCompleted: number;
       examDaysLeft: number | null;
     },
   ) => ({
@@ -159,7 +165,13 @@ export const dto = {
     practiceQuestions: extras.practiceQuestions,
     masteryPercent: extras.masteryPercent,
     weakConcepts: extras.weakConcepts,
+    learningConcepts: extras.learningConcepts,
+    masteredConcepts: extras.masteredConcepts,
     dueCards: extras.dueCards,
+    lastStudiedAt: extras.lastStudiedAt,
+    cardsReviewed: extras.cardsReviewed,
+    practiceAnswers: extras.practiceAnswers,
+    testsCompleted: extras.testsCompleted,
     summaryUpdatedAt: record.summaryUpdatedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,

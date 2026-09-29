@@ -39,6 +39,9 @@ const TASK_ICONS = {
   learn: IconBook,
   practice: IconZap,
   test: IconQuiz,
+  continue: IconBook,
+  'generate-concepts': IconLightbulb,
+  'generate-practice': IconQuiz,
   'add-material': IconSparkles,
 } as const;
 
@@ -77,6 +80,8 @@ export function MyStudyPage() {
   const totalDue = dueGroups.reduce((sum, group) => sum + group.dueCount, 0);
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
   const tasks = packToday?.tasks ?? [];
+  const recommended = packToday?.recommended ?? tasks[0];
+  const otherTasks = tasks.slice(1);
   const packs = packToday?.packs ?? [];
   const exams = packToday?.exams ?? [];
   // Real activity only: a pack counts as started when the student practised,
@@ -159,19 +164,31 @@ export function MyStudyPage() {
       <section className="dashboard-overview">
         <div className="study-feature">
           <div className="study-feature-copy">
-            <span className="eyebrow-label">Next up</span>
+            <span className="eyebrow-label">{recommended ? 'Recommended for you' : 'Next up'}</span>
             <h2>
-              {dashboard.today.goalReached ? 'Today’s goal is complete.' : next.label}
+              {recommended?.label ?? (dashboard.today.goalReached ? 'Today’s goal is complete.' : next.label)}
             </h2>
             <p>
-              {dashboard.continueSet
+              {recommended?.description ?? (dashboard.continueSet
                 ? `Continue with ${dashboard.continueSet.title}.`
                 : totalDue > 0
                   ? `${totalDue} cards are ready for review across your study packs.`
-                  : 'Choose a study pack or add new material to get started.'}
+                  : 'Choose a study pack or add new material to get started.')}
             </p>
-            <ButtonLink to={next.to}>
-              {dashboard.continueSet || totalDue > 0 ? 'Start studying' : 'Explore study packs'}
+            <ButtonLink to={recommended ? todayTaskHref(recommended) : next.to}>
+              {recommended?.type === 'practice'
+                ? 'Start practice'
+                : recommended?.type === 'review'
+                  ? 'Review now'
+                  : recommended?.type === 'continue'
+                    ? 'Continue session'
+                    : recommended?.type === 'add-material'
+                      ? 'Add study material'
+                      : recommended
+                        ? 'Start studying'
+                        : dashboard.continueSet || totalDue > 0
+                          ? 'Start studying'
+                          : 'Explore study packs'}
               <IconArrowRight size={17} />
             </ButtonLink>
           </div>
@@ -216,16 +233,16 @@ export function MyStudyPage() {
         </section>
       </section>
 
-      {tasks.length > 0 ? (
+      {otherTasks.length > 0 ? (
         <section aria-labelledby="my-study-today">
           <div className="section-title">
             <div>
-              <h2 id="my-study-today">What to study today</h2>
-              <p className="muted">Lerno looks at reviews, weak concepts and your exam dates.</p>
+              <h2 id="my-study-today">Also on your study list</h2>
+              <p className="muted">Your main action stays first; these are useful next steps.</p>
             </div>
           </div>
           <div className="today-plan">
-            {tasks.map((task) => {
+            {otherTasks.map((task) => {
               const Icon = TASK_ICONS[task.type];
               return (
                 <Link key={`${task.type}-${task.packId ?? 'none'}-${task.conceptId ?? ''}`} to={todayTaskHref(task)} className="card card-interactive today-plan-item">

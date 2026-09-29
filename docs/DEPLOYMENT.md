@@ -15,6 +15,10 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
    - `database/migrations/0006_profiles_role_privileges.sql` — **required before
      enabling MCP OAuth**: prevents bearer holders from changing `profiles.role`
      directly through Supabase. Apply even to existing databases.
+   - `database/migrations/0007_study_packs.sql` and `0008_study_packs_rls.sql` — Study Packs,
+     concepts, mastery, practice and test storage.
+   - `database/migrations/0009_adaptive_learning.sql` — confidence, concept review dates and
+     the shared learning-event ledger used by adaptive recommendations.
 3. Collect the credentials from _Project Settings → API_:
    - `Project URL` → `SUPABASE_URL`
    - `anon public` key → `SUPABASE_ANON_KEY` (safe for the browser; never used

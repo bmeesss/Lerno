@@ -16,6 +16,8 @@ import type {
   CardRecord,
   ConceptMasteryRecord,
   ConceptRecord,
+  LearningEventCreate,
+  LearningEventRecord,
   FavoriteRecord,
   NewCard,
   NewConcept,
@@ -269,12 +271,30 @@ function conceptMasteryRow(row: Row): ConceptMasteryRecord {
     userId: field(row, 'user_id'),
     conceptId: field(row, 'concept_id'),
     mastery: Number(field<number>(row, 'mastery') ?? 0),
+    confidence: Number(field<number>(row, 'confidence') ?? 0.5),
     attempts: field<number>(row, 'attempts') ?? 0,
     correctCount: field<number>(row, 'correct_count') ?? 0,
     incorrectCount: field<number>(row, 'incorrect_count') ?? 0,
     lastPracticedAt: field<string | null>(row, 'last_practiced_at') ?? null,
+    nextReviewAt: field<string | null>(row, 'next_review_at') ?? null,
     createdAt: field(row, 'created_at'),
     updatedAt: field(row, 'updated_at'),
+  };
+}
+
+function learningEventRow(row: Row): LearningEventRecord {
+  return {
+    id: field(row, 'id'),
+    userId: field(row, 'user_id'),
+    packId: field<string | null>(row, 'pack_id') ?? null,
+    conceptId: field<string | null>(row, 'concept_id') ?? null,
+    cardId: field<string | null>(row, 'card_id') ?? null,
+    questionId: field<string | null>(row, 'question_id') ?? null,
+    eventType: field(row, 'event_type') as LearningEventRecord['eventType'],
+    isCorrect: field<boolean | null>(row, 'is_correct') ?? null,
+    responseTimeMs: field<number | null>(row, 'response_time_ms') ?? null,
+    metadata: (field<Record<string, unknown> | null>(row, 'metadata') ?? {}) as Record<string, unknown>,
+    createdAt: field(row, 'created_at'),
   };
 }
 
@@ -686,6 +706,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .from('cards')
           .select('*')
           .eq('set_id', setId)
+          .order('position');
+        throwIfError(error);
+        return (data as Row[]).map(cardRow);
+      },
+      async listBySets(setIds) {
+        if (setIds.length === 0) return [];
+        const { data, error } = await client
+          .from('cards')
+          .select('*')
+          .in('set_id', setIds)
           .order('position');
         throwIfError(error);
         return (data as Row[]).map(cardRow);
@@ -1194,6 +1224,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
         throwIfError(error);
         return (data as Row[]).map(packSourceRow);
       },
+      async listByPacks(packIds) {
+        if (packIds.length === 0) return [];
+        const { data, error } = await client
+          .from('study_pack_sources')
+          .select('*')
+          .in('pack_id', packIds)
+          .order('created_at', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(packSourceRow);
+      },
       async listByOwner(ownerId) {
         const { data, error } = await client
           .from('study_pack_sources')
@@ -1275,6 +1315,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .from('concepts')
           .select('*')
           .eq('pack_id', packId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(conceptRow);
+      },
+      async listByPacks(packIds) {
+        if (packIds.length === 0) return [];
+        const { data, error } = await client
+          .from('concepts')
+          .select('*')
+          .in('pack_id', packIds)
           .order('position', { ascending: true });
         throwIfError(error);
         return (data as Row[]).map(conceptRow);
@@ -1378,10 +1428,12 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           user_id: record.userId,
           concept_id: record.conceptId,
           mastery: record.mastery,
+          confidence: record.confidence,
           attempts: record.attempts,
           correct_count: record.correctCount,
           incorrect_count: record.incorrectCount,
           last_practiced_at: record.lastPracticedAt,
+          next_review_at: record.nextReviewAt,
           updated_at: new Date().toISOString(),
         };
         const { data, error } = await client
@@ -1391,6 +1443,41 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .single();
         throwIfError(error);
         return conceptMasteryRow(data as Row);
+      },
+    },
+
+    learningEvents: {
+      async create(event: LearningEventCreate) {
+        const { data, error } = await client
+          .from('learning_events')
+          .insert({
+            user_id: event.userId,
+            pack_id: event.packId ?? null,
+            concept_id: event.conceptId ?? null,
+            card_id: event.cardId ?? null,
+            question_id: event.questionId ?? null,
+            event_type: event.eventType,
+            is_correct: event.isCorrect ?? null,
+            response_time_ms: event.responseTimeMs ?? null,
+            metadata: event.metadata ?? {},
+            ...(event.createdAt ? { created_at: event.createdAt } : {}),
+          })
+          .select()
+          .single();
+        throwIfError(error);
+        return learningEventRow(data as Row);
+      },
+      async listByUser(userId, since) {
+        let query = client
+          .from('learning_events')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        if (since) query = query.gte('created_at', since);
+        const { data, error } = await query;
+        throwIfError(error);
+        return (data as Row[]).map(learningEventRow);
       },
     },
 
@@ -1409,6 +1496,16 @@ function buildDatabase(client: SupabaseClient, admin: SupabaseClient | null): Da
           .from('practice_questions')
           .select('*')
           .eq('pack_id', packId)
+          .order('position', { ascending: true });
+        throwIfError(error);
+        return (data as Row[]).map(practiceQuestionRow);
+      },
+      async listByPacks(packIds) {
+        if (packIds.length === 0) return [];
+        const { data, error } = await client
+          .from('practice_questions')
+          .select('*')
+          .in('pack_id', packIds)
           .order('position', { ascending: true });
         throwIfError(error);
         return (data as Row[]).map(practiceQuestionRow);

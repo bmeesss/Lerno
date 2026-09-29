@@ -5,7 +5,8 @@ import { IconArrowRight, IconBook, IconLayers, IconLightbulb, IconZap } from '..
 import { useAsync } from '../hooks/useAsync';
 import { useAuth } from '../hooks/useAuth';
 import { studyPackService } from '../services/studyPackService';
-import type { PackReviewSummary } from '../types';
+import { todayTaskHref } from '../lib/studyPackRoutes';
+import type { PackReviewSummary, StudyPackToday } from '../types';
 
 /**
  * Review — pack-aware.
@@ -17,6 +18,10 @@ export function ReviewPage() {
   const { user } = useAuth();
   const { data, loading, error } = useAsync<PackReviewSummary | null>(
     () => (user ? studyPackService.reviewQueue() : Promise.resolve(null)),
+    [user?.id],
+  );
+  const { data: today } = useAsync<StudyPackToday | null>(
+    () => (user ? studyPackService.today() : Promise.resolve(null)),
     [user?.id],
   );
 
@@ -41,23 +46,34 @@ export function ReviewPage() {
   const firstDue = needsReview[0] ?? null;
   const firstWeak = weakPacks[0] ?? null;
 
-  const nextAction = firstDue
+  const nextAction = today?.recommended
     ? {
-        label: `Review ${data.cardsDue} card${data.cardsDue === 1 ? '' : 's'}`,
-        description: `Start with ${firstDue.title} — spaced repetition says these are ready.`,
-        to: firstDue.packId ? `/study-packs/${firstDue.packId}?tab=flashcards` : `/sets/${firstDue.packId}/study`,
+        label: today.recommended.label,
+        description: today.recommended.description,
+        to: todayTaskHref(today.recommended),
       }
-    : firstWeak
+    : firstDue
       ? {
-          label: `Practise your weak concepts`,
-          description: `${firstWeak.packTitle} has ${firstWeak.weakConcepts} concept${
-            firstWeak.weakConcepts === 1 ? '' : 's'
-          } below mastery — practice finds them.`,
-          to: `/study-packs/${firstWeak.packId}?tab=practice`,
+          label: `Review ${data.cardsDue} card${data.cardsDue === 1 ? '' : 's'}`,
+          description: `Start with ${firstDue.title} — spaced repetition says these are ready.`,
+          to: firstDue.packId ? `/study-packs/${firstDue.packId}?tab=flashcards` : '#',
         }
-      : null;
+      : firstWeak
+        ? {
+            label: `Practise your weak concepts`,
+            description: `${firstWeak.packTitle} has ${firstWeak.weakConcepts} concept${
+              firstWeak.weakConcepts === 1 ? '' : 's'
+            } below mastery — practice finds them.`,
+            to: `/study-packs/${firstWeak.packId}?tab=practice`,
+          }
+        : null;
 
-  const hasAnything = needsReview.length > 0 || weakPacks.length > 0;
+  const hasAnything =
+    needsReview.length > 0 ||
+    weakPacks.length > 0 ||
+    data.conceptsDue > 0 ||
+    data.testsToReview > 0 ||
+    Boolean(today?.recommended && today.recommended.type !== 'add-material');
 
   return (
     <div className="stack" style={{ gap: 24 }}>
@@ -88,9 +104,14 @@ export function ReviewPage() {
               <span className="muted">below mastery in your packs</span>
             </div>
             <div className="card review-summary-card">
-              <span className="pack-label">Packs to review</span>
-              <strong className="review-summary-value">{needsReview.length}</strong>
-              <span className="muted">with cards due today</span>
+              <span className="pack-label">Tests to review</span>
+              <strong className="review-summary-value">{data.testsToReview}</strong>
+              <span className="muted">with weak concepts to revisit</span>
+            </div>
+            <div className="card review-summary-card">
+              <span className="pack-label">Concepts due</span>
+              <strong className="review-summary-value">{data.conceptsDue}</strong>
+              <span className="muted">ready for spaced review</span>
             </div>
           </section>
 

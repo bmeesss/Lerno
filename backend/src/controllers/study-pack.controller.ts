@@ -180,8 +180,14 @@ export const studyPackController = {
   rateConcept: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     const { packId, conceptId } = req.params as { packId: string; conceptId: string };
-    const { rating } = req.body as { rating: ConceptRating };
-    sendOk(res, await studyPackService.rateConcept(req.db, req.auth.id, packId, conceptId, rating));
+    const { rating, responseTimeMs } = req.body as {
+      rating: ConceptRating;
+      responseTimeMs?: number;
+    };
+    sendOk(
+      res,
+      await studyPackService.rateConcept(req.db, req.auth.id, packId, conceptId, rating, responseTimeMs),
+    );
   }),
 
   /* ------------------------- generation + content -------------------------- */
@@ -229,9 +235,25 @@ export const studyPackController = {
     );
   }),
 
+  learnNext: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.auth) throw errors.unauthorized();
+    const { packId } = req.params as { packId: string };
+    const query = req.query as { exclude?: string[]; focusConceptId?: string };
+    sendOk(
+      res,
+      await studyPackService.nextLearnConcept(
+        req.db,
+        req.auth.id,
+        packId,
+        query.exclude ?? [],
+        query.focusConceptId,
+      ),
+    );
+  }),
+
   practiceAttempt: asyncHandler(async (req: Request, res: Response) => {
     const { packId } = req.params as { packId: string };
-    const body = req.body as { questionId: string; answer: string };
+    const body = req.body as { questionId: string; answer: string; responseTimeMs?: number };
     sendOk(res, await studyPackService.gradePractice(req.db, req.auth?.id ?? null, packId, body));
   }),
 

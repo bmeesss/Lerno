@@ -68,7 +68,13 @@ function pack(overrides: Partial<StudyPackSummary> = {}): StudyPackSummary {
     practiceQuestions: 6,
     masteryPercent: 0,
     weakConcepts: 0,
+    learningConcepts: 0,
+    masteredConcepts: 0,
     dueCards: 0,
+    lastStudiedAt: null,
+    cardsReviewed: 0,
+    practiceAnswers: 0,
+    testsCompleted: 0,
     summaryUpdatedAt: null,
     createdAt: '2026-09-27T09:00:00.000Z',
     updatedAt: '2026-09-27T09:05:00.000Z',
@@ -99,6 +105,28 @@ beforeEach(() => {
 });
 
 describe('MyStudyPage', () => {
+  it('renders the central recommendation, reason and matching practice CTA', async () => {
+    const recommendation = {
+      type: 'practice' as const,
+      label: 'Practice Osmosis',
+      description: 'You answered 3 questions incorrectly recently.',
+      packId: 'pack-1',
+      conceptId: 'concept-osmosis',
+      conceptName: 'Osmosis',
+    };
+    todayMock.mockResolvedValue(
+      today({ packs: [pack()], recommended: recommendation, tasks: [recommendation] }),
+    );
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Practice Osmosis' })).toBeInTheDocument();
+    expect(screen.getByText('You answered 3 questions incorrectly recently.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /start practice/i })).toHaveAttribute(
+      'href',
+      '/study-packs/pack-1?tab=practice&concept=concept-osmosis',
+    );
+  });
+
   it('offers a brand new pack as the next step with honest 0% progress', async () => {
     todayMock.mockResolvedValue(today({ packs: [pack()] }));
     renderPage();

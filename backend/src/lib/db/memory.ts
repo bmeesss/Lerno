@@ -14,6 +14,8 @@ import type {
   CardRecord,
   ConceptMasteryRecord,
   ConceptRecord,
+  LearningEventCreate,
+  LearningEventRecord,
   FavoriteRecord,
   NewCard,
   NewConcept,
@@ -63,6 +65,7 @@ export interface MemoryState {
   packSources: Map<string, StudyPackSourceRecord>;
   concepts: Map<string, ConceptRecord>;
   conceptMastery: Map<string, ConceptMasteryRecord>;
+  learningEvents: LearningEventRecord[];
   practiceQuestions: Map<string, PracticeQuestionRecord>;
   practiceAttempts: PracticeAttemptRecord[];
   tests: Map<string, TestRecord>;
@@ -89,6 +92,7 @@ export function createMemoryState(): MemoryState {
     packSources: new Map(),
     concepts: new Map(),
     conceptMastery: new Map(),
+    learningEvents: [],
     practiceQuestions: new Map(),
     practiceAttempts: [],
     tests: new Map(),
@@ -360,6 +364,12 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         return [...state.cards.values()]
           .filter((card) => card.setId === setId)
           .sort((a, b) => a.position - b.position);
+      },
+      async listBySets(setIds) {
+        const wanted = new Set(setIds);
+        return [...state.cards.values()]
+          .filter((card) => wanted.has(card.setId))
+          .sort((a, b) => a.setId.localeCompare(b.setId) || a.position - b.position);
       },
       async countBySets(setIds) {
         const counts: Record<string, number> = {};
@@ -748,6 +758,12 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           .filter((source) => source.packId === packId)
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       },
+      async listByPacks(packIds) {
+        const wanted = new Set(packIds);
+        return [...state.packSources.values()]
+          .filter((source) => wanted.has(source.packId))
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      },
       async listByOwner(ownerId) {
         return [...state.packSources.values()]
           .filter((source) => source.ownerId === ownerId)
@@ -812,6 +828,12 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         return [...state.concepts.values()]
           .filter((concept) => concept.packId === packId)
           .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+      },
+      async listByPacks(packIds) {
+        const wanted = new Set(packIds);
+        return [...state.concepts.values()]
+          .filter((concept) => wanted.has(concept.packId))
+          .sort((a, b) => a.packId.localeCompare(b.packId) || a.position - b.position);
       },
       async listByIds(ids) {
         const wanted = new Set(ids);
@@ -901,15 +923,42 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           userId: record.userId,
           conceptId: record.conceptId,
           mastery: record.mastery,
+          confidence: record.confidence ?? existing?.confidence ?? 0.5,
           attempts: record.attempts,
           correctCount: record.correctCount,
           incorrectCount: record.incorrectCount,
           lastPracticedAt: record.lastPracticedAt,
+          nextReviewAt: record.nextReviewAt === undefined ? (existing?.nextReviewAt ?? null) : record.nextReviewAt,
           createdAt: existing?.createdAt ?? timestamp,
           updatedAt: timestamp,
         };
         state.conceptMastery.set(key, saved);
         return saved;
+      },
+    },
+
+    learningEvents: {
+      async create(event: LearningEventCreate) {
+        const record: LearningEventRecord = {
+          id: randomUUID(),
+          userId: event.userId,
+          packId: event.packId ?? null,
+          conceptId: event.conceptId ?? null,
+          cardId: event.cardId ?? null,
+          questionId: event.questionId ?? null,
+          eventType: event.eventType,
+          isCorrect: event.isCorrect ?? null,
+          responseTimeMs: event.responseTimeMs ?? null,
+          metadata: event.metadata ?? {},
+          createdAt: event.createdAt ?? now(),
+        };
+        state.learningEvents.push(record);
+        return record;
+      },
+      async listByUser(userId, since) {
+        return state.learningEvents
+          .filter((event) => event.userId === userId && (!since || event.createdAt >= since))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       },
     },
 
@@ -921,6 +970,12 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         return [...state.practiceQuestions.values()]
           .filter((question) => question.packId === packId)
           .sort((a, b) => a.position - b.position);
+      },
+      async listByPacks(packIds) {
+        const wanted = new Set(packIds);
+        return [...state.practiceQuestions.values()]
+          .filter((question) => wanted.has(question.packId))
+          .sort((a, b) => a.packId.localeCompare(b.packId) || a.position - b.position);
       },
       async listByIds(ids) {
         const wanted = new Set(ids);

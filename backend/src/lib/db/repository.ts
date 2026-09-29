@@ -13,6 +13,8 @@ import type {
   ConceptMasteryRecord,
   ConceptMasteryUpsert,
   ConceptRecord,
+  LearningEventCreate,
+  LearningEventRecord,
   FavoriteRecord,
   NewCard,
   NewConcept,
@@ -121,6 +123,7 @@ export interface Database {
   cards: {
     get(id: string): Promise<CardRecord | null>;
     listBySet(setId: string): Promise<CardRecord[]>;
+    listBySets(setIds: string[]): Promise<CardRecord[]>;
     countBySets(setIds: string[]): Promise<Record<string, number>>;
     createMany(setId: string, cards: NewCard[]): Promise<CardRecord[]>;
     update(
@@ -256,6 +259,7 @@ export interface Database {
   packSources: {
     get(id: string): Promise<StudyPackSourceRecord | null>;
     listByPack(packId: string): Promise<StudyPackSourceRecord[]>;
+    listByPacks(packIds: string[]): Promise<StudyPackSourceRecord[]>;
     /**
      * Every source of one student, across their packs. Used to spot an
      * accidental re-import of the same material (content fingerprint).
@@ -292,6 +296,7 @@ export interface Database {
   concepts: {
     get(id: string): Promise<ConceptRecord | null>;
     listByPack(packId: string): Promise<ConceptRecord[]>;
+    listByPacks(packIds: string[]): Promise<ConceptRecord[]>;
     listByIds(ids: string[]): Promise<ConceptRecord[]>;
     countByPacks(packIds: string[]): Promise<Record<string, number>>;
     createMany(packId: string, concepts: NewConcept[]): Promise<ConceptRecord[]>;
@@ -311,9 +316,15 @@ export interface Database {
     upsert(record: ConceptMasteryUpsert): Promise<ConceptMasteryRecord>;
   };
 
+  learningEvents: {
+    create(event: LearningEventCreate): Promise<LearningEventRecord>;
+    listByUser(userId: string, since?: string): Promise<LearningEventRecord[]>;
+  };
+
   practiceQuestions: {
     get(id: string): Promise<PracticeQuestionRecord | null>;
     listByPack(packId: string): Promise<PracticeQuestionRecord[]>;
+    listByPacks(packIds: string[]): Promise<PracticeQuestionRecord[]>;
     listByIds(ids: string[]): Promise<PracticeQuestionRecord[]>;
     countByPacks(packIds: string[]): Promise<Record<string, number>>;
     createMany(packId: string, questions: NewPracticeQuestion[]): Promise<PracticeQuestionRecord[]>;

@@ -305,12 +305,45 @@ export interface ConceptMasteryRecord {
   conceptId: string;
   /** 0..1 (0 = unknown, 1 = mastered). */
   mastery: number;
+  /** Outcome reliability, updated from real correct/incorrect interactions. */
+  confidence: number;
   attempts: number;
   correctCount: number;
   incorrectCount: number;
   lastPracticedAt: string | null;
+  nextReviewAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type LearningEventType = 'learn' | 'flashcard' | 'practice' | 'test' | 'review' | 'self_rating';
+
+/** Append-only, shared record of student interactions across study modes. */
+export interface LearningEventRecord {
+  id: string;
+  userId: string;
+  packId: string | null;
+  conceptId: string | null;
+  cardId: string | null;
+  questionId: string | null;
+  eventType: LearningEventType;
+  isCorrect: boolean | null;
+  responseTimeMs: number | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface LearningEventCreate {
+  userId: string;
+  packId?: string | null;
+  conceptId?: string | null;
+  cardId?: string | null;
+  questionId?: string | null;
+  eventType: LearningEventType;
+  isCorrect?: boolean | null;
+  responseTimeMs?: number | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
 }
 
 export interface PracticeQuestionRecord {
@@ -434,8 +467,10 @@ export interface ConceptMasteryUpsert {
   userId: string;
   conceptId: string;
   mastery: number;
+  confidence?: number;
   attempts: number;
   correctCount: number;
   incorrectCount: number;
   lastPracticedAt: string | null;
+  nextReviewAt?: string | null;
 }

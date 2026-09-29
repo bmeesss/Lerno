@@ -9,6 +9,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { config } from './config.js';
+import { getMemoryState } from './lib/db/index.js';
 
 const { createCompletion } = vi.hoisted(() => ({ createCompletion: vi.fn() }));
 
@@ -385,6 +386,13 @@ describe('study packs: practice, mastery and tests', () => {
     expect(detail.body.data.progress.practiceAnswers).toBe(2);
     expect(detail.body.data.recommended.type).toBe('practice');
     expect(detail.body.data.recommended.conceptName).toBe(detail.body.data.progress.weakConcepts[0].name);
+
+    const today = await request(app).get('/api/study-packs/today').set(auth(token));
+    expect(today.body.data.recommended.type).toBe('practice');
+    expect(today.body.data.recommended.description).toMatch(/1 question incorrectly recently/);
+    const events = getMemoryState().learningEvents.filter((event) => event.packId === pack.id);
+    expect(events.map((event) => event.eventType)).toContain('practice');
+    expect(events.filter((event) => event.eventType === 'practice')).toHaveLength(2);
   });
 
   it('accepts the option text as an answer for multiple choice', async () => {
@@ -443,6 +451,45 @@ describe('study packs: practice, mastery and tests', () => {
     expect(detail.body.data.progress.testAttempts).toBe(1);
     expect(detail.body.data.progress.bestTestScorePercent).toBeGreaterThanOrEqual(0);
     expect(detail.body.data.counts.tests).toBe(1);
+    expect(detail.body.data.concepts.some((concept: { attempts: number }) => concept.attempts > 0)).toBe(true);
+    expect(
+      getMemoryState().learningEvents.filter(
+        (event) => event.packId === pack.id && event.eventType === 'test',
+      ),
+    ).toHaveLength(3);
+  });
+
+  it('feeds linked flashcard reviews into the same concept mastery model', async () => {
+    const token = await signup();
+    const pack = await createPack(token);
+    await addContent(token, pack.id, {
+      target: 'concepts',
+      concepts: [{ name: 'Osmosis', explanation: 'Water moves across a selectively permeable membrane.' }],
+    });
+    await addContent(token, pack.id, {
+      target: 'flashcards',
+      cards: [{ front: 'Define osmosis', back: 'Water movement across a membrane' }],
+    });
+    const detail = await request(app).get(`/api/study-packs/${pack.id}`).set(auth(token));
+    const cards = await request(app)
+      .get(`/api/sets/${pack.legacySetId}/cards`)
+      .set(auth(token));
+    const card = cards.body.data[0];
+    const reviewed = await request(app)
+      .post('/api/study/review')
+      .set(auth(token))
+      .send({ setId: pack.legacySetId, cardId: card.id, result: 'correct', responseTimeMs: 900 });
+    expect(reviewed.status).toBe(200);
+
+    const after = await request(app).get(`/api/study-packs/${pack.id}`).set(auth(token));
+    expect(after.body.data.concepts[0].masteryPercent).toBe(20);
+    expect(after.body.data.concepts[0].attempts).toBe(1);
+    const flashcardEvent = getMemoryState().learningEvents.find(
+      (event) => event.packId === pack.id && event.eventType === 'flashcard',
+    );
+    expect(flashcardEvent?.responseTimeMs).toBe(900);
+    expect(flashcardEvent?.isCorrect).toBe(true);
+    expect(detail.body.data.concepts[0].masteryPercent).toBe(0);
   });
 
   it('requires three practice questions before a test can be made', async () => {
@@ -473,6 +520,59 @@ describe('study packs: practice, mastery and tests', () => {
       .set(auth(token))
       .send({ rating: 'again' });
     expect(weaker.body.data.masteryPercent).toBe(5);
+
+    const adaptive = await request(app)
+      .get(`/api/study-packs/${pack.id}/learn/next`)
+      .set(auth(token));
+    expect(adaptive.body.data.concept.id).toBe(concept.id);
+    expect(adaptive.body.data.reason).toBe('weak');
+    expect(adaptive.body.data.concept.confidencePercent).toBeLessThan(50);
+
+    const next = await request(app)
+      .get(`/api/study-packs/${pack.id}/learn/next?exclude=${concept.id}`)
+      .set(auth(token));
+    expect(next.body.data.concept.id).not.toBe(concept.id);
+    const events = getMemoryState().learningEvents.filter((event) => event.packId === pack.id);
+    expect(events.some((event) => event.eventType === 'self_rating')).toBe(true);
+    expect(events.some((event) => event.eventType === 'learn')).toBe(true);
+  });
+
+  it('recommends continuing an unfinished study session with a clear reason', async () => {
+    const token = await signup();
+    const pack = await preparedPack(token);
+    const started = await request(app)
+      .post('/api/study/sessions')
+      .set(auth(token))
+      .send({ setId: pack.legacySetId });
+    expect(started.status).toBe(201);
+
+    const today = await request(app).get('/api/study-packs/today').set(auth(token));
+    expect(today.body.data.recommended.type).toBe('continue');
+    expect(today.body.data.recommended.description).toMatch(/unfinished study session/);
+  });
+
+  it('raises the priority of a pack with an imminent exam', async () => {
+    const token = await signup();
+    const weakPack = await preparedPack(token);
+    const weakQueue = await request(app)
+      .get(`/api/study-packs/${weakPack.id}/practice`)
+      .set(auth(token));
+    const weakQuestion = weakQueue.body.data.questions[0];
+    await request(app)
+      .post(`/api/study-packs/${weakPack.id}/practice/attempts`)
+      .set(auth(token))
+      .send({ questionId: weakQuestion.id, answer: 'wrong answer' });
+
+    const examDay = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    const examPack = await createPack(token, {
+      title: 'Biology exam pack',
+      examDate: examDay,
+    });
+    await addContent(token, examPack.id, { target: 'concepts', concepts: CONCEPTS.slice(0, 1) });
+
+    const today = await request(app).get('/api/study-packs/today').set(auth(token));
+    expect(today.body.data.recommended.packId).toBe(examPack.id);
+    expect(today.body.data.recommended.type).toBe('learn');
   });
 
   it('keeps review pack-aware: due cards and weak concepts per pack', async () => {
