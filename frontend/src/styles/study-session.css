@@ -24,7 +24,13 @@
 }
 
 .session-header > div {
+  flex: 1;
   min-width: 0;
+}
+
+.session-header .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .session-position {
@@ -81,20 +87,37 @@
   outline: none;
 }
 
-.session-question-text {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text);
+/* `.app-content h2` / `h3` size every heading in the shell; these need the same weight to take effect. */
+.app-content .session-question {
+  font-size: clamp(1.25rem, 3.6vw, 1.6rem);
 }
 
-.session-subheading {
-  display: block;
+.app-content .session-result-title {
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+}
+
+.app-content .mistake-prompt {
+  font-size: 1.1rem;
+}
+
+.app-content .session-subheading {
   margin: 0 0 var(--space-2);
   font-size: 0.78rem;
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.session-question-text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Small section labels ("What you will work on", "Needs practice"); sized below with .app-content weight. */
+.session-subheading {
+  display: block;
 }
 
 /* A spinner that can sit inside a button or a sentence. */
@@ -148,6 +171,14 @@
 .session-option:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Where :has() exists, a mouse or touch tap does not draw a ring; keyboard focus always does. */
+@supports selector(:has(*)) {
+  .session-option:focus-within:not(:has(input:focus-visible)),
+  .test-mode:focus-within:not(:has(input:focus-visible)) {
+    outline: none;
+  }
 }
 
 .session-option.is-selected {
@@ -414,13 +445,14 @@
 }
 
 .learn-rating-button {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-height: 76px;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + 6px);
+  overflow: hidden;
   border: 1.5px solid var(--control-border);
-  border-left-width: 6px;
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text);
@@ -429,6 +461,15 @@
   transition:
     background 0.15s,
     border-color 0.15s;
+}
+
+/* The colour is a hint next to the word (Again / Hard / Good / Easy), never the message. */
+.learn-rating-button::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--rating-color, var(--border-strong));
 }
 
 .learn-rating-button:hover:not(:disabled) {
@@ -455,19 +496,19 @@
 }
 
 .learn-rating-again {
-  border-left-color: var(--danger);
+  --rating-color: var(--danger);
 }
 
 .learn-rating-hard {
-  border-left-color: var(--warning);
+  --rating-color: var(--warning);
 }
 
 .learn-rating-good {
-  border-left-color: var(--accent-border);
+  --rating-color: var(--accent-border);
 }
 
 .learn-rating-easy {
-  border-left-color: var(--accent);
+  --rating-color: var(--accent);
 }
 
 @media (min-width: 640px) {
@@ -536,6 +577,9 @@
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
+  /* Short labels must wrap between words, never inside one ("Estimate|d"). */
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .session-facts dt {
@@ -632,6 +676,25 @@ a.session-concept-chip:hover {
   width: 100%;
   min-height: 52px;
   font-size: 1rem;
+}
+
+/* On a phone the three facts read better as rows than as three cramped columns. */
+@media (max-width: 479px) {
+  .session-facts {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .session-facts > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .session-facts dd {
+    margin: 0;
+  }
 }
 
 @media (min-width: 640px) {
@@ -903,12 +966,12 @@ a.session-concept-chip:hover {
   color: var(--text);
 }
 
-.mistake-wrong {
+.mistake-facts .mistake-wrong {
   color: var(--danger);
   font-weight: 600;
 }
 
-.mistake-right {
+.mistake-facts .mistake-right {
   color: var(--accent-text);
   font-weight: 650;
 }

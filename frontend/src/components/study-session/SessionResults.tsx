@@ -5,7 +5,7 @@ import { formatMinutes, nextStepHref } from '../../lib/studyPackRoutes';
 import type { LearningSession, SessionResult } from '../../types';
 
 function duration(seconds: number): string {
-  if (seconds < 60) return 'under a minute';
+  if (seconds < 60) return '< 1 min';
   return formatMinutes(Math.round(seconds / 60));
 }
 

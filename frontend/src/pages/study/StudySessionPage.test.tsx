@@ -6,7 +6,13 @@ import { ApiError } from '../../lib/api';
 import { studyPackService } from '../../services/studyPackService';
 import { studySessionService } from '../../services/studySessionService';
 import { mistakes, questionItem, result, session } from '../../test-fixtures/study';
-import type { ItemFeedback, LearningSession, SessionItem, SessionItemResponse } from '../../types';
+import type {
+  ItemFeedback,
+  LearningSession,
+  SessionItem,
+  SessionItemResponse,
+  SessionResult,
+} from '../../types';
 import { StudySessionPage } from './StudySessionPage';
 
 vi.mock('../../services/studySessionService', () => ({
@@ -220,7 +226,7 @@ describe('practice session', () => {
 });
 
 describe('finishing a practice session', () => {
-  async function finishOneQuestion(mistakeCount = 1) {
+  async function finishOneQuestion(mistakeCount = 1, resultPatch: Partial<SessionResult> = {}) {
     const user = userEvent.setup();
     const only = questionItem('i1');
     svc.get.mockResolvedValue(session({ items: [only] }));
@@ -232,7 +238,7 @@ describe('finishing a practice session', () => {
       status: 'completed',
       answeredCount: 1,
       completedAt: '2026-09-29T09:30:00.000Z',
-      result: result({ mistakeCount }),
+      result: result({ mistakeCount, ...resultPatch }),
     });
     svc.complete.mockResolvedValue(completed);
     renderRunner();
@@ -261,6 +267,13 @@ describe('finishing a practice session', () => {
       '/study-packs/pack-1?tab=practice&concept=c2',
     );
     expect(screen.getByText('You missed 1 question on it.')).toBeInTheDocument();
+  });
+
+  it('says "< 1 min" for a session of a few seconds, not a rounded-down "0 min"', async () => {
+    await finishOneQuestion(1, { durationSeconds: 25 });
+    const summary = await screen.findByRole('group', { name: 'Session summary' });
+    expect(within(summary).getByText('< 1 min')).toBeInTheDocument();
+    expect(within(summary).queryByText(/0 min/)).not.toBeInTheDocument();
   });
 
   it('offers "Review mistakes" from the result, and only when there are mistakes', async () => {

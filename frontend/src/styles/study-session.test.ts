@@ -47,7 +47,10 @@ describe('study experience styles', () => {
 
   describe.each(Object.entries(sheets))('%s', (name, css) => {
     it('only uses design tokens that exist, so light and dark keep their tested contrast', () => {
-      const defined = new Set([...tokens.matchAll(/(--[\w-]+):/g)].map((match) => match[1]!));
+      // Design tokens, plus custom properties a sheet declares for itself (e.g. --rating-color).
+      const defined = new Set(
+        [...(tokens + css).matchAll(/(--[\w-]+):/g)].map((match) => match[1]!),
+      );
       const used = [...css.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]!);
       expect(used.length).toBeGreaterThan(20);
       const unknown = [...new Set(used)].filter((token) => !defined.has(token));
@@ -66,12 +69,13 @@ describe('study experience styles', () => {
         const selectors = match[1]!.split(',').map((entry) => entry.trim());
         for (const selector of selectors) {
           // Headings with tabindex="-1" receive focus from the page so screen readers start there.
-          if (
-            !/^(\.session-question|\.session-result-title|#mistakes-heading)(:focus)?$/.test(
+          const focusedByCode =
+            /^(\.session-question|\.session-result-title|#mistakes-heading)(:focus)?$/.test(
               selector,
-            )
-          )
-            offenders.push(selector);
+            );
+          // Cards may drop the ring only when the radio inside is NOT keyboard-focused (a pointer tap).
+          const pointerOnly = /:focus-within:not\(:has\(input:focus-visible\)\)$/.test(selector);
+          if (!focusedByCode && !pointerOnly) offenders.push(selector);
         }
       }
       expect(offenders).toEqual([]);
@@ -137,6 +141,55 @@ describe('study session screens on a phone', () => {
     // The styling differs, and QuestionInput renders a text badge for both (see its test).
     expect(blocks(css, '.session-option.is-correct')[0]).toMatch(/border-color:\s*var\(--accent\)/);
     expect(blocks(css, '.session-option.is-wrong')[0]).toMatch(/border-color:\s*var\(--danger\)/);
+  });
+
+  it('keeps the session header readable: the Leave button never wraps, the title takes the space', () => {
+    expect(blocks(css, '.session-header .btn')[0]).toMatch(/white-space:\s*nowrap/);
+    expect(blocks(css, '.session-header .btn')[0]).toMatch(/flex-shrink:\s*0/);
+    expect(blocks(css, '.session-header > div')[0]).toMatch(/min-width:\s*0/);
+  });
+
+  it('never breaks a word inside the facts, and stacks them as rows on a phone', () => {
+    expect(blocks(css, '.session-facts > div')[0]).toMatch(/overflow-wrap:\s*normal/);
+    const phone = css.slice(css.indexOf('@media (max-width: 479px)'));
+    const grid = blocks(
+      phone.slice(0, phone.indexOf('@media (min-width: 640px)')),
+      '.session-facts',
+    )[0]!;
+    expect(grid).toMatch(/grid-template-columns:\s*1fr/);
+  });
+
+  it('colours the answers in the mistake review (specific enough to beat the plain dd rule)', () => {
+    expect(blocks(css, '.mistake-facts .mistake-wrong')[0]).toMatch(/color:\s*var\(--danger\)/);
+    expect(blocks(css, '.mistake-facts .mistake-right')[0]).toMatch(
+      /color:\s*var\(--accent-text\)/,
+    );
+  });
+
+  it('draws the rating colour as a clipped bar, with the word carrying the meaning', () => {
+    expect(blocks(css, '.learn-rating-button')[0]).toMatch(/overflow:\s*hidden/);
+    expect(blocks(css, '.learn-rating-button::before')[0]).toMatch(
+      /background:\s*var\(--rating-color/,
+    );
+    for (const rating of ['again', 'hard', 'good', 'easy']) {
+      expect(blocks(css, `.learn-rating-${rating}`)[0]).toMatch(/--rating-color:/);
+    }
+  });
+
+  it('shows the focus ring on keyboard focus even where :has() is missing', () => {
+    // The base rule always draws it; the :has() rule only hides it for pointer taps.
+    expect(blocks(css, '.session-option:focus-within')[0]).toMatch(/outline:\s*2px solid/);
+    expect(css).toMatch(/@supports selector\(:has\(\*\)\)/);
+    expect(css).toMatch(/:not\(:has\(input:focus-visible\)\)/);
+  });
+
+  it('sizes the session headings with enough weight to beat the shell heading styles', () => {
+    // `.app-content h2` has higher specificity than a bare class, so a plain `.session-question` never applied.
+    expect(blocks(css, '.app-content .session-question')[0]).toMatch(
+      /font-size:\s*clamp\(1\.25rem/,
+    );
+    expect(blocks(css, '.app-content .session-result-title')[0]).toMatch(/font-size:\s*clamp\(/);
+    expect(blocks(css, '.app-content .session-subheading')[0]).toMatch(/font-size:\s*0\.78rem/);
   });
 
   it('respects reduced motion', () => {
