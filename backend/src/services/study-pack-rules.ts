@@ -19,7 +19,6 @@ import type {
   ConceptMasteryRecord,
   ConceptRecord,
   PracticeQuestionRecord,
-  StudyPlanSession,
 } from '../lib/db/types.js';
 
 /* --------------------------------- grading -------------------------------- */
@@ -422,107 +421,6 @@ export function addDaysIso(dayIso: string, days: number): string {
 /** Today's calendar day (YYYY-MM-DD) in the student's timezone (UTC by default). */
 export function todayIso(now: Date = new Date(), timeZone: string = DEFAULT_TIMEZONE): string {
   return todayInZone(timeZone, now);
-}
-
-export interface StudyPlanInput {
-  title: string;
-  days: number;
-  minutesPerDay: number;
-  /** Days actually needed for the first pass over all concepts/cards. */
-  conceptCount: number;
-  cardCount: number;
-  questionCount: number;
-  dueCards: number;
-  weakConceptNames: string[];
-  startDay: string;
-}
-
-/**
- * Builds a practical, deterministic study plan: a first pass over the material
- * (concepts), then interleaved practice and spaced review with a final exam
- * simulation. No AI required, so the plan always exists once there is an exam
- * date — it can later be enriched by the AI planner.
- */
-export function buildStudyPlan(input: StudyPlanInput): { overview: string; sessions: StudyPlanSession[] } {
-  const days = Math.max(1, Math.min(60, Math.round(input.days)));
-  const minutes = Math.max(10, Math.min(180, Math.round(input.minutesPerDay)));
-
-  // Roughly 4 concepts or 12 cards per study day as the first-pass workload.
-  const workloadDays =
-    input.conceptCount > 0 || input.cardCount > 0
-      ? Math.ceil(Math.max(input.conceptCount / 4, input.cardCount / 12))
-      : 1;
-  const learningDays = Math.max(1, Math.min(days - 1 > 0 ? days - 1 : days, workloadDays));
-  const practiceReady = input.questionCount > 0;
-
-  const sessions: StudyPlanSession[] = [];
-  for (let day = 1; day <= days; day += 1) {
-    const date = addDaysIso(input.startDay, day - 1);
-    const isExamEve = day === days;
-    const focusConcept = input.weakConceptNames[(day - 1) % Math.max(1, input.weakConceptNames.length)];
-
-    if (isExamEve) {
-      sessions.push({
-        day,
-        date,
-        focus: 'Exam simulation and final review',
-        activities: [
-          'Take one exam simulation without hints',
-          'Review every mistake from the test',
-          'Review the cards that are due today',
-        ],
-        minutes,
-      });
-      continue;
-    }
-
-    if (day <= learningDays) {
-      const activities = [
-        input.conceptCount > 0
-          ? `Learn up to ${Math.min(3, input.conceptCount)} concepts using your mastery-first queue`
-          : null,
-        input.cardCount > 0 ? 'Study the matching flashcards' : null,
-        practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
-        day === 1 && input.dueCards > 0 ? `Review ${Math.min(8, input.dueCards)} cards due now` : null,
-        focusConcept ? `Revisit weak concept: ${focusConcept}` : null,
-      ].filter((activity): activity is string => activity !== null);
-      sessions.push({
-        day,
-        date,
-        focus: input.conceptCount > 0 ? 'Learn new concepts' : 'Learn new flashcards',
-        activities: activities.length > 0 ? activities : [`Study ${input.title}`],
-        minutes,
-      });
-      continue;
-    }
-
-    const activities = [
-      focusConcept ? `Practice weak concept: ${focusConcept}` : null,
-      practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
-      input.dueCards > 0 ? `Review up to ${Math.min(8, input.dueCards)} due cards` : null,
-      day >= days - 2 && input.questionCount >= 3 ? 'Take a practice test and review its mistakes' : null,
-      !focusConcept && !practiceReady && input.cardCount > 0 ? 'Review flashcards to check recall' : null,
-    ].filter((activity): activity is string => activity !== null);
-    sessions.push({
-      day,
-      date,
-      focus: day % 2 === 0 ? 'Practice weak topics' : 'Spaced review',
-      activities: activities.length > 0 ? activities : ['Check your current mastery and adjust the next session'],
-      minutes,
-    });
-  }
-
-  const overviewParts = [
-    `${days} days of study at ${minutes} minutes per day.`,
-    input.conceptCount > 0 ? `${input.conceptCount} concepts to understand.` : null,
-    input.cardCount > 0 ? `${input.cardCount} flashcards to learn.` : null,
-    input.dueCards > 0 ? `${input.dueCards} cards are already due for review.` : null,
-    input.weakConceptNames.length > 0
-      ? `Weakest right now: ${input.weakConceptNames.slice(0, 3).join(', ')}.`
-      : null,
-  ].filter((part): part is string => part !== null);
-
-  return { overview: overviewParts.join(' '), sessions };
 }
 
 /* --------------------------- recommended action --------------------------- */

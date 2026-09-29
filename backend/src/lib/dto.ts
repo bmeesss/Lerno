@@ -251,6 +251,18 @@ export const dto = {
     ...(includeAnswer ? { correctAnswer: record.correctAnswer } : {}),
   }),
 
+  /** A question as shown during a test: no answer and no explanation until it is over. */
+  testQuestion: (record: PracticeQuestionRecord) => ({
+    id: record.id,
+    packId: record.packId,
+    conceptId: record.conceptId,
+    sourceId: record.sourceId,
+    prompt: record.prompt,
+    questionType: record.questionType,
+    options: record.options,
+    position: record.position,
+  }),
+
   testAttempt: (record: TestAttemptRecord, extra: { packTitle: string | null }) => ({
     id: record.id,
     testId: record.testId,
