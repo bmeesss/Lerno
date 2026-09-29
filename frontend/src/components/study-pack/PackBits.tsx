@@ -54,6 +54,7 @@ export function sourceKindLabel(kind: PackSourceKind): string {
 }
 
 const SOURCE_STATUS_LABEL: Record<PackSourceStatus, string> = {
+  pending: 'Waiting',
   uploading: 'Uploading',
   processing: 'Processing',
   ready: 'Ready',
@@ -64,7 +65,42 @@ export function SourceStatusBadge({ status }: { status: PackSourceStatus }) {
   if (status === 'ready') return <Badge variant="accent">{SOURCE_STATUS_LABEL.ready}</Badge>;
   if (status === 'failed') return <Badge variant="danger">{SOURCE_STATUS_LABEL.failed}</Badge>;
   if (status === 'processing') return <Badge variant="warning">{SOURCE_STATUS_LABEL.processing}</Badge>;
-  return <Badge>{SOURCE_STATUS_LABEL.uploading}</Badge>;
+  return <Badge>{SOURCE_STATUS_LABEL[status]}</Badge>;
+}
+
+/** "03:42" / "1:02:11" — transcript timestamps in provenance labels. */
+export function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
+}
+
+/** Where a source came from, in the student's words (never a model guess). */
+export function sourceOriginLabel(source: {
+  kind: PackSourceKind;
+  channel?: string | null;
+  slideCount?: number | null;
+  durationSeconds?: number | null;
+  extractedBy?: string | null;
+}): string | null {
+  if (source.kind === 'youtube') {
+    return source.channel ? `YouTube · ${source.channel}` : 'YouTube video';
+  }
+  if (source.kind === 'audio') {
+    return source.durationSeconds
+      ? `Recording · ${formatClock(source.durationSeconds)}`
+      : 'Recording';
+  }
+  if (source.kind === 'powerpoint') {
+    return source.slideCount
+      ? `${source.slideCount} slide${source.slideCount === 1 ? '' : 's'}`
+      : 'Presentation';
+  }
+  if (source.kind === 'image') return source.extractedBy === 'ocr' ? 'Photo · read with OCR' : 'Photo';
+  return null;
 }
 
 /** Human-readable size of an imported source. */
@@ -73,10 +109,18 @@ export function sourceSizeLabel(source: {
   characterCount: number;
   pageCount: number | null;
   legacySetId: string | null;
+  slideCount?: number | null;
+  durationSeconds?: number | null;
 }): string {
   if (source.kind === 'set') return 'Cards imported';
   if (source.kind === 'pdf' && source.pageCount) {
     return `${source.pageCount} page${source.pageCount === 1 ? '' : 's'}`;
+  }
+  if (source.kind === 'powerpoint' && source.slideCount) {
+    return `${source.slideCount} slide${source.slideCount === 1 ? '' : 's'}`;
+  }
+  if (source.kind === 'audio' && source.durationSeconds) {
+    return formatClock(source.durationSeconds);
   }
   if (source.characterCount >= 1000) {
     return `${(source.characterCount / 1000).toFixed(1)}k characters`;

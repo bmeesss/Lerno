@@ -1,6 +1,10 @@
 import { api } from '../lib/api';
 import type {
   AdaptiveLearnNext,
+  GenerationSettings,
+  RegeneratableKind,
+  RegeneratedItem,
+  StudyContentPreview,
   PackCardsPreview,
   PackConceptsPreview,
   PackPracticeGrade,
@@ -53,10 +57,27 @@ export interface PracticeQuestionInput {
   explanation: string;
 }
 
+/** Optional provenance a reviewed item may carry (verified again server-side). */
+export interface ContentProvenance {
+  sourceId?: string | null;
+  refLabel?: string | null;
+  conceptId?: string | null;
+  importance?: number | null;
+  difficulty?: 'easy' | 'medium' | 'hard' | null;
+}
+
 export type ApplyContentInput =
   | { target: 'summary'; summary: string; sourceId: string | null }
-  | { target: 'concepts'; concepts: { name: string; explanation: string }[]; sourceId: string | null }
-  | { target: 'flashcards'; cards: { front: string; back: string }[]; sourceId: string | null }
+  | {
+      target: 'concepts';
+      concepts: ({ name: string; explanation: string } & ContentProvenance)[];
+      sourceId: string | null;
+    }
+  | {
+      target: 'flashcards';
+      cards: ({ front: string; back: string } & ContentProvenance)[];
+      sourceId: string | null;
+    }
   | { target: 'practice'; questions: PracticeQuestionInput[]; sourceId: string | null };
 
 export type ApplyContentResult =
@@ -90,6 +111,31 @@ export const studyPackService = {
   ) => api.patch<StudyPackSummary>(`/study-packs/${packId}`, patch),
 
   remove: (packId: string) => api.delete<void>(`/study-packs/${packId}`),
+
+  /**
+   * The full review bundle: summary, concepts, flashcards and practice in one
+   * call, all generated from the same analysis. Nothing is stored until the
+   * student accepts, and generation never overwrites existing content.
+   */
+  generateBundle: (
+    packId: string,
+    options: { sourceId?: string | null; settings?: Partial<GenerationSettings> } = {},
+  ) =>
+    api.post<StudyContentPreview>(`/study-packs/${packId}/generate/bundle`, {
+      sourceId: options.sourceId ?? null,
+      ...(options.settings ? { settings: options.settings } : {}),
+    }),
+
+  /** Replaces one item with a freshly validated one; approved content is kept. */
+  regenerateItem: (
+    packId: string,
+    input: {
+      kind: RegeneratableKind;
+      current: Record<string, unknown>;
+      sourceId?: string | null;
+      settings?: Partial<GenerationSettings>;
+    },
+  ) => api.post<RegeneratedItem>(`/study-packs/${packId}/generate/regenerate`, input),
 
   /* sources */
   addSource: (packId: string, input: AddSourceInput) =>
