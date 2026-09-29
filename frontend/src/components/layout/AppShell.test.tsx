@@ -29,7 +29,7 @@ describe('Lerno workspace navigation', () => {
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
     for (const label of ['Study', 'Library', 'You'])
       expect(within(nav).getByText(label)).toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'My subjects' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Subjects' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -39,12 +39,15 @@ describe('Lerno workspace navigation', () => {
     );
   });
 
-  it('exposes Study Studio as a distinct authenticated navigation destination', () => {
+  it('keeps the AI tutor and Study Studio reachable from the sidebar', () => {
     renderShell('/ai/studio');
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
-    expect(within(nav).getByRole('link', { name: 'Study Studio' })).toHaveAttribute('aria-current', 'page');
-    expect(within(nav).getByRole('link', { name: 'Lerno AI' })).not.toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Study Studio', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'AI Tutor' })).toHaveAttribute('href', '/ai');
+    expect(within(nav).getByRole('link', { name: 'Study packs' })).toHaveAttribute(
+      'href',
+      '/study-packs',
+    );
+    expect(screen.getByText('AI Tutor', { selector: 'strong' })).toBeInTheDocument();
   });
 
   it('makes every page reachable from the mobile More dialog and restores focus', async () => {
@@ -52,8 +55,8 @@ describe('Lerno workspace navigation', () => {
     renderShell();
     const more = screen.getByRole('button', { name: 'More' });
     await user.click(more);
-    const dialog = screen.getByRole('dialog', { name: 'Your workspace' });
-    expect(within(dialog).getByRole('link', { name: 'My subjects' })).toHaveAttribute(
+    const dialog = screen.getByRole('dialog', { name: 'Lerno' });
+    expect(within(dialog).getByRole('link', { name: 'Subjects' })).toHaveAttribute(
       'href',
       '/subjects',
     );

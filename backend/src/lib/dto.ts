@@ -3,13 +3,19 @@
 import type {
   CardProgressRecord,
   CardRecord,
+  ConceptRecord,
+  PracticeQuestionRecord,
   ProfileRecord,
   QuizAttemptRecord,
   QuizQuestionRecord,
   ReportRecord,
+  StudyPackRecord,
+  StudyPackSourceRecord,
+  StudyPlanRecord,
   StudySessionRecord,
   StudySetRecord,
   SubjectRecord,
+  TestAttemptRecord,
 } from './db/types.js';
 
 export const dto = {
@@ -114,4 +120,123 @@ export const dto = {
     resolvedAt: record.resolvedAt,
     resolvedBy: record.resolvedBy,
   }),
+
+  /* ------------------------------ study packs ----------------------------- */
+
+  studyPackSummary: (
+    record: StudyPackRecord,
+    extras: {
+      sources: number;
+      flashcards: number;
+      concepts: number;
+      practiceQuestions: number;
+      masteryPercent: number;
+      weakConcepts: number;
+      dueCards: number;
+      examDaysLeft: number | null;
+    },
+  ) => ({
+    id: record.id,
+    ownerId: record.ownerId,
+    subjectId: record.subjectId,
+    subjectName: record.subjectName,
+    title: record.title,
+    description: record.description,
+    level: record.level,
+    visibility: record.visibility,
+    examDate: record.examDate,
+    examDaysLeft: extras.examDaysLeft,
+    legacySetId: record.legacySetId,
+    sources: extras.sources,
+    flashcards: extras.flashcards,
+    concepts: extras.concepts,
+    practiceQuestions: extras.practiceQuestions,
+    masteryPercent: extras.masteryPercent,
+    weakConcepts: extras.weakConcepts,
+    dueCards: extras.dueCards,
+    summaryUpdatedAt: record.summaryUpdatedAt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
+
+  packSource: (record: StudyPackSourceRecord) => ({
+    id: record.id,
+    packId: record.packId,
+    kind: record.kind,
+    title: record.title,
+    status: record.status,
+    characterCount: record.characterCount,
+    pageCount: record.pageCount,
+    failureReason: record.failureReason,
+    legacySetId: record.legacySetId,
+    origin: record.origin,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
+
+  concept: (
+    record: ConceptRecord,
+    extras: {
+      sourceTitle: string | null;
+      masteryPercent: number;
+      attempts: number;
+      cardCount: number;
+      questionCount: number;
+    },
+  ) => ({
+    id: record.id,
+    packId: record.packId,
+    name: record.name,
+    explanation: record.explanation,
+    sourceId: record.sourceId,
+    sourceTitle: extras.sourceTitle,
+    origin: record.origin,
+    position: record.position,
+    masteryPercent: extras.masteryPercent,
+    attempts: extras.attempts,
+    cardCount: extras.cardCount,
+    questionCount: extras.questionCount,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
+
+  practiceQuestion: (record: PracticeQuestionRecord, includeAnswer = false) => ({
+    id: record.id,
+    packId: record.packId,
+    conceptId: record.conceptId,
+    sourceId: record.sourceId,
+    prompt: record.prompt,
+    questionType: record.questionType,
+    options: record.options,
+    explanation: record.explanation,
+    position: record.position,
+    ...(includeAnswer ? { correctAnswer: record.correctAnswer } : {}),
+  }),
+
+  testAttempt: (record: TestAttemptRecord, extra: { packTitle: string | null }) => ({
+    id: record.id,
+    testId: record.testId,
+    packId: record.packId,
+    packTitle: extra.packTitle,
+    score: record.score,
+    total: record.total,
+    correctCount: record.correctCount,
+    partialCount: record.partialCount,
+    incorrectCount: record.incorrectCount,
+    answers: record.answers,
+    strongConceptIds: record.strongConceptIds,
+    weakConceptIds: record.weakConceptIds,
+    createdAt: record.createdAt,
+  }),
+
+  studyPlan: (record: StudyPlanRecord) => ({
+    id: record.id,
+    packId: record.packId,
+    examDate: record.examDate,
+    overview: record.overview,
+    sessions: record.sessions,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }),
 };
+

@@ -27,6 +27,8 @@ import { PracticePage } from './pages/study/PracticePage';
 import { StudyPage } from './pages/study/StudyPage';
 import { AiStudyPage } from './pages/sets/AiStudyPage';
 import { MyStudyPage } from './pages/study/MyStudyPage';
+import { StudyPacksPage } from './pages/study-packs/StudyPacksPage';
+import { StudyPackPage } from './pages/study-packs/StudyPackPage';
 import { SubjectDetailPage } from './pages/subjects/SubjectDetailPage';
 import { SubjectsPage } from './pages/subjects/SubjectsPage';
 
@@ -70,6 +72,8 @@ export function App() {
         <Route path="/ai/studio" element={authed(<AIStudioPage />)} />
         <Route path="/subjects" element={authed(<SubjectsPage />)} />
         <Route path="/subjects/:subjectId" element={authed(<SubjectDetailPage />)} />
+        <Route path="/study-packs" element={authed(<StudyPacksPage />)} />
+        <Route path="/study-packs/:packId" element={<StudyPackPage />} />
         <Route path="/sets" element={authed(<MySetsPage />)} />
         <Route path="/sets/new" element={authed(<SetEditorPage />)} />
         <Route path="/sets/:setId/edit" element={authed(<SetEditorPage />)} />

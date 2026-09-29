@@ -7,38 +7,55 @@ import {
   IconBook,
   IconCards,
   IconClock,
+  IconLayers,
+  IconLightbulb,
   IconPlus,
   IconQuiz,
   IconSparkles,
+  IconZap,
 } from '../../components/ui/Icons';
 import { useAsync } from '../../hooks/useAsync';
 import { dashboardService } from '../../services/dashboardService';
+import { studyPackService } from '../../services/studyPackService';
 import { studyService } from '../../services/studyService';
 import { studySetService } from '../../services/studySetService';
 import { subjectService } from '../../services/subjectService';
 import { useAuth } from '../../hooks/useAuth';
 import { nextActionLink } from '../../lib/nextAction';
-import type { DashboardData, DueGroup, StudySetSummary, Subject } from '../../types';
+import { examCountdownLabel, formatExamDate, todayTaskHref } from '../../lib/studyPackRoutes';
+import { MasteryMeter } from '../../components/study-pack/PackBits';
+import type { DashboardData, DueGroup, StudyPackToday, StudySetSummary, Subject } from '../../types';
 
 interface MyStudyData {
   dashboard: DashboardData;
   dueGroups: DueGroup[];
   recentSets: StudySetSummary[];
   subjects: Subject[];
+  packToday: StudyPackToday | null;
 }
+
+const TASK_ICONS = {
+  review: IconClock,
+  learn: IconBook,
+  practice: IconZap,
+  test: IconQuiz,
+  'add-material': IconSparkles,
+} as const;
 
 export function MyStudyPage() {
   const { user } = useAuth();
   const { data, loading, error } = useAsync<MyStudyData>(
     async () => {
-      const [dashboard, dueGroups, recentSets, subjects] = await Promise.all([
+      const [dashboard, dueGroups, recentSets, subjects, packToday] = await Promise.all([
         dashboardService.get(),
         studyService.dueGroups(),
         studySetService.listMine(),
         subjectService.list(),
+        // Packs are additive: an empty or failing pack layer never blocks My Study.
+        studyPackService.today().catch(() => null),
       ]);
 
-      return { dashboard, dueGroups, recentSets, subjects };
+      return { dashboard, dueGroups, recentSets, subjects, packToday };
     },
     [],
   );
@@ -55,10 +72,13 @@ export function MyStudyPage() {
     );
   }
 
-  const { dashboard, dueGroups, recentSets, subjects } = data;
+  const { dashboard, dueGroups, recentSets, subjects, packToday } = data;
   const next = nextActionLink(dashboard.today.continueAction);
   const totalDue = dueGroups.reduce((sum, group) => sum + group.dueCount, 0);
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
+  const tasks = packToday?.tasks ?? [];
+  const packs = packToday?.packs ?? [];
+  const exams = packToday?.exams ?? [];
 
   return (
     <div className="stack" style={{ gap: 28 }}>
@@ -78,9 +98,7 @@ export function MyStudyPage() {
           <div className="study-feature-copy">
             <span className="eyebrow-label">Next up</span>
             <h2>
-              {dashboard.today.goalReached
-                ? 'Today’s goal is complete.'
-                : next.label}
+              {dashboard.today.goalReached ? 'Today’s goal is complete.' : next.label}
             </h2>
             <p>
               {dashboard.continueSet
@@ -135,6 +153,104 @@ export function MyStudyPage() {
         </section>
       </section>
 
+      {tasks.length > 0 ? (
+        <section aria-labelledby="my-study-today">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-today">What to study today</h2>
+              <p className="muted">Lerno looks at reviews, weak concepts and your exam dates.</p>
+            </div>
+          </div>
+          <div className="today-plan">
+            {tasks.map((task) => {
+              const Icon = TASK_ICONS[task.type];
+              return (
+                <Link key={`${task.type}-${task.packId ?? 'none'}-${task.conceptId ?? ''}`} to={todayTaskHref(task)} className="card card-interactive today-plan-item">
+                  <span className="quick-icon">
+                    <Icon />
+                  </span>
+                  <div>
+                    <strong>{task.label}</strong>
+                    <p className="muted">{task.description}</p>
+                  </div>
+                  <IconArrowRight size={17} />
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {exams.length > 0 ? (
+        <section aria-labelledby="my-study-exams">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-exams">Exams coming up</h2>
+              <p className="muted">Study packs count down to your exam date.</p>
+            </div>
+          </div>
+          <div className="exam-strip">
+            {exams.map((exam) => (
+              <Link key={exam.packId} to={`/study-packs/${exam.packId}`} className="card card-interactive exam-card">
+                <div className="exam-card-head">
+                  <Badge variant={exam.daysLeft !== null && exam.daysLeft <= 7 ? 'warning' : 'default'}>
+                    {examCountdownLabel(exam.daysLeft)}
+                  </Badge>
+                  {exam.examDate ? <span className="muted">{formatExamDate(exam.examDate)}</span> : null}
+                </div>
+                <strong>{exam.title}</strong>
+                <MasteryMeter percent={exam.masteryPercent} compact />
+                <span className="muted exam-card-meta">
+                  {exam.dueCards} due · {exam.weakConcepts} weak concept
+                  {exam.weakConcepts === 1 ? '' : 's'}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {packs.length > 0 ? (
+        <section aria-labelledby="my-study-packs">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-packs">Study packs in progress</h2>
+              <p className="muted">Continue where you left off.</p>
+            </div>
+            <Link to="/study-packs">
+              View all <IconArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="set-grid">
+            {packs.slice(0, 3).map((pack) => (
+              <article key={pack.id} className="card card-interactive pack-list-card">
+                <div className="pack-list-head">
+                  <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
+                  {pack.dueCards > 0 ? <Badge variant="accent">{pack.dueCards} due</Badge> : null}
+                </div>
+                <h3 className="pack-list-title">
+                  <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
+                </h3>
+                <p className="muted pack-list-meta">
+                  {pack.flashcards} cards · {pack.concepts} concepts · {pack.practiceQuestions} questions
+                </p>
+                <MasteryMeter percent={pack.masteryPercent} compact />
+                <div className="pack-list-actions">
+                  <Link to={`/study-packs/${pack.id}`} className="btn btn-sm btn-primary">
+                    <IconZap size={16} /> Continue
+                  </Link>
+                  <span className="muted pack-list-open">
+                    {pack.weakConcepts > 0
+                      ? `${pack.weakConcepts} weak concept${pack.weakConcepts === 1 ? '' : 's'}`
+                      : 'Up to date'}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section>
         <div className="section-title">
           <div>
@@ -171,7 +287,7 @@ export function MyStudyPage() {
             description="Learn something new or practice one of your study packs."
             action={
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <ButtonLink to="/sets">Open study packs</ButtonLink>
+                <ButtonLink to="/study-packs">Open study packs</ButtonLink>
                 <ButtonLink to="/ai/studio" variant="secondary">
                   Add material
                 </ButtonLink>
@@ -184,11 +300,11 @@ export function MyStudyPage() {
       <section>
         <div className="section-title">
           <div>
-            <h2>My study packs</h2>
-            <p className="muted">Your subjects and the material you are actively learning.</p>
+            <h2>My study material</h2>
+            <p className="muted">Sets and packs you can keep studying today.</p>
           </div>
           <Link to="/sets">
-            View all <IconArrowRight size={15} />
+            View sets <IconArrowRight size={15} />
           </Link>
         </div>
 
@@ -265,9 +381,9 @@ export function MyStudyPage() {
       </section>
 
       <section className="quick-actions" aria-label="Study actions">
-        <Link to="/sets">
+        <Link to="/study-packs">
           <span className="quick-icon">
-            <IconBook />
+            <IconLayers />
           </span>
           <span>
             <strong>Open study packs</strong>
@@ -297,7 +413,7 @@ export function MyStudyPage() {
         </Link>
         <Link to="/ai">
           <span className="quick-icon quick-icon-blue">
-            <IconQuiz />
+            <IconLightbulb />
           </span>
           <span>
             <strong>AI tutor</strong>

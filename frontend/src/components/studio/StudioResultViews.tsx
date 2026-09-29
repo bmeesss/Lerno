@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { MarkdownLite } from '../ai/MarkdownLite';
 import { Button, ButtonLink } from '../ui/Button';
 import { IconArrowRight, IconCheck, IconPlus, IconTrash } from '../ui/Icons';
 import { aiStudioService, type StudioActionSource, type StudioCardsResult, type StudioChatMessage, type StudioFlashcard, type StudioPracticeQuestion, type StudioQuizQuestion, type StudioStudyPlan, type StudioSummary } from '../../services/aiStudioService';
 import { studySetService } from '../../services/studySetService';
+import { studyPackService } from '../../services/studyPackService';
 
 export function StudioSummaryView({ summary }: { summary: StudioSummary }) {
   return (
@@ -57,14 +59,18 @@ export function StudioPlanView({ plan }: { plan: StudioStudyPlan }) {
 interface CardsEditorProps {
   result: StudioCardsResult;
   onSaved: (setId: string) => void;
+  /** When present, the cards can become the first content of a Study Pack. */
+  source?: StudioActionSource | null;
 }
 
-export function StudioCardsEditor({ result, onSaved }: CardsEditorProps) {
+export function StudioCardsEditor({ result, onSaved, source = null }: CardsEditorProps) {
   const [title, setTitle] = useState(result.title);
   const [description, setDescription] = useState(result.description);
   const [cards, setCards] = useState(result.cards);
   const [saving, setSaving] = useState(false);
   const [savedSetId, setSavedSetId] = useState<string | null>(null);
+  const [createdPackId, setCreatedPackId] = useState<string | null>(null);
+  const [packSaving, setPackSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,6 +78,7 @@ export function StudioCardsEditor({ result, onSaved }: CardsEditorProps) {
     setDescription(result.description);
     setCards(result.cards);
     setSavedSetId(null);
+    setCreatedPackId(null);
     setError(null);
   }, [result]);
 
@@ -88,17 +95,55 @@ export function StudioCardsEditor({ result, onSaved }: CardsEditorProps) {
     setCards((current) => [...current, { front: '', back: '' }]);
   }
 
-  async function saveSet() {
+  function validCardsOrError() {
     const validCards = cards.filter((card) => card.front.trim() && card.back.trim());
     if (!title.trim() || validCards.length === 0 || validCards.length !== cards.length) {
       setError('Add a title and complete or remove every card before saving.');
-      return;
+      return null;
     }
     const normalizedFronts = validCards.map((card) => card.front.trim().toLowerCase().replace(/\\s+/g, ' '));
     if (new Set(normalizedFronts).size !== normalizedFronts.length) {
       setError('Each flashcard needs a distinct front. Edit or remove the duplicate card.');
-      return;
+      return null;
     }
+    return validCards;
+  }
+
+  /**
+   * Turns this preview into a Study Pack: the source becomes the pack's first
+   * material, the cards its first flashcards. Nothing already in the pack is
+   * touched, and the classic set/card model keeps working underneath.
+   */
+  async function createStudyPack() {
+    const validCards = validCardsOrError();
+    if (!validCards) return;
+    setPackSaving(true);
+    setError(null);
+    try {
+      const pack = await studyPackService.create({
+        title: title.trim(),
+        description: description.trim(),
+        level: '',
+        visibility: 'private',
+        source:
+          source?.type === 'set'
+            ? { type: 'set', setId: source.setId, title: title.trim() }
+            : source
+              ? { type: source.type, title: source.title || title.trim(), text: source.text, pageCount: source.pageCount }
+              : undefined,
+        cards: validCards.map((card) => ({ question: card.front.trim(), answer: card.back.trim() })),
+      });
+      setCreatedPackId(pack.id);
+    } catch (packError) {
+      setError(packError instanceof Error ? packError.message : 'Could not create the study pack. Please try again.');
+    } finally {
+      setPackSaving(false);
+    }
+  }
+
+  async function saveSet() {
+    const validCards = validCardsOrError();
+    if (!validCards) return;
     setSaving(true);
     setError(null);
     try {
@@ -147,10 +192,38 @@ export function StudioCardsEditor({ result, onSaved }: CardsEditorProps) {
         <Button type="button" variant="secondary" onClick={addCard} disabled={cards.length >= 30 || saving || Boolean(savedSetId)}>
           <IconPlus size={16} /> Add card
         </Button>
-        <Button type="button" onClick={() => void saveSet()} disabled={saving || Boolean(savedSetId) || !cards.length}>
-          {saving ? 'Saving set…' : savedSetId ? 'Saved as a private set' : 'Save as a private set'}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void saveSet()}
+          disabled={saving || packSaving || Boolean(savedSetId) || Boolean(createdPackId) || !cards.length}
+        >
+          {saving ? 'Saving set…' : savedSetId ? 'Saved as a private set' : 'Save as a set'}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void createStudyPack()}
+          disabled={saving || packSaving || Boolean(createdPackId) || !cards.length}
+        >
+          {packSaving ? 'Creating pack…' : createdPackId ? 'Study pack created' : 'Create study pack'}
         </Button>
       </div>
+      {createdPackId ? (
+        <div className="studio-pack-created" role="status">
+          <p>
+            <strong>Study pack created.</strong> Your source is in it, these cards are its first
+            flashcards, and the learning loop is ready.
+          </p>
+          <div className="studio-result-actions">
+            <Link to={`/study-packs/${createdPackId}`} className="btn btn-primary">
+              Open study pack
+            </Link>
+            <Link to={`/study-packs/${createdPackId}?tab=learn`} className="btn btn-secondary">
+              Start learning
+            </Link>
+          </div>
+        </div>
+      ) : null}
       {error ? <p className="studio-inline-error" role="alert">{error}</p> : null}
     </article>
   );

@@ -18,10 +18,8 @@ import type { CardRecord, StudySetRecord } from '../lib/db/types.js';
 import { errors } from '../lib/errors.js';
 import type { AiContextSource } from '../lib/ai-context-source.js';
 import { logger } from '../lib/logger.js';
-import { describeAiJsonFailure, parseAiJson, type AiJsonFailure } from '../lib/ai-json.js';
-import { cleanAiText } from '../lib/ai-text.js';
-import { guardSecretLeak } from '../lib/ai-guard.js';
-import { AI_TASKS, taskMessages, type AiTaskName } from './ai-prompts.js';
+import type { AiTaskName } from './ai-prompts.js';
+import { runStructuredAiTask, runTextAiTask } from './ai-tasks.js';
 import {
   buildCardContext,
   buildQuizContext,
@@ -37,7 +35,7 @@ import {
   hintResponseSchema,
 } from '../lib/ai-schemas.js';
 import { sanitizeChatText } from '../lib/ai-sanitize.js';
-import { logAiAction, requestChat, type ChatResult } from './ai-completion.js';
+import { type ChatResult } from './ai-completion.js';
 import { canViewSet } from './set-service.js';
 import { studyService } from './study-service.js';
 import type {
@@ -109,22 +107,14 @@ async function runTextTask(
   extra: Record<string, unknown> = {},
   options: RunOptions = {},
 ): Promise<string> {
-  const config = AI_TASKS[task];
-  const result = await requestChat({
-    action: task,
-    messages: taskMessages(task, payload, options.contextSource ?? 'none'),
-    maxOutputTokens: options.maxOutputTokens ?? config.maxOutputTokens,
-    temperature: config.temperature,
+  const { text } = await runTextAiTask({
+    task,
+    payload,
+    contextSource: options.contextSource ?? 'none',
+    maxOutputTokens: options.maxOutputTokens,
+    logMeta: extra,
   });
-
-  if (!result.text) {
-    logAiAction(task, result, 'invalid', { ...extra, reason: 'empty' });
-    throw errors.aiError();
-  }
-
-  const safe = guardSecretLeak(result.text);
-  logAiAction(task, result, safe === result.text ? 'ok' : 'blocked', extra);
-  return cleanAiText(safe);
+  return text;
 }
 
 /**
@@ -139,29 +129,14 @@ async function runStructuredTask<S extends z.ZodTypeAny>(
   extra: Record<string, unknown> = {},
   options: RunOptions = {},
 ): Promise<{ data: z.infer<S>; result: ChatResult }> {
-  const config = AI_TASKS[task];
-  let failure: AiJsonFailure = { ok: false, reason: 'empty' };
-
-  for (let attempt = 1; attempt <= config.parseAttempts; attempt += 1) {
-    const result = await requestChat({
-      action: task,
-      messages: taskMessages(task, payload, options.contextSource ?? 'none'),
-      maxOutputTokens: options.maxOutputTokens ?? config.maxOutputTokens,
-      temperature: config.temperature,
-      jsonMode: config.json,
-    });
-
-    const parsed = parseAiJson(result.text, schema);
-    if (parsed.ok) {
-      logAiAction(task, result, 'ok', { ...extra, attempt });
-      return { data: parsed.data, result };
-    }
-
-    failure = parsed;
-    logAiAction(task, result, 'invalid', { ...extra, attempt, reason: parsed.reason });
-  }
-
-  throw errors.aiInvalidContent(describeAiJsonFailure(failure));
+  return runStructuredAiTask({
+    task,
+    payload,
+    schema,
+    contextSource: options.contextSource ?? 'none',
+    maxOutputTokens: options.maxOutputTokens,
+    logMeta: extra,
+  });
 }
 
 type StudyInput = {

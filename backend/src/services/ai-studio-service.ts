@@ -2,9 +2,7 @@ import type { z } from 'zod';
 import type { Database } from '../lib/db/repository.js';
 import { errors } from '../lib/errors.js';
 import { sanitizeChatText } from '../lib/ai-sanitize.js';
-import { cleanAiText } from '../lib/ai-text.js';
-import { guardSecretLeak } from '../lib/ai-guard.js';
-import { describeAiJsonFailure, parseAiJson, type AiJsonFailure } from '../lib/ai-json.js';
+import { runStructuredAiTask, runTextAiTask } from './ai-tasks.js';
 import {
   generatedCardsSchema,
   generatedQuestionsSchema,
@@ -14,8 +12,7 @@ import {
 } from '../lib/ai-schemas.js';
 import { buildSetSourceContext, buildTextContext } from '../lib/ai-studio-context.js';
 import type { AiContextSource } from '../lib/ai-context-source.js';
-import { AI_TASKS, taskMessages, type AiTaskName } from './ai-prompts.js';
-import { logAiAction, requestChat } from './ai-completion.js';
+import type { AiTaskName } from './ai-prompts.js';
 import { loadSetForAi } from './ai-learning-service.js';
 import { extractPdfText } from './ai-studio-pdf.js';
 import type {
@@ -117,36 +114,23 @@ interface StructuredRunOptions<S extends z.ZodTypeAny> {
   validCount?: (value: z.infer<S>) => boolean;
 }
 
+/** Studio task run: shared runner + studio-level provenance logging. */
 async function runStructured<S extends z.ZodTypeAny>(
   options: StructuredRunOptions<S>,
 ): Promise<z.infer<S>> {
-  const taskConfig = AI_TASKS[options.task];
-  let failure: AiJsonFailure = { ok: false, reason: 'empty' };
-  for (let attempt = 1; attempt <= taskConfig.parseAttempts; attempt += 1) {
-    const result = await requestChat({
-      action: options.task,
-      messages: taskMessages(options.task, options.payload, options.source.contextSource),
-      maxOutputTokens: options.maxOutputTokens ?? taskConfig.maxOutputTokens,
-      temperature: taskConfig.temperature,
-      jsonMode: taskConfig.json,
-    });
-    const parsed = parseAiJson(guardSecretLeak(result.text), options.schema);
-    if (parsed.ok && (!options.validCount || options.validCount(parsed.data))) {
-      logAiAction(options.task, result, 'ok', {
-        attempt,
-        sourceType: options.source.kind,
-        sourceChars: options.source.characterCount,
-      });
-      return parsed.data;
-    }
-    failure = parsed.ok ? { ok: false, reason: 'schema' } : parsed;
-    logAiAction(options.task, result, 'invalid', {
-      attempt,
+  const { data } = await runStructuredAiTask({
+    task: options.task,
+    payload: options.payload,
+    schema: options.schema,
+    contextSource: options.source.contextSource,
+    maxOutputTokens: options.maxOutputTokens,
+    validCount: options.validCount,
+    logMeta: {
       sourceType: options.source.kind,
-      reason: failure.reason,
-    });
-  }
-  throw errors.aiInvalidContent(describeAiJsonFailure(failure));
+      sourceChars: options.source.characterCount,
+    },
+  });
+  return data;
 }
 
 export async function summarizeStudioSource(
@@ -251,18 +235,14 @@ export async function chatWithStudioSource(
     recentConversation: history,
     latestQuestion: sanitizeChatText(request.message, 1_500),
   });
-  const taskConfig = AI_TASKS['studio-chat'];
-  const result = await requestChat({
-    action: 'studio-chat',
-    messages: taskMessages('studio-chat', conversationPayload, source.contextSource),
-    maxOutputTokens: taskConfig.maxOutputTokens,
-    temperature: taskConfig.temperature,
+  const { text } = await runTextAiTask({
+    task: 'studio-chat',
+    payload: conversationPayload,
+    contextSource: source.contextSource,
+    logMeta: {
+      sourceType: source.kind,
+      sourceChars: source.characterCount,
+    },
   });
-  if (!result.text.trim()) throw errors.aiError();
-  const safeReply = cleanAiText(guardSecretLeak(result.text));
-  logAiAction('studio-chat', result, 'ok', {
-    sourceType: source.kind,
-    sourceChars: source.characterCount,
-  });
-  return { reply: safeReply };
+  return { reply: text };
 }

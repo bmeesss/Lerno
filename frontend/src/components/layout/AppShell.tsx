@@ -35,7 +35,7 @@ const groups = [
   {
     label: 'Library',
     items: [
-      { to: '/sets', label: 'Study packs', Icon: IconLayers },
+      { to: '/study-packs', label: 'Study packs', Icon: IconLayers },
       { to: '/subjects', label: 'Subjects', Icon: IconBook },
       { to: '/discover', label: 'Discover', Icon: IconCompass },
       { to: '/favorites', label: 'Favorites', Icon: IconHeart },
@@ -100,6 +100,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const focusMatch = pathname.match(/^\/sets\/([^/]+)\/(study|practice|quiz|ai-study)$/);
+  const packMatch = pathname.match(/^\/study-packs\/([^/]+)$/);
   const pageTitle =
     groups
       .flatMap((group) => group.items)
@@ -174,7 +175,9 @@ export function AppShell() {
                 ? focusMatch[2] === 'ai-study'
                   ? 'AI study'
                   : focusMatch[2]!.replace(/^./, (c) => c.toUpperCase())
-                : pageTitle}
+                : packMatch
+                  ? 'Study pack'
+                  : pageTitle}
             </strong>
           </div>
 

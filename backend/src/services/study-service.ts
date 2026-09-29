@@ -308,6 +308,8 @@ export const studyService = {
 
     const groups: {
       setId: string;
+      /** Study Pack that owns this set, when the set is part of one. */
+      packId: string | null;
       setTitle: string;
       subjectName: string | null;
       dueCount: number;
@@ -318,9 +320,11 @@ export const studyService = {
       // Skip sets the user can no longer study (deleted, or a public set
       // that was privatized after they studied it).
       if (!set || !canViewSet(set, userId)) continue;
+      const pack = await db.packs.getByLegacySetId(set.id);
       groups.push({
         setId: entry.setId,
-        setTitle: set.title,
+        packId: pack?.id ?? null,
+        setTitle: pack?.title ?? set.title,
         subjectName: set.subjectName,
         dueCount: entry.dueCount,
         nextReviewAt: entry.nextReviewAt,
