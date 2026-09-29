@@ -24,6 +24,11 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
      (`ref_label`, importance, difficulty, conflicts) and the stored pack analysis.
      It is additive: existing Study Packs, sets and cards keep working and no data is
      rewritten or removed.
+   - `database/migrations/0011_learning_sessions.sql` — **required for the study experience**
+     (`docs/STUDY_EXPERIENCE.md`): `learning_sessions`, `learning_session_items` and
+     `mastery_snapshots`, each with own-row row-level security. Additive and idempotent
+     (`create … if not exists`); the classic flashcard timer table `study_sessions` and all
+     existing attempts and learning events are untouched.
 3. Collect the credentials from _Project Settings → API_:
    - `Project URL` → `SUPABASE_URL`
    - `anon public` key → `SUPABASE_ANON_KEY` (safe for the browser; never used

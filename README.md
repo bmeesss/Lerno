@@ -19,6 +19,9 @@ with no daily limits and no premium paywall for core learning features.
 - **AI Study Studio** — at `/ai/studio`, start with pasted notes, selectable-text PDF,
   or an existing set; generate a summary, editable flashcards, quiz, practice
   questions, a source-grounded study plan, or source-aware chat. Previews are not saved unless you confirm.
+- **Study sessions & planner** — Learn, Practice and Test sessions that adapt to what you know,
+  a daily plan that counts down to your exams, mistake review and honest progress
+  (see [`docs/STUDY_EXPERIENCE.md`](docs/STUDY_EXPERIENCE.md)).
 - **Guest learning** — study public sets without an account; sign up to keep progress.
 - **Dark mode** — calm, modern, mobile-first UI with a green accent.
 
