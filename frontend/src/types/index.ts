@@ -71,6 +71,9 @@ export interface Card {
   question: string;
   answer: string;
   position: number;
+  /** Study Pack provenance (absent on classic set responses). */
+  sourceId?: string | null;
+  conceptId?: string | null;
 }
 
 export interface CardProgress {
@@ -555,6 +558,8 @@ export interface StudyPackDetail {
   summary: string | null;
   summarySourceId: string | null;
   summaryUpdatedAt: string | null;
+  /** False when Lerno AI is not configured — the pack itself keeps working. */
+  aiAvailable?: boolean;
   legacySetId: string | null;
   schoolMethod: {
     publisher: string | null;
@@ -757,4 +762,71 @@ export type PackPreview =
 
 export interface PackTutorReply {
   reply: string;
+}
+
+/* ----------------------- material import (ingestion) ----------------------- */
+
+export interface MaterialConceptCandidate {
+  name: string;
+  /** The sentence the candidate was found in — never a generated definition. */
+  explanation: string;
+}
+
+/** What Lerno really found in an uploaded PDF, before anything is created. */
+export interface MaterialPdfPreview {
+  title: string;
+  text: string;
+  pageCount: number;
+  wordCount: number;
+  characterCount: number;
+  truncated: boolean;
+  concepts: MaterialConceptCandidate[];
+}
+
+export type ImportStageId = 'concepts' | 'summary' | 'flashcards' | 'practice' | 'plan';
+
+export type ImportStepState = 'pending' | 'active' | 'done' | 'skipped' | 'failed';
+
+export interface ImportProcessingStep {
+  id: ImportStageId;
+  label: string;
+  state: ImportStepState;
+}
+
+/**
+ * Real processing state of one import. `processing` is true while the backend
+ * is still working; the steps are what actually ran, never a timer.
+ */
+export interface ImportProcessingStatus {
+  packId: string;
+  status: 'processing' | 'ready' | 'partial' | 'failed';
+  stage: ImportStageId | null;
+  stageLabel: string | null;
+  steps: ImportProcessingStep[];
+  aiAvailable: boolean;
+  aiSkipped: boolean;
+  counts: {
+    concepts: number;
+    flashcards: number;
+    practiceQuestions: number;
+    hasSummary: boolean;
+    hasPlan: boolean;
+  };
+  failure: { stage: ImportStageId | null; message: string; details: string | null } | null;
+  processing: boolean;
+}
+
+export interface ImportStarted {
+  packId: string;
+  jobId: string;
+  status: ImportProcessingStatus;
+}
+
+/** Existing material the duplicate check found (409 CONFLICT details). */
+export interface DuplicateMaterialRef {
+  reason: 'duplicate-source';
+  packId: string;
+  packTitle: string;
+  sourceId: string;
+  sourceTitle: string;
 }

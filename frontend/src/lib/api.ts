@@ -31,12 +31,20 @@ export function clearTokens(): void {
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
+  /** Optional machine-readable context from the API (e.g. the duplicate match). */
+  readonly details: Record<string, unknown> | null;
 
-  constructor(message: string, code: string, status: number) {
+  constructor(
+    message: string,
+    code: string,
+    status: number,
+    details: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -83,11 +91,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const payload: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const err = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+    const err = (
+      payload as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null
+    )?.error;
     throw new ApiError(
       err?.message ?? `Request failed (${response.status})`,
       err?.code ?? 'UNKNOWN',
       response.status,
+      err?.details ?? null,
     );
   }
 
@@ -116,14 +127,80 @@ export async function apiUpload<T>(
   }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const err = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+    const err = (
+      payload as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null
+    )?.error;
     throw new ApiError(
       err?.message ?? `Request failed (${response.status})`,
       err?.code ?? 'UNKNOWN',
       response.status,
+      err?.details ?? null,
     );
   }
   return (payload as { data: T }).data;
+}
+
+export interface UploadOptions {
+  /** Real upload progress (0-100) reported by the browser for large files. */
+  onProgress?: (percent: number) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Multipart upload with progress. XMLHttpRequest is used because `fetch` cannot
+ * report upload progress — file uploads are the one place the student needs to
+ * see how far along they are.
+ */
+export function apiUploadWithProgress<T>(
+  path: string,
+  body: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', buildUrl(path));
+    request.setRequestHeader('Accept', 'application/json');
+    const token = getAccessToken();
+    if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    request.upload.onprogress = (event) => {
+      if (!options.onProgress || !event.lengthComputable) return;
+      options.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onerror = () =>
+      reject(new ApiError('Could not reach the Lerno server. Check your connection.', 'NETWORK', 0));
+    request.onabort = () => reject(new ApiError('The upload was cancelled.', 'ABORTED', 0));
+    request.ontimeout = () =>
+      reject(new ApiError('The upload took too long. Check your connection and try again.', 'TIMEOUT', 0));
+    request.onload = () => {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(request.responseText) as unknown;
+      } catch {
+        payload = null;
+      }
+      if (request.status < 200 || request.status >= 300) {
+        const err = (
+          payload as { error?: { code?: string; message?: string; details?: Record<string, unknown> } } | null
+        )?.error;
+        reject(
+          new ApiError(
+            err?.message ?? `Upload failed (${request.status})`,
+            err?.code ?? 'UNKNOWN',
+            request.status,
+            err?.details ?? null,
+          ),
+        );
+        return;
+      }
+      resolve((payload as { data: T }).data);
+    };
+
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => request.abort(), { once: true });
+    }
+    request.send(body);
+  });
 }
 
 export const api = {
