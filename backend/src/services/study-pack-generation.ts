@@ -21,8 +21,8 @@ import {
   type GenerationSettings,
 } from './source-generation.js';
 import { loadPackAiInput } from './study-pack-service.js';
+import { tutorService } from './tutor-context.js';
 import {
-  chatWithPack,
   generatePackConcepts,
   generatePackFlashcards,
   generatePackPractice,
@@ -230,7 +230,7 @@ export const studyPackGenerationService = {
   async tutor(db: Database, userId: string, packId: string, body: TutorBody) {
     const input = await resolveInput(db, userId, packId);
     requireUsableSource(input);
-    return chatWithPack(input, body.message, body.history);
+    return tutorService.reply(db, userId, input, body);
   },
 };
 

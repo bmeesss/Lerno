@@ -37,6 +37,11 @@ export const studyPackController = {
     sendOk(res, await studyPackService.list(req.db, req.auth.id));
   }),
 
+  conceptSource: asyncHandler(async (req: Request, res: Response) => {
+    const { packId, conceptId } = req.params as { packId: string; conceptId: string };
+    sendOk(res, await studyPackService.conceptSource(req.db, req.auth?.id ?? null, packId, conceptId));
+  }),
+
   today: asyncHandler(async (req: Request, res: Response) => {
     if (!req.auth) throw errors.unauthorized();
     sendOk(res, await studyPackService.today(req.db, req.auth.id));

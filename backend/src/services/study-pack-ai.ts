@@ -19,7 +19,6 @@ import type {
   StudyPackSourceRecord,
 } from '../lib/db/types.js';
 import { capLength } from '../lib/ai-sanitize.js';
-import { sanitizeChatText } from '../lib/ai-sanitize.js';
 import {
   generatedCardsSchema,
   generatedConceptsSchema,
@@ -27,7 +26,7 @@ import {
   generatedSummarySchema,
 } from '../lib/ai-schemas.js';
 import { normalizeText } from './ai-context.js';
-import { runStructuredAiTask, runTextAiTask } from './ai-tasks.js';
+import { runStructuredAiTask } from './ai-tasks.js';
 
 /** Per-source character budget inside a pack context (keeps prompts bounded). */
 const SOURCE_BUDGET_CHARS = 6_000;
@@ -295,32 +294,4 @@ export async function generatePackPractice(
   });
 
   return { questions };
-}
-
-/**
- * Pack-scoped tutor chat: the model may only claim things about this material
- * from the pack's own sources. Reuses the source-aware studio-chat task.
- */
-export async function chatWithPack(
-  input: PackAiInput,
-  message: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-): Promise<{ reply: string }> {
-  const context = buildPackContext(input, 9_000);
-  const conversationPayload = JSON.stringify({
-    source: context.text,
-    recentConversation: history.slice(-8).map((entry) => ({
-      role: entry.role,
-      content: sanitizeChatText(entry.content, 1_000),
-    })),
-    latestQuestion: sanitizeChatText(message, 1_500),
-  });
-
-  const { text } = await runTextAiTask({
-    task: 'studio-chat',
-    payload: conversationPayload,
-    contextSource: 'document',
-    logMeta: { packId: input.pack.id, sourceCount: context.usedSourceIds.length },
-  });
-  return { reply: text };
 }
