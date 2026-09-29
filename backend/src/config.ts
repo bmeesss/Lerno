@@ -51,6 +51,13 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().optional().or(z.literal('')),
   /** Groq chat model. Central so it can be swapped without code changes. */
   GROQ_MODEL: stringFromEnv('openai/gpt-oss-120b'),
+  /**
+   * Vision-capable Groq model used for image OCR. Only called when a student
+   * uploads an image, and only from the server (key never leaves the backend).
+   */
+  GROQ_VISION_MODEL: stringFromEnv('meta-llama/llama-4-scout-17b-16e-instruct'),
+  /** Groq transcription model used for audio sources (never stored, only its text). */
+  GROQ_TRANSCRIBE_MODEL: stringFromEnv('whisper-large-v3'),
   /** Upper bound on tokens the model may generate for one answer. */
   GROQ_MAX_OUTPUT_TOKENS: boundedNumber(2048, 256, 8192, true),
   /** Sampling temperature — low keeps explanations predictable. */
@@ -84,6 +91,19 @@ const envSchema = z.object({
   AI_RATE_LIMIT_WINDOW_MS: boundedNumber(5 * 60 * 1000, 1_000, 60 * 60 * 1000, true),
   /** Wider per-IP quota so one network cannot burn the shared Groq budget. */
   AI_RATE_LIMIT_IP_MAX: boundedNumber(60, 1, 100_000, true),
+  /* ------------------------------ sources ------------------------------ */
+  /** Hard upload ceilings per source kind (bytes). Anything bigger is rejected. */
+  SOURCE_MAX_PDF_BYTES: boundedNumber(15 * 1024 * 1024, 1024, 100 * 1024 * 1024, true),
+  SOURCE_MAX_PPTX_BYTES: boundedNumber(25 * 1024 * 1024, 1024, 100 * 1024 * 1024, true),
+  SOURCE_MAX_IMAGE_BYTES: boundedNumber(10 * 1024 * 1024, 1024, 100 * 1024 * 1024, true),
+  SOURCE_MAX_AUDIO_BYTES: boundedNumber(25 * 1024 * 1024, 1024, 100 * 1024 * 1024, true),
+  /**
+   * Optional YouTube Data API v3 key. When set, Lerno reads public video
+   * metadata (title, channel, duration) from the official API; without it only
+   * the public oEmbed metadata is used and the duration stays unknown. Captions
+   * are never scraped — the student pastes them, or the source fails honestly.
+   */
+  YOUTUBE_API_KEY: z.string().optional().or(z.literal('')),
   HEALTH_CHECK_DB: z
     .enum(['true', 'false'])
     .default('false')
@@ -165,6 +185,9 @@ export const config = {
   /** Server-only Groq credentials (Lerno AI). */
   groqApiKey: parsed.GROQ_API_KEY ?? '',
   groqModel: parsed.GROQ_MODEL,
+  /** Vision model for image OCR; transcription model for audio sources. */
+  groqVisionModel: parsed.GROQ_VISION_MODEL,
+  groqTranscribeModel: parsed.GROQ_TRANSCRIBE_MODEL,
   groqMaxOutputTokens: parsed.GROQ_MAX_OUTPUT_TOKENS,
   groqTemperature: parsed.GROQ_TEMPERATURE,
   groqTimeoutMs: parsed.GROQ_TIMEOUT_MS,
@@ -175,6 +198,13 @@ export const config = {
   /** Bounds for AI study-set context sent to the model. */
   aiContextMaxCards: parsed.AI_CONTEXT_MAX_CARDS,
   aiContextMaxChars: parsed.AI_CONTEXT_MAX_CHARS,
+  /** Optional official YouTube Data API key (metadata only; never captions). */
+  youtubeApiKey: parsed.YOUTUBE_API_KEY ?? '',
+  /** Upload ceilings per source kind (bytes). */
+  sourceMaxPdfBytes: parsed.SOURCE_MAX_PDF_BYTES,
+  sourceMaxPptxBytes: parsed.SOURCE_MAX_PPTX_BYTES,
+  sourceMaxImageBytes: parsed.SOURCE_MAX_IMAGE_BYTES,
+  sourceMaxAudioBytes: parsed.SOURCE_MAX_AUDIO_BYTES,
   /** Lerno AI quota (per user, with a wider per-IP guard). */
   aiRateLimitMax: parsed.AI_RATE_LIMIT_MAX,
   aiRateLimitWindowMs: parsed.AI_RATE_LIMIT_WINDOW_MS,

@@ -6,6 +6,7 @@
  * production (see config.ts).
  */
 import { randomUUID } from 'node:crypto';
+import { EMPTY_SOURCE_METADATA } from '../source-model.js';
 import type { Database } from './repository.js';
 import type {
   AdminUserRecord,
@@ -681,6 +682,8 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           visibility: data.visibility as StudyPackRecord['visibility'],
           examDate: data.examDate,
           summary: null,
+          analysis: null,
+          analysisUpdatedAt: null,
           summarySourceId: null,
           summaryUpdatedAt: null,
           legacySetId: data.legacySetId,
@@ -708,6 +711,11 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           visibility: (patch.visibility as StudyPackRecord['visibility']) ?? existing.visibility,
           examDate: patch.examDate === undefined ? existing.examDate : patch.examDate,
           summary: patch.summary === undefined ? existing.summary : patch.summary,
+          analysis: patch.analysis === undefined ? existing.analysis : patch.analysis,
+          analysisUpdatedAt:
+            patch.analysisUpdatedAt === undefined
+              ? existing.analysisUpdatedAt
+              : patch.analysisUpdatedAt,
           summarySourceId:
             patch.summarySourceId === undefined ? existing.summarySourceId : patch.summarySourceId,
           summaryUpdatedAt:
@@ -792,6 +800,8 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           failureReason: data.failureReason,
           legacySetId: data.legacySetId,
           origin: data.origin,
+          metadata: data.metadata ?? EMPTY_SOURCE_METADATA,
+          processingStage: data.processingStage ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         };
@@ -810,6 +820,9 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           pageCount: patch.pageCount === undefined ? existing.pageCount : patch.pageCount,
           failureReason:
             patch.failureReason === undefined ? existing.failureReason : patch.failureReason,
+          metadata: patch.metadata ?? existing.metadata,
+          processingStage:
+            patch.processingStage === undefined ? existing.processingStage : patch.processingStage,
           updatedAt: now(),
         };
         state.packSources.set(id, record);
@@ -857,6 +870,10 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           explanation: concept.explanation,
           origin: concept.origin,
           position: concept.position,
+          refLabel: concept.refLabel ?? null,
+          importance: concept.importance ?? null,
+          difficulty: concept.difficulty ?? null,
+          conflictWith: concept.conflictWith ?? null,
           createdAt: timestamp,
           updatedAt: timestamp,
         }));
@@ -871,6 +888,11 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           name: patch.name ?? existing.name,
           explanation: patch.explanation ?? existing.explanation,
           position: patch.position ?? existing.position,
+          refLabel: patch.refLabel === undefined ? existing.refLabel : patch.refLabel,
+          importance: patch.importance === undefined ? existing.importance : patch.importance,
+          difficulty: patch.difficulty === undefined ? existing.difficulty : patch.difficulty,
+          conflictWith:
+            patch.conflictWith === undefined ? existing.conflictWith : patch.conflictWith,
           updatedAt: now(),
         };
         state.concepts.set(id, record);

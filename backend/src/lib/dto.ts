@@ -188,6 +188,21 @@ export const dto = {
     failureReason: record.failureReason,
     legacySetId: record.legacySetId,
     origin: record.origin,
+    /* Extraction provenance (never model output). */
+    language: record.metadata?.language ?? 'unknown',
+    stage: record.processingStage,
+    extractedBy: record.metadata?.extractedBy ?? null,
+    slideCount: record.metadata?.slideCount ?? null,
+    durationSeconds: record.metadata?.durationSeconds ?? null,
+    channel: record.metadata?.channel ?? null,
+    url: record.metadata?.url ?? null,
+    warnings: record.metadata?.warnings ?? [],
+    /** Bounded reference labels so the UI can show "page 6 · slide 8 · …". */
+    references: (record.metadata?.references ?? []).slice(0, 50).map((reference) => ({
+      marker: reference.marker,
+      kind: reference.kind,
+      label: reference.label,
+    })),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }),
@@ -210,6 +225,11 @@ export const dto = {
     sourceTitle: extras.sourceTitle,
     origin: record.origin,
     position: record.position,
+    /** Provenance inside the source ("page 6", "slide 8", "03:42 in recording"). */
+    refLabel: record.refLabel,
+    importance: record.importance,
+    difficulty: record.difficulty,
+    conflictWith: record.conflictWith,
     masteryPercent: extras.masteryPercent,
     attempts: extras.attempts,
     cardCount: extras.cardCount,

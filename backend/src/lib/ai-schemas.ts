@@ -114,6 +114,10 @@ export const generatedCardsSchema = z
         z.object({
           front: text(1, 160),
           back: text(1, 300),
+          /** Source marker token ("1:p6") — verified before it is shown. */
+          ref: z.string().trim().max(40).optional(),
+          /** 1-based index of the concept this card belongs to (when provided). */
+          conceptRef: z.number().int().min(1).max(40).optional(),
         }),
       )
       .min(1)
@@ -142,14 +146,28 @@ export const GENERATED_QUIZ_TYPES = ['multiple_choice', 'open', 'true_false'] as
 
 export const generatedQuizQuestionSchema = z.object({
   type: z.enum(GENERATED_QUIZ_TYPES).catch('open'),
-  question: text(3, 200),
-  options: z.array(text(1, 160)).max(4).default([]),
-  correctIndex: z.number().int().min(0).max(3).nullable().default(null),
+  question: text(3, 240),
+  options: z.array(text(1, 160)).max(6).default([]),
+  correctIndex: z.number().int().min(0).max(5).nullable().default(null),
   answer: text(0, 300).default(''),
   explanation: text(0, 400).default(''),
+  /** Source marker token ("1:s8") — verified before it is shown. */
+  ref: z.string().trim().max(40).optional(),
+  /** 1-based index of the concept this question belongs to. */
+  conceptRef: z.number().int().min(1).max(40).optional(),
 });
 
-export const generatedQuizSchema = z
+/**
+ * Shared validation for generated question sets.
+ *
+ * `multipleChoiceOptions` is the only difference between the classic set quiz
+ * (exactly four options, unchanged since #11) and the content engine's practice
+ * questions (three or four options, because a generated question may legitimately
+ * have fewer distractors). Everything else — duplicates, distinct options,
+ * correct answers, true/false shape — is validated identically.
+ */
+function generatedQuestionsSchemaWithOptions(multipleChoiceOptions: 'exactly-four' | 'at-least-two') {
+  return z
   .object({
     questions: z.array(generatedQuizQuestionSchema).min(1).max(15),
   })
@@ -175,10 +193,14 @@ export const generatedQuizSchema = z
             path: ['questions', index, 'options'],
           });
         }
-        if (question.options.length !== 4) {
+        const optionsRule =
+          multipleChoiceOptions === 'exactly-four'
+            ? { ok: question.options.length === 4, message: 'Multiple choice needs exactly 4 options' }
+            : { ok: question.options.length >= 2, message: 'Multiple choice needs at least two options' };
+        if (!optionsRule.ok) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Multiple choice needs exactly 4 options',
+            message: optionsRule.message,
             path: ['questions', index, 'options'],
           });
         }
@@ -232,6 +254,13 @@ export const generatedQuizSchema = z
       }
     });
   });
+}
+
+/** The set/quiz path: exactly four options per multiple-choice question (#11). */
+export const generatedQuizSchema = generatedQuestionsSchemaWithOptions('exactly-four');
+
+/** The content engine's practice questions: two to four plausible options. */
+export const sourcePracticeSchema = generatedQuestionsSchemaWithOptions('at-least-two');
 
 export type GeneratedQuizQuestion = z.infer<typeof generatedQuizQuestionSchema>;
 
@@ -281,6 +310,11 @@ export const generatedConceptsSchema = z
           explanation: text(10, 600),
           /** 1-based index of the source block this concept came from. */
           sourceRef: z.number().int().min(1).max(20).optional(),
+          /** Source marker token ("1:p6"), verified before it is shown. */
+          ref: z.string().trim().max(40).optional(),
+          /** How central this concept is for the material (0..1). */
+          importance: z.number().min(0).max(1).nullable().optional(),
+          difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
         }),
       )
       .min(3)
@@ -349,3 +383,59 @@ export type AnswerEvaluation = z.infer<typeof evaluationSchema>;
 export const hintResponseSchema = z.object({
   hint: text(1, 300),
 });
+
+// ---------------------------------------------------- source analysis (v2)
+
+/**
+ * The source-grounded analysis behind every generated item: what the material
+ * contains, how hard it is, what is likely exam material, and — crucially —
+ * where two sources disagree. Claims carry a marker + a short quote so Lerno can
+ * verify them against the real text before showing anything.
+ */
+export const generatedSourceAnalysisSchema = z
+  .object({
+    summary: text(60, 2_000),
+    keyFacts: z.array(text(10, 240)).min(2).max(12),
+    relationships: z.array(text(10, 240)).max(10).default([]),
+    examTopics: z.array(text(3, 160)).max(12).default([]),
+    difficulty: z.enum(['easy', 'medium', 'hard']).catch('medium'),
+    sections: z
+      .array(z.object({ title: text(2, 120), ref: z.string().trim().max(40).optional() }))
+      .max(20)
+      .default([]),
+    conflicts: z
+      .array(
+        z.object({
+          topic: text(2, 160),
+          explanation: text(5, 400).default(''),
+          claims: z
+            .array(
+              z.object({
+                statement: text(5, 300),
+                ref: z.string().trim().max(40),
+                quote: text(5, 240),
+              }),
+            )
+            .min(2)
+            .max(4),
+        }),
+      )
+      .max(6)
+      .default([]),
+  })
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    value.keyFacts.forEach((fact, index) => {
+      const normalized = key(fact);
+      if (seen.has(normalized)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Duplicate key fact',
+          path: ['keyFacts', index],
+        });
+      }
+      seen.add(normalized);
+    });
+  });
+
+export type GeneratedSourceAnalysis = z.infer<typeof generatedSourceAnalysisSchema>;

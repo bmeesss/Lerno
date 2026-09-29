@@ -247,6 +247,8 @@ export interface Database {
         summary?: string | null;
         summarySourceId?: string | null;
         summaryUpdatedAt?: string | null;
+        analysis?: StudyPackRecord['analysis'];
+        analysisUpdatedAt?: string | null;
         publisher?: string | null;
         method?: string | null;
         methodEdition?: string | null;
@@ -278,6 +280,8 @@ export interface Database {
       failureReason: string | null;
       legacySetId: string | null;
       origin: StudyPackSourceRecord['origin'];
+      metadata?: StudyPackSourceRecord['metadata'];
+      processingStage?: StudyPackSourceRecord['processingStage'];
     }): Promise<StudyPackSourceRecord>;
     update(
       id: string,
@@ -288,6 +292,8 @@ export interface Database {
         characterCount?: number;
         pageCount?: number | null;
         failureReason?: string | null;
+        metadata?: StudyPackSourceRecord['metadata'];
+        processingStage?: StudyPackSourceRecord['processingStage'];
       },
     ): Promise<StudyPackSourceRecord>;
     delete(id: string): Promise<void>;
@@ -302,7 +308,15 @@ export interface Database {
     createMany(packId: string, concepts: NewConcept[]): Promise<ConceptRecord[]>;
     update(
       id: string,
-      patch: { name?: string; explanation?: string; position?: number },
+      patch: {
+        name?: string;
+        explanation?: string;
+        position?: number;
+        refLabel?: string | null;
+        importance?: number | null;
+        difficulty?: ConceptRecord['difficulty'];
+        conflictWith?: string | null;
+      },
     ): Promise<ConceptRecord>;
     delete(id: string): Promise<void>;
     /** Cards/questions pointing at this concept, used for safe deletes. */
