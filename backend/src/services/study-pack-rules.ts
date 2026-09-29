@@ -12,6 +12,7 @@
  * tested and later replaced (e.g. by a smarter mastery model) without touching
  * services or controllers.
  */
+import { DEFAULT_TIMEZONE, todayInZone } from '../lib/timezone.js';
 import type {
   AnswerVerdict,
   CardRecord,
@@ -276,31 +277,55 @@ export function isConceptDue(state: MasteryState, now: Date = new Date()): boole
   return Number.isFinite(dueAt) && dueAt <= now.getTime();
 }
 
-/** Priority: weak → new → due/stale → learning/familiar → mastered checks. */
+export type LearnReason = 'weak' | 'new' | 'learning' | 'due' | 'confirmation';
+
+/** Learn tiers, most urgent first. */
+const LEARN_TIERS: LearnReason[] = ['weak', 'new', 'learning', 'due', 'confirmation'];
+
+/** Which Learn tier a concept is in: the single definition the ranking and the UI reason share. */
+export function learnReason(state: MasteryState, now: Date = new Date()): LearnReason {
+  if (state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD) return 'weak';
+  if (state.attempts === 0) return 'new';
+  if (state.mastery < LEARNING_MASTERY_THRESHOLD) return 'learning';
+  if (isConceptDue(state, now)) return 'due';
+  return 'confirmation';
+}
+
+/**
+ * Learn priority, from the student's live mastery state:
+ *   weak → new → learning → due → mastered confirmation.
+ *
+ * "Learning" is the 30–60% band, "due" is a familiar concept whose review date
+ * has passed, and the last tier confirms what looks mastered. Within a tier the
+ * most urgent concept goes first (lowest mastery, or longest overdue).
+ */
 export function rankLearnCandidates(
   candidates: LearnCandidate[],
   excludedIds: string[] = [],
   now: Date = new Date(),
 ): LearnCandidate[] {
   const excluded = new Set(excludedIds);
-  const priority = (candidate: LearnCandidate): number => {
-    const { state } = candidate;
-    if (state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD) return 0;
-    if (state.attempts === 0) return 1;
-    if (isConceptDue(state, now)) return 2;
-    if (state.mastery < STRONG_MASTERY_THRESHOLD) return 3;
-    return 4;
-  };
+  const tierOf = (candidate: LearnCandidate): number =>
+    LEARN_TIERS.indexOf(learnReason(candidate.state, now));
+  const dueAt = (state: MasteryState): string => state.nextReviewAt ?? '';
   return candidates
     .filter(({ concept }) => !excluded.has(concept.id))
     .slice()
-    .sort((a, b) =>
-      priority(a) - priority(b) ||
-      (priority(a) === 0 || priority(a) === 3 || priority(a) === 4
-        ? a.state.mastery - b.state.mastery
-        : (a.state.nextReviewAt ?? '').localeCompare(b.state.nextReviewAt ?? '')) ||
-      a.concept.position - b.concept.position,
-    );
+    .sort((a, b) => {
+      const tierA = tierOf(a);
+      const tierB = tierOf(b);
+      if (tierA !== tierB) return tierA - tierB;
+      // Tiers with a review schedule: the longest overdue first, then weakest.
+      if (tierA === 2 || tierA === 3) {
+        return (
+          dueAt(a.state).localeCompare(dueAt(b.state)) ||
+          a.state.mastery - b.state.mastery ||
+          a.concept.position - b.concept.position
+        );
+      }
+      if (tierA === 1) return a.concept.position - b.concept.position;
+      return a.state.mastery - b.state.mastery || a.concept.position - b.concept.position;
+    });
 }
 
 export interface RankedRecommendation {
@@ -372,11 +397,19 @@ export function conceptIdForCard(card: Pick<CardRecord, 'question' | 'answer'>, 
 
 /* ---------------------------- exam + planning ----------------------------- */
 
-/** Whole days from `now` until an ISO calendar day (negative when past). */
-export function daysUntil(dayIso: string, now: Date): number {
+/**
+ * Whole calendar days from *today* until an ISO calendar day (negative when past).
+ *
+ * An exam date is a calendar day, not an instant, so "today" has to be the
+ * student's local day: at 23:30 UTC on the 8th it is already the 9th in
+ * Amsterdam, and the countdown must say so. Both sides are compared as
+ * `YYYY-MM-DD` days (pure calendar arithmetic, immune to DST), which removes the
+ * off-by-one a UTC-only comparison has around midnight.
+ */
+export function daysUntil(dayIso: string, now: Date, timeZone: string = DEFAULT_TIMEZONE): number {
   const target = Date.parse(`${dayIso}T00:00:00Z`);
   if (Number.isNaN(target)) return 0;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = Date.parse(`${todayInZone(timeZone, now)}T00:00:00Z`);
   return Math.round((target - today) / 86_400_000);
 }
 
@@ -386,8 +419,9 @@ export function addDaysIso(dayIso: string, days: number): string {
   return result.toISOString().slice(0, 10);
 }
 
-export function todayIso(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
+/** Today's calendar day (YYYY-MM-DD) in the student's timezone (UTC by default). */
+export function todayIso(now: Date = new Date(), timeZone: string = DEFAULT_TIMEZONE): string {
+  return todayInZone(timeZone, now);
 }
 
 export interface StudyPlanInput {
