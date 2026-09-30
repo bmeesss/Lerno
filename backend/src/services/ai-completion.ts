@@ -1,28 +1,43 @@
 /**
- * Low-level Groq completion helper shared by every Lerno AI feature
+ * Low-level AI completion helper shared by every Lerno AI feature
  * (free chat, set actions, generation, evaluation).
  *
  * Responsibilities:
- * - one cached Groq client (connection reuse) keyed by API key
- * - missing key → clean AI_UNAVAILABLE, upstream failures → safe mapped errors
- * - a hard timeout (next to the SDK timeout) so no request hangs the API
- * - structured logging per action: action, model, reasoning effort, duration,
- *   tokens, outcome
+ * - one cached client per provider (connection reuse); the providers themselves
+ *   live in `ai-providers.ts` (Groq primary, Cerebras fallback)
+ * - missing Groq key → clean AI_UNAVAILABLE, upstream failures → safe mapped errors
+ * - a hard timeout (next to the client timeout) so no request hangs the API
+ * - at most *one* fallback attempt: a transient Groq failure is retried once at
+ *   Cerebras with the exact same request and context; both failing returns the
+ *   same clean error the student saw before the fallback existed
+ * - structured logging per action: action, provider, model, reasoning effort,
+ *   duration, tokens, outcome — never the prompt or the answer
  * - the request body is built in one place (`buildChatParams`), so the reasoning
- *   effort, output budget and temperature are identical in production and in the
- *   live audit script
+ *   effort, output budget and temperature are identical for every provider and
+ *   in the live audit script
  *
- * Never logs: the API key, the prompt, or the answer.
+ * Never logs: an API key, the prompt, or the answer.
  */
-import Groq from 'groq-sdk';
 import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
 } from 'groq-sdk/resources/chat/completions.js';
 import { config } from '../config.js';
-import { errors, type ApiError } from '../lib/errors.js';
+import { ApiError, errors } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import {
+  classifyProviderError,
+  fallbackProvider,
+  groqProvider,
+  isTransientProviderError,
+  type AiProvider,
+  type AiProviderId,
+  type ProviderAnswer,
+} from './ai-providers.js';
 import { REASONING_RESERVE, resolveReasoningEffort, type ReasoningEffort } from './ai-reasoning.js';
+
+// Re-exported so existing importers (transcription, OCR, scripts) keep working.
+export { getGroqClient, requireGroqKey } from './ai-providers.js';
 
 /** A text part or an image part (multimodal OCR asks for an image). */
 export type ConversationContentPart =
@@ -34,33 +49,7 @@ export type ConversationMessage = {
   content: string | ConversationContentPart[];
 };
 
-let cachedClient: Groq | null = null;
-let cachedClientKey = '';
-
-/** Reuses one client (and its HTTP connections) instead of building one per request. */
-export function getGroqClient(apiKey: string): Groq {
-  if (!cachedClient || cachedClientKey !== apiKey) {
-    cachedClient = new Groq({
-      apiKey,
-      timeout: config.groqTimeoutMs,
-      maxRetries: config.groqMaxRetries,
-    });
-    cachedClientKey = apiKey;
-  }
-  return cachedClient;
-}
-
-/** Returns the configured key or throws the safe "AI unavailable" error. */
-export function requireGroqKey(): string {
-  const apiKey = config.groqApiKey;
-  if (!apiKey) {
-    // Checked per call (not at boot) so the rest of the API works without AI.
-    throw errors.aiUnavailable('Lerno AI is not available right now. Please try again later.');
-  }
-  return apiKey;
-}
-
-interface GroqErrorShape {
+interface ProviderErrorShape {
   status?: unknown;
   name?: unknown;
   code?: unknown;
@@ -69,7 +58,7 @@ interface GroqErrorShape {
 
 function isTimeoutError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  const shape = error as unknown as GroqErrorShape;
+  const shape = error as unknown as ProviderErrorShape;
   const name = typeof shape.name === 'string' ? shape.name : '';
   if (
     name === 'APIConnectionTimeoutError' ||
@@ -88,11 +77,12 @@ function isTimeoutError(error: unknown): boolean {
 /**
  * Maps an upstream failure to a safe API error. Upstream messages, headers and
  * bodies stay server-side — the student only ever sees a generic message.
+ * Used for every provider, so Groq and Cerebras failures look identical.
  */
 export function mapGroqError(error: unknown): ApiError {
   if (isTimeoutError(error)) return errors.aiTimeout();
 
-  const status = (error as unknown as GroqErrorShape)?.status;
+  const status = (error as unknown as ProviderErrorShape)?.status;
   if (status === 429) {
     return errors.rateLimited('Lerno AI is busy right now. Please try again in a moment.');
   }
@@ -120,12 +110,27 @@ export interface ChatRequest {
    * overrides both. Ignored by models without reasoning support.
    */
   reasoningEffort?: ReasoningEffort;
+  /**
+   * May this request be retried once at the fallback provider (Cerebras) after a
+   * *transient* primary failure? Default: yes. Requests that pin a model only
+   * one provider serves (image OCR) opt out.
+   */
+  fallback?: boolean;
+  /**
+   * Start at this provider instead of the primary. Set by a caller whose earlier
+   * attempt in the same user action already failed at the primary, so a task
+   * never re-tries a provider that is known to be down for that action. Ignored
+   * when the fallback is disabled or not configured.
+   */
+  preferProvider?: AiProviderId;
 }
 
 export interface ChatResult {
   text: string;
   /** Model that actually answered (for logs; never shown to students). */
   model: string;
+  /** Provider that actually answered (for logs; never shown to students). */
+  provider: AiProviderId;
   inputTokens: number | null;
   outputTokens: number | null;
   /** Hidden reasoning tokens billed for this answer (null when not reported). */
@@ -151,8 +156,9 @@ export function completionBudget(
 }
 
 /**
- * The exact Groq request body for one call. Kept separate from `requestChat` so
- * the live audit script measures the very same settings production sends.
+ * The exact request body for one call, identical for every provider apart from
+ * the model name. Kept separate from `requestChat` so the live audit script
+ * measures the very same settings production sends.
  */
 export function buildChatParams(request: ChatRequest): ChatCompletionCreateParamsNonStreaming {
   const reasoningEffort = resolveReasoningEffort(request);
@@ -168,54 +174,164 @@ export function buildChatParams(request: ChatRequest): ChatCompletionCreateParam
   };
 }
 
-/** Sends one chat completion and returns the trimmed text (never throws raw upstream errors). */
-export async function requestChat(request: ChatRequest): Promise<ChatResult> {
-  const apiKey = requireGroqKey();
-  const model = request.model ?? config.groqModel;
+/** How long one call to this provider may take, including its own retries. */
+function watchdogMs(provider: AiProvider): number {
+  const timeout =
+    provider.id === 'groq' ? config.groqTimeoutMs : config.cerebrasTimeoutMs;
+  const retries = provider.id === 'groq' ? config.groqMaxRetries : config.cerebrasMaxRetries;
+  return timeout * (retries + 1) + 2000;
+}
 
-  const startedAt = Date.now();
-  // Belt and braces next to the SDK timeout: covers retries too.
+/** Sends one request to one provider, with a watchdog on top of its own timeout. */
+async function callProvider(
+  provider: AiProvider,
+  request: ChatRequest,
+  params: ChatCompletionCreateParamsNonStreaming,
+): Promise<ProviderAnswer> {
+  // The model belongs to the provider: Groq answers with `GROQ_MODEL`, Cerebras
+  // with `CEREBRAS_MODEL`; everything else (prompt, context, sampling, budget)
+  // is the identical body.
+  const providerParams: ChatCompletionCreateParamsNonStreaming = {
+    ...params,
+    model: request.model ?? provider.defaultModel(),
+  };
+
   const controller = new AbortController();
-  const abortAfter = setTimeout(
-    () => controller.abort(),
-    config.groqTimeoutMs * (config.groqMaxRetries + 1) + 2000,
-  );
+  const abortAfter = setTimeout(() => controller.abort(), watchdogMs(provider));
   abortAfter.unref?.();
-
-  let completion: Awaited<ReturnType<Groq['chat']['completions']['create']>>;
-  const reasoningEffort = resolveReasoningEffort(request);
   try {
-    completion = await getGroqClient(apiKey).chat.completions.create(buildChatParams(request), {
-      signal: controller.signal,
-    });
-  } catch (err) {
-    const mapped = mapGroqError(err);
-    logger.warn('ai.action.failed', {
-      action: request.action,
-      model,
-      reasoningEffort,
-      durationMs: Date.now() - startedAt,
-      outcome: 'error',
-      errorCode: mapped.code,
-      httpStatus: mapped.status,
-    });
-    throw mapped;
+    return await provider.complete(providerParams, { signal: controller.signal });
   } finally {
     clearTimeout(abortAfter);
   }
+}
 
-  const text = completion?.choices?.[0]?.message?.content?.trim() ?? '';
-  const usage = completion?.usage;
+/** The provider a request starts with. */
+function primaryProvider(request: ChatRequest): AiProvider {
+  const wantsFallback = (request.fallback ?? true) && request.preferProvider === 'cerebras';
+  return wantsFallback && fallbackProvider.isConfigured() ? fallbackProvider : groqProvider;
+}
+
+/** True when a failed primary attempt may be retried once at the fallback. */
+function mayFallBack(primary: AiProvider, request: ChatRequest, error: unknown): boolean {
+  if (primary.id !== groqProvider.id) return false;
+  if (request.fallback === false) return false;
+  if (!fallbackProvider.isConfigured()) return false;
+  return isTransientProviderError(error);
+}
+
+function toResult(
+  answer: ProviderAnswer,
+  provider: AiProviderId,
+  reasoningEffort: ReasoningEffort | null,
+  durationMs: number,
+): ChatResult {
   return {
-    text,
-    model,
-    durationMs: Date.now() - startedAt,
-    inputTokens: usage?.prompt_tokens ?? null,
-    outputTokens: usage?.completion_tokens ?? null,
-    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? null,
-    totalTokens: usage?.total_tokens ?? null,
+    text: answer.text,
+    model: answer.model,
+    provider,
+    durationMs,
+    inputTokens: answer.inputTokens,
+    outputTokens: answer.outputTokens,
+    reasoningTokens: answer.reasoningTokens,
+    totalTokens: answer.totalTokens,
     reasoningEffort,
   };
+}
+
+/**
+ * Sends one chat completion and returns the trimmed text (never throws raw
+ * upstream errors).
+ *
+ * Provider policy: Groq answers first; if it fails in a way another provider can
+ * fix (rate limit, timeout, network, provider-side outage) the *same* request is
+ * sent to Cerebras exactly once. If Cerebras also fails, the mapped Groq error
+ * is thrown — the same clean error as before the fallback existed. Failures we
+ * caused ourselves (bad request, validation, missing key) never switch provider.
+ */
+export async function requestChat(request: ChatRequest): Promise<ChatResult> {
+  const startedAt = Date.now();
+  const params = buildChatParams(request);
+  const reasoningEffort = resolveReasoningEffort(request);
+  const primary = primaryProvider(request);
+
+  try {
+    const answer = await callProvider(primary, request, params);
+    return toResult(answer, primary.id, reasoningEffort, Date.now() - startedAt);
+  } catch (error) {
+    // Our own clean errors (missing key, student rate limit, …) pass through
+    // untouched — they are decisions, not provider failures.
+    if (error instanceof ApiError) throw error;
+
+    const mapped = mapGroqError(error);
+
+    // Without a fallback the failure is logged exactly like before, and the
+    // action carries on failing (`ai.action.failed` keeps its old meaning).
+    if (!mayFallBack(primary, request, error)) {
+      logActionFailed(request, params.model, reasoningEffort, startedAt, mapped);
+      throw mapped;
+    }
+
+    // With a fallback, one line explains *why* the provider switch happens —
+    // and no failure line is logged unless the action really fails.
+    const fallbackStartedAt = Date.now();
+    logger.info('ai.provider.fallback', {
+      action: request.action,
+      from: primary.id,
+      to: fallbackProvider.id,
+      reason: classifyProviderError(error),
+      errorCode: mapped.code,
+      httpStatus: mapped.status,
+    });
+
+    try {
+      const answer = await callProvider(fallbackProvider, request, params);
+      logger.info('ai.provider.fallback.completed', {
+        action: request.action,
+        provider: fallbackProvider.id,
+        durationMs: Date.now() - fallbackStartedAt,
+        outcome: 'ok',
+      });
+      return toResult(answer, fallbackProvider.id, reasoningEffort, Date.now() - startedAt);
+    } catch (fallbackError) {
+      const fallbackMapped = mapGroqError(fallbackError);
+      logger.warn('ai.provider.fallback.failed', {
+        action: request.action,
+        provider: fallbackProvider.id,
+        durationMs: Date.now() - fallbackStartedAt,
+        outcome: 'error',
+        errorCode: fallbackMapped.code,
+        httpStatus: fallbackMapped.status,
+        primaryErrorCode: mapped.code,
+      });
+      // Both providers failed: report the error the primary produced, so the
+      // student sees the same message as before the fallback existed.
+      logActionFailed(request, params.model, reasoningEffort, startedAt, mapped, fallbackMapped);
+      throw mapped;
+    }
+  }
+}
+
+/** One `ai.action.failed` line per failed action (never per provider attempt). */
+function logActionFailed(
+  request: ChatRequest,
+  model: string,
+  reasoningEffort: ReasoningEffort | null,
+  startedAt: number,
+  mapped: ApiError,
+  fallbackError?: ApiError,
+): void {
+  logger.warn('ai.action.failed', {
+    action: request.action,
+    provider: groqProvider.id,
+    model,
+    reasoningEffort,
+    durationMs: Date.now() - startedAt,
+    outcome: 'error',
+    errorCode: mapped.code,
+    httpStatus: mapped.status,
+    ...(fallbackError ? { fallbackErrorCode: fallbackError.code } : {}),
+  });
 }
 
 /** Logs one completed AI action (never the prompt or the answer). */
@@ -227,6 +343,7 @@ export function logAiAction(
 ): void {
   logger.info('ai.action.completed', {
     action,
+    provider: result.provider,
     model: result.model,
     reasoningEffort: result.reasoningEffort,
     durationMs: result.durationMs,

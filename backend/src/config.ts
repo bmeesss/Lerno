@@ -22,6 +22,14 @@ function stringFromEnv(defaultValue: string) {
   );
 }
 
+/** URL env helper: empty values fall back to the default, anything else must parse. */
+function urlFromEnv(defaultValue: string) {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().url().default(defaultValue),
+  );
+}
+
 /** Enum env helper: empty strings fall back to the default. */
 function boundedEnum<T extends string>(values: readonly [T, ...T[]], defaultValue: T) {
   return z.preprocess(
@@ -81,6 +89,24 @@ const envSchema = z.object({
    * defensively and validated with Zod — this only helps the model comply.
    */
   GROQ_JSON_MODE: boundedEnum(['true', 'false'], 'true').transform((v) => v === 'true'),
+  /**
+   * Cerebras Inference key (server-side only). Optional: empty keeps Lerno AI
+   * Groq-only. When set, a *transient* Groq failure is retried once at Cerebras
+   * with the exact same request (see `services/ai-providers.ts`). Never shipped
+   * to the frontend, logged or committed.
+   */
+  CEREBRAS_API_KEY: z.string().optional(),
+  /** Cerebras chat model used for the fallback answer. */
+  CEREBRAS_MODEL: stringFromEnv('gpt-oss-120b'),
+  /** OpenAI-compatible Cerebras base URL (a trailing slash is stripped). */
+  CEREBRAS_BASE_URL: urlFromEnv('https://api.cerebras.ai/v1'),
+  /** Hard timeout for one Cerebras fallback call. */
+  CEREBRAS_TIMEOUT_MS: boundedNumber(30_000, 1_000, 120_000, true),
+  /**
+   * Retries inside the fallback client. 0 (default) means: one fallback attempt
+   * per user request, never a retry loop.
+   */
+  CEREBRAS_MAX_RETRIES: boundedNumber(0, 0, 2, true),
   /** Max cards sent to the model as set context (larger sets are trimmed). */
   AI_CONTEXT_MAX_CARDS: boundedNumber(60, 5, 200, true),
   /** Hard ceiling on the characters of one set context sent to the model. */
@@ -168,6 +194,27 @@ if ((parsed.NODE_ENV === 'production' || isSupabaseConfigured) && !parsed.PUBLIC
   );
 }
 
+// The Cerebras base URL is concatenated with a fixed path and called with a
+// bearer key. A credentialed, query-carrying or plaintext (in production) URL
+// would send the AI key somewhere it does not belong, so it fails fast at boot.
+const cerebrasBaseUrl = parsed.CEREBRAS_BASE_URL.replace(/\/+$/, '');
+{
+  const url = new URL(cerebrasBaseUrl);
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !['http:', 'https:'].includes(url.protocol) ||
+    ((parsed.NODE_ENV === 'production' || isSupabaseConfigured) && url.protocol !== 'https:')
+  ) {
+    throw new Error(
+      'CEREBRAS_BASE_URL must be a plain HTTP(S) URL without credentials, query or fragment ' +
+        '(HTTPS whenever Supabase or production is configured)',
+    );
+  }
+}
+
 export const config = {
   nodeEnv: parsed.NODE_ENV,
   isProduction: parsed.NODE_ENV === 'production',
@@ -195,6 +242,15 @@ export const config = {
   /** auto = per-task reasoning defaults; low|medium|high = force one level. */
   groqReasoningEffort: parsed.GROQ_REASONING_EFFORT,
   groqJsonMode: parsed.GROQ_JSON_MODE,
+  /**
+   * Server-only Cerebras credentials (fallback provider). Empty key = no
+   * fallback; Groq stays the only provider and its errors are unchanged.
+   */
+  cerebrasApiKey: parsed.CEREBRAS_API_KEY ?? '',
+  cerebrasModel: parsed.CEREBRAS_MODEL,
+  cerebrasBaseUrl,
+  cerebrasTimeoutMs: parsed.CEREBRAS_TIMEOUT_MS,
+  cerebrasMaxRetries: parsed.CEREBRAS_MAX_RETRIES,
   /** Bounds for AI study-set context sent to the model. */
   aiContextMaxCards: parsed.AI_CONTEXT_MAX_CARDS,
   aiContextMaxChars: parsed.AI_CONTEXT_MAX_CHARS,

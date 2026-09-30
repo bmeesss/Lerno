@@ -99,3 +99,62 @@ describe('Lerno AI configuration', () => {
     expect(config.frontendUrls).not.toContain('test-key-placeholder');
   });
 });
+
+describe('Cerebras fallback provider configuration', () => {
+  it('is optional: empty by default, with the documented model and endpoint', async () => {
+    const { config } = await loadConfig();
+    expect(config.cerebrasApiKey).toBe('');
+    expect(config.cerebrasModel).toBe('gpt-oss-120b');
+    expect(config.cerebrasBaseUrl).toBe('https://api.cerebras.ai/v1');
+    expect(config.cerebrasTimeoutMs).toBe(30_000);
+    // 0 = exactly one fallback attempt per user request.
+    expect(config.cerebrasMaxRetries).toBe(0);
+  });
+
+  it('reads CEREBRAS_API_KEY, CEREBRAS_MODEL, CEREBRAS_BASE_URL and the budget', async () => {
+    const { config } = await loadConfig({
+      CEREBRAS_API_KEY: 'test-key-placeholder',
+      CEREBRAS_MODEL: 'gpt-oss-120b-preview',
+      CEREBRAS_BASE_URL: 'https://inference.test.invalid/v1/',
+      CEREBRAS_TIMEOUT_MS: '9000',
+      CEREBRAS_MAX_RETRIES: '0',
+    });
+
+    expect(config.cerebrasApiKey).toBe('test-key-placeholder');
+    expect(config.cerebrasModel).toBe('gpt-oss-120b-preview');
+    // A trailing slash would double up with the request path.
+    expect(config.cerebrasBaseUrl).toBe('https://inference.test.invalid/v1');
+    expect(config.cerebrasTimeoutMs).toBe(9_000);
+    expect(config.cerebrasMaxRetries).toBe(0);
+  });
+
+  it('keeps the key server-side only (no frontend-facing export)', async () => {
+    const { config } = await loadConfig({ CEREBRAS_API_KEY: 'test-key-placeholder' });
+    expect(config.cerebrasApiKey).toBe('test-key-placeholder');
+    expect(config.frontendUrls).not.toContain('test-key-placeholder');
+  });
+
+  it('rejects a base URL that would send the key somewhere unsafe', async () => {
+    for (const value of [
+      'http://api.cerebras.ai/v1',
+      'https://user:pass@api.cerebras.ai/v1',
+      'https://api.cerebras.ai/v1?redirect=evil',
+      'https://api.cerebras.ai/v1#fragment',
+      'not-a-url',
+    ]) {
+      await expect(loadConfig({ CEREBRAS_BASE_URL: value })).rejects.toThrow();
+    }
+  });
+
+  it('treats empty fallback values as unset and keeps the defaults', async () => {
+    const { config } = await loadConfig({
+      CEREBRAS_API_KEY: '',
+      CEREBRAS_MODEL: '',
+      CEREBRAS_BASE_URL: '',
+    });
+
+    expect(config.cerebrasApiKey).toBe('');
+    expect(config.cerebrasModel).toBe('gpt-oss-120b');
+    expect(config.cerebrasBaseUrl).toBe('https://api.cerebras.ai/v1');
+  });
+});

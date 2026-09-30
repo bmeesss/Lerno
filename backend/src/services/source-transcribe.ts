@@ -9,6 +9,10 @@
  *
  * Failure is never silent: without a transcript the source fails with a clear
  * message and the student can retry, exactly like a PDF that cannot be read.
+ *
+ * Transcription has no fallback provider: Cerebras serves chat completions
+ * only, so audio stays on the Groq transcription endpoint (honestly reported
+ * when it is unavailable).
  */
 import { config } from '../config.js';
 import { ApiError, errors } from '../lib/errors.js';

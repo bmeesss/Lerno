@@ -9,10 +9,16 @@
 --      came from (provenance), and to the concept it belongs to.
 --   4. Publisher/method columns exist for future *official* school-method
 --      integrations only. No copyrighted book content is ever scraped here.
+--
+-- Re-runnable: tables and indexes use "if not exists", triggers and the
+-- deferred foreign key are created only when they are missing, and both
+-- backfills below are guarded (the packs one by the unique legacy_set_id, the
+-- sources one by an explicit "not exists"). Re-running only ever *adds* the
+-- packs/sources that are genuinely missing; it never rewrites or removes a row.
 
 -- study_packs ----------------------------------------------------------------
 
-create table public.study_packs (
+create table if not exists public.study_packs (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
   subject_id uuid references public.subjects (id) on delete set null,
@@ -37,20 +43,32 @@ create table public.study_packs (
   updated_at timestamptz not null default now()
 );
 
-create trigger study_packs_set_updated_at
-  before update on public.study_packs
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'study_packs_set_updated_at'
+      and tgrelid = to_regclass('public.study_packs')
+      and not tgisinternal
+  ) then
+    create trigger study_packs_set_updated_at
+      before update on public.study_packs
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index study_packs_owner_idx on public.study_packs (owner_id);
-create index study_packs_subject_idx on public.study_packs (subject_id);
-create index study_packs_exam_idx on public.study_packs (owner_id, exam_date);
+create index if not exists study_packs_owner_idx on public.study_packs (owner_id);
+create index if not exists study_packs_subject_idx on public.study_packs (subject_id);
+create index if not exists study_packs_exam_idx on public.study_packs (owner_id, exam_date);
 
 -- study_pack_sources ---------------------------------------------------------
 -- One row per piece of material: pasted text, PDF, an existing Lerno set, and
 -- (future) PowerPoint/YouTube/image/audio sources. `status` models the
 -- asynchronous pipeline the UI already renders.
 
-create table public.study_pack_sources (
+create table if not exists public.study_pack_sources (
   id uuid primary key default gen_random_uuid(),
   pack_id uuid not null references public.study_packs (id) on delete cascade,
   owner_id uuid not null references public.profiles (id) on delete cascade,
@@ -67,15 +85,27 @@ create table public.study_pack_sources (
   updated_at timestamptz not null default now()
 );
 
-create trigger study_pack_sources_set_updated_at
-  before update on public.study_pack_sources
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'study_pack_sources_set_updated_at'
+      and tgrelid = to_regclass('public.study_pack_sources')
+      and not tgisinternal
+  ) then
+    create trigger study_pack_sources_set_updated_at
+      before update on public.study_pack_sources
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index study_pack_sources_pack_idx on public.study_pack_sources (pack_id, created_at);
+create index if not exists study_pack_sources_pack_idx on public.study_pack_sources (pack_id, created_at);
 
 -- concepts -------------------------------------------------------------------
 
-create table public.concepts (
+create table if not exists public.concepts (
   id uuid primary key default gen_random_uuid(),
   pack_id uuid not null references public.study_packs (id) on delete cascade,
   source_id uuid references public.study_pack_sources (id) on delete set null,
@@ -87,17 +117,29 @@ create table public.concepts (
   updated_at timestamptz not null default now()
 );
 
-create trigger concepts_set_updated_at
-  before update on public.concepts
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'concepts_set_updated_at'
+      and tgrelid = to_regclass('public.concepts')
+      and not tgisinternal
+  ) then
+    create trigger concepts_set_updated_at
+      before update on public.concepts
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index concepts_pack_idx on public.concepts (pack_id, position);
+create index if not exists concepts_pack_idx on public.concepts (pack_id, position);
 
 -- concept_mastery ------------------------------------------------------------
 -- Per-user mastery (0..1) of one concept. Feeds weak-topic detection, review
 -- prioritisation and — later — adaptive learning.
 
-create table public.concept_mastery (
+create table if not exists public.concept_mastery (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   concept_id uuid not null references public.concepts (id) on delete cascade,
@@ -111,15 +153,27 @@ create table public.concept_mastery (
   unique (user_id, concept_id)
 );
 
-create trigger concept_mastery_set_updated_at
-  before update on public.concept_mastery
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'concept_mastery_set_updated_at'
+      and tgrelid = to_regclass('public.concept_mastery')
+      and not tgisinternal
+  ) then
+    create trigger concept_mastery_set_updated_at
+      before update on public.concept_mastery
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index concept_mastery_user_idx on public.concept_mastery (user_id);
+create index if not exists concept_mastery_user_idx on public.concept_mastery (user_id);
 
 -- practice_questions ---------------------------------------------------------
 
-create table public.practice_questions (
+create table if not exists public.practice_questions (
   id uuid primary key default gen_random_uuid(),
   pack_id uuid not null references public.study_packs (id) on delete cascade,
   concept_id uuid references public.concepts (id) on delete set null,
@@ -135,16 +189,28 @@ create table public.practice_questions (
   updated_at timestamptz not null default now()
 );
 
-create trigger practice_questions_set_updated_at
-  before update on public.practice_questions
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'practice_questions_set_updated_at'
+      and tgrelid = to_regclass('public.practice_questions')
+      and not tgisinternal
+  ) then
+    create trigger practice_questions_set_updated_at
+      before update on public.practice_questions
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index practice_questions_pack_idx on public.practice_questions (pack_id, position);
+create index if not exists practice_questions_pack_idx on public.practice_questions (pack_id, position);
 
 -- practice_attempts ----------------------------------------------------------
 -- Every graded practice answer. Weak concepts are derived from these rows.
 
-create table public.practice_attempts (
+create table if not exists public.practice_attempts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   pack_id uuid not null references public.study_packs (id) on delete cascade,
@@ -155,11 +221,11 @@ create table public.practice_attempts (
   created_at timestamptz not null default now()
 );
 
-create index practice_attempts_user_pack_idx on public.practice_attempts (user_id, pack_id, created_at);
+create index if not exists practice_attempts_user_pack_idx on public.practice_attempts (user_id, pack_id, created_at);
 
 -- tests / test_questions / test_attempts -------------------------------------
 
-create table public.tests (
+create table if not exists public.tests (
   id uuid primary key default gen_random_uuid(),
   pack_id uuid not null references public.study_packs (id) on delete cascade,
   owner_id uuid not null references public.profiles (id) on delete cascade,
@@ -169,18 +235,18 @@ create table public.tests (
   created_at timestamptz not null default now()
 );
 
-create index tests_pack_idx on public.tests (pack_id, created_at);
+create index if not exists tests_pack_idx on public.tests (pack_id, created_at);
 
-create table public.test_questions (
+create table if not exists public.test_questions (
   id uuid primary key default gen_random_uuid(),
   test_id uuid not null references public.tests (id) on delete cascade,
   question_id uuid not null references public.practice_questions (id) on delete cascade,
   position integer not null default 0
 );
 
-create index test_questions_test_idx on public.test_questions (test_id, position);
+create index if not exists test_questions_test_idx on public.test_questions (test_id, position);
 
-create table public.test_attempts (
+create table if not exists public.test_attempts (
   id uuid primary key default gen_random_uuid(),
   test_id uuid not null references public.tests (id) on delete cascade,
   pack_id uuid not null references public.study_packs (id) on delete cascade,
@@ -196,12 +262,12 @@ create table public.test_attempts (
   created_at timestamptz not null default now()
 );
 
-create index test_attempts_user_pack_idx on public.test_attempts (user_id, pack_id, created_at);
+create index if not exists test_attempts_user_pack_idx on public.test_attempts (user_id, pack_id, created_at);
 
 -- study_plans ----------------------------------------------------------------
 -- One (replaceable) study plan per pack, generated from the exam date.
 
-create table public.study_plans (
+create table if not exists public.study_plans (
   id uuid primary key default gen_random_uuid(),
   pack_id uuid not null unique references public.study_packs (id) on delete cascade,
   owner_id uuid not null references public.profiles (id) on delete cascade,
@@ -212,25 +278,50 @@ create table public.study_plans (
   updated_at timestamptz not null default now()
 );
 
-create trigger study_plans_set_updated_at
-  before update on public.study_plans
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'study_plans_set_updated_at'
+      and tgrelid = to_regclass('public.study_plans')
+      and not tgisinternal
+  ) then
+    create trigger study_plans_set_updated_at
+      before update on public.study_plans
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
 -- Provenance on cards --------------------------------------------------------
 -- Nullable additions: classic set/card flows leave both columns empty, so
 -- nothing in the existing product changes.
 
 alter table public.cards
-  add column source_id uuid references public.study_pack_sources (id) on delete set null,
-  add column concept_id uuid references public.concepts (id) on delete set null;
+  add column if not exists source_id uuid references public.study_pack_sources (id) on delete set null,
+  add column if not exists concept_id uuid references public.concepts (id) on delete set null;
 
-create index cards_concept_idx on public.cards (concept_id);
+create index if not exists cards_concept_idx on public.cards (concept_id);
 
 -- summary provenance (added after study_pack_sources exists) ------------------
+-- The foreign key is only created when it is missing: an existing, identical
+-- constraint is left alone (and is not validated again).
 
-alter table public.study_packs
-  add constraint study_packs_summary_source_fk
-  foreign key (summary_source_id) references public.study_pack_sources (id) on delete set null;
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'study_packs_summary_source_fk'
+      and conrelid = to_regclass('public.study_packs')
+  ) then
+    alter table public.study_packs
+      add constraint study_packs_summary_source_fk
+      foreign key (summary_source_id) references public.study_pack_sources (id) on delete set null;
+  end if;
+end
+$lerno$;
 
 -- Backfill: every existing study set becomes a Study Pack --------------------
 -- Non-destructive and idempotent: the pack links the existing set, so all

@@ -82,23 +82,27 @@ the environment variables are present. Never run production without Supabase con
 
 1. Create a Supabase project.
 2. Run the migrations in [`database/migrations/`](database/migrations/) in order (SQL editor or
-   `psql`). They create the tables and enable row-level security.
+   `psql`). They create the tables and enable row-level security. All of them are designed to be
+   safely re-runnable against an existing database: applying the whole folder again never drops
+   data and ends in the same schema (see
+   [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#migrations-are-re-runnable)).
 3. Fill `backend/.env` and `frontend/.env` with the project URL, anon key and (server-side only)
    service-role key.
 4. Restart both dev servers.
 
 ## Scripts
 
-| Command                | What it does                                                 |
-| ---------------------- | ------------------------------------------------------------ |
-| `npm run dev:frontend` | Start the Vite dev server                                    |
-| `npm run dev:backend`  | Start the API with hot reload                                |
-| `npm run build`        | Build backend and frontend                                   |
-| `npm run lint`         | ESLint                                                       |
-| `npm run format`       | Prettier write                                               |
-| `npm run typecheck`    | TypeScript checks for both workspaces                        |
-| `npm test`             | Backend + frontend test suites                               |
-| `npm run test:smoke`   | End-to-end API smoke flow (signup → study → quiz → progress) |
+| Command                   | What it does                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `npm run dev:frontend`    | Start the Vite dev server                                                             |
+| `npm run dev:backend`     | Start the API with hot reload                                                         |
+| `npm run build`           | Build backend and frontend                                                            |
+| `npm run lint`            | ESLint                                                                                |
+| `npm run format`          | Prettier write                                                                        |
+| `npm run typecheck`       | TypeScript checks for both workspaces                                                 |
+| `npm test`                | Backend + frontend test suites                                                        |
+| `npm run test:smoke`      | End-to-end API smoke flow (signup → study → quiz → progress)                          |
+| `npm run test:migrations` | Runs the migration chain against a real PostgreSQL server (needs `pg` and a database) |
 
 ## Deployment
 

@@ -2,9 +2,10 @@
  * Image → text (OCR).
  *
  * Lerno reads images with the vision model of the *existing* Groq layer: no extra
- * OCR service, no extra API key, and the key stays server-side. The model is told
- * to transcribe verbatim — never to explain, summarize or answer — and its output
- * is treated as untrusted text like any other source.
+ * OCR service, no extra API key, and the key stays server-side. The Cerebras
+ * fallback serves chat completions only, so OCR opts out of it explicitly. The
+ * model is told to transcribe verbatim — never to explain, summarize or answer —
+ * and its output is treated as untrusted text like any other source.
  *
  * Honesty rules this module enforces:
  *  - an image without enough readable text fails with a clear message
@@ -70,6 +71,9 @@ export async function ocrImage(input: { buffer: Buffer; mimeType: string }): Pro
   const result = await requestChat({
     action: 'source-ocr',
     model: config.groqVisionModel,
+    // Vision is a Groq-only model: never send an image to the text-only
+    // fallback provider (there is no equivalent vision model there).
+    fallback: false,
     messages: [
       systemMessage!,
       {

@@ -18,6 +18,7 @@ import { describeAiJsonFailure, parseAiJson, type AiJsonFailure } from '../lib/a
 import { cleanAiText } from '../lib/ai-text.js';
 import { errors } from '../lib/errors.js';
 import { logAiAction, requestChat, type ChatResult } from './ai-completion.js';
+import type { AiProviderId } from './ai-providers.js';
 import { AI_TASKS, taskMessages, type AiTaskName } from './ai-prompts.js';
 
 export interface AiTaskRunOptions {
@@ -80,6 +81,13 @@ export async function runStructuredAiTask<S extends z.ZodTypeAny>(
 ): Promise<StructuredTaskResult<S>> {
   const taskConfig = AI_TASKS[options.task];
   let failure: AiJsonFailure = { ok: false, reason: 'empty' };
+  /**
+   * Provider this user action has already switched to. When the primary failed
+   * on one attempt, the remaining parse attempts stay on the provider that
+   * answered: one action never re-tries a provider that is down, and never
+   * falls back twice.
+   */
+  let preferProvider: AiProviderId | undefined;
 
   for (let attempt = 1; attempt <= taskConfig.parseAttempts; attempt += 1) {
     const result = await requestChat({
@@ -92,7 +100,9 @@ export async function runStructuredAiTask<S extends z.ZodTypeAny>(
       maxOutputTokens: options.maxOutputTokens ?? taskConfig.maxOutputTokens,
       temperature: options.temperature ?? taskConfig.temperature,
       jsonMode: taskConfig.json,
+      preferProvider,
     });
+    preferProvider = result.provider === 'groq' ? preferProvider : result.provider;
 
     const parsed = parseAiJson(guardSecretLeak(result.text), options.schema);
     if (parsed.ok && (!options.validCount || options.validCount(parsed.data))) {
