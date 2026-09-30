@@ -23,7 +23,9 @@ export const SYSTEM_PROMPT_FINGERPRINTS = [
 export const SECRET_PATTERNS = [
   /gsk_[A-Za-z0-9]{12,}/,
   /\bsk-[A-Za-z0-9]{16,}/,
+  /\bcsk-[A-Za-z0-9]{12,}/,
   /groq[_-]?api[_-]?key/i,
+  /cerebras[_-]?api[_-]?key/i,
 ];
 
 /** Replaces a leaking answer with a short refusal; other text passes through. */

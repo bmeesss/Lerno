@@ -6,35 +6,99 @@ level. It is a normal Lerno feature: it uses the existing Supabase login and the
 existing backend — it is **fully independent of the MCP server**.
 
 ```
-Lerno frontend → Lerno backend (POST /api/ai/chat) → Groq API
+Lerno frontend → Lerno backend (POST /api/ai/chat) → Groq API        (primary)
+                                                 ↘ Cerebras Inference (fallback, one attempt)
 ```
 
-The **Groq API key never leaves the backend**. It is not part of any response, log
-line, or frontend bundle, and it is never committed to Git.
+The **Groq and Cerebras API keys never leave the backend**. They are not part of any
+response, log line, or frontend bundle, and they are never committed to Git.
 
 ## Configuration
 
 All Lerno AI settings live on the backend only (`backend/src/config.ts`) and are read
 from environment variables. Nothing is hardcoded per environment.
 
-| Variable                  | Default                 | What it does                                                                            |
-| ------------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
-| `GROQ_API_KEY`            | _(empty = AI disabled)_ | Server-side Groq key. Never commit, never ship to the browser.                          |
-| `GROQ_MODEL`              | `openai/gpt-oss-120b`   | Chat model; change to switch models without code changes.                               |
-| `GROQ_MAX_OUTPUT_TOKENS`  | `2048`                  | Upper bound on tokens per answer (256–8192).                                            |
-| `GROQ_TEMPERATURE`        | `0.6`                   | Sampling temperature (0–2).                                                             |
-| `GROQ_REASONING_EFFORT`   | `auto`                  | `auto` = per-task effort; `low`/`medium`/`high` forces one level for a measurement run. |
-| `GROQ_TIMEOUT_MS`         | `30000`                 | Timeout for one upstream call (1–120 s).                                                |
-| `GROQ_MAX_RETRIES`        | `1`                     | Retries inside the Groq SDK (0–3).                                                      |
-| `AI_RATE_LIMIT_MAX`       | `20`                    | AI messages per user per window.                                                        |
-| `AI_RATE_LIMIT_WINDOW_MS` | `300000` (5 min)        | Window for the per-user AI quota.                                                       |
-| `AI_RATE_LIMIT_IP_MAX`    | `60`                    | Wider per-IP quota for the AI endpoint.                                                 |
-| `GROQ_JSON_MODE`          | `true`                  | Ask Groq for JSON on structured tasks (always validated).                               |
-| `AI_CONTEXT_MAX_CARDS`    | `60`                    | Max cards sent to the model as set context (5–200).                                     |
-| `AI_CONTEXT_MAX_CHARS`    | `12000`                 | Hard ceiling for one set context (1 000–40 000).                                        |
+| Variable                  | Default                      | What it does                                                                                    |
+| ------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `GROQ_API_KEY`            | _(empty = AI disabled)_      | Server-side Groq key. Never commit, never ship to the browser.                                  |
+| `GROQ_MODEL`              | `openai/gpt-oss-120b`        | Chat model; change to switch models without code changes.                                       |
+| `GROQ_MAX_OUTPUT_TOKENS`  | `2048`                       | Upper bound on tokens per answer (256–8192).                                                    |
+| `GROQ_TEMPERATURE`        | `0.6`                        | Sampling temperature (0–2).                                                                     |
+| `GROQ_REASONING_EFFORT`   | `auto`                       | `auto` = per-task effort; `low`/`medium`/`high` forces one level for a measurement run.         |
+| `GROQ_TIMEOUT_MS`         | `30000`                      | Timeout for one upstream call (1–120 s).                                                        |
+| `GROQ_MAX_RETRIES`        | `1`                          | Retries inside the Groq SDK (0–3).                                                              |
+| `CEREBRAS_API_KEY`        | _(empty = no fallback)_      | Server-side [Cerebras](https://cloud.cerebras.ai) key. Never commit, never ship to the browser. |
+| `CEREBRAS_MODEL`          | `gpt-oss-120b`               | Cerebras chat model used for the fallback answer.                                               |
+| `CEREBRAS_BASE_URL`       | `https://api.cerebras.ai/v1` | OpenAI-compatible Cerebras endpoint (must be a plain HTTPS URL).                                |
+| `CEREBRAS_TIMEOUT_MS`     | `30000`                      | Timeout for one fallback call (1–120 s).                                                        |
+| `CEREBRAS_MAX_RETRIES`    | `0`                          | Retries inside the fallback client (0–2). `0` = exactly one fallback attempt.                   |
+| `AI_RATE_LIMIT_MAX`       | `20`                         | AI messages per user per window.                                                                |
+| `AI_RATE_LIMIT_WINDOW_MS` | `300000` (5 min)             | Window for the per-user AI quota.                                                               |
+| `AI_RATE_LIMIT_IP_MAX`    | `60`                         | Wider per-IP quota for the AI endpoint.                                                         |
+| `GROQ_JSON_MODE`          | `true`                       | Ask Groq for JSON on structured tasks (always validated).                                       |
+| `AI_CONTEXT_MAX_CARDS`    | `60`                         | Max cards sent to the model as set context (5–200).                                             |
+| `AI_CONTEXT_MAX_CHARS`    | `12000`                      | Hard ceiling for one set context (1 000–40 000).                                                |
 
 Empty values fall back to the defaults; out-of-range values fail fast at boot instead
 of silently misbehaving. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for where to set them.
+
+## Providers
+
+Lerno AI has exactly **one** AI implementation. The provider-specific parts live in
+[`backend/src/services/ai-providers.ts`](../backend/src/services/ai-providers.ts) and
+nothing else in the codebase knows which provider answered.
+
+| Provider     | Role     | Model (default)       | Endpoint                                         | Credential         |
+| ------------ | -------- | --------------------- | ------------------------------------------------ | ------------------ |
+| **Groq**     | primary  | `openai/gpt-oss-120b` | Groq chat completions (SDK)                      | `GROQ_API_KEY`     |
+| **Cerebras** | fallback | `gpt-oss-120b`        | `https://api.cerebras.ai/v1` (OpenAI-compatible) | `CEREBRAS_API_KEY` |
+
+Both speak the OpenAI chat-completions protocol, so Cerebras reuses the existing
+request body and the SDK **without adding a package**: Groq through the existing
+`groq-sdk` client, Cerebras over the built-in `fetch`. Groq and Cerebras are the two
+implementations of one `AiProvider` interface (`isConfigured`, `defaultModel`,
+`complete`), so a new provider is one object, not a second code path.
+
+### Fallback policy
+
+```
+Groq request   → success                     → done (nothing changes)
+Groq transient → Cerebras (same request)     → success → done
+Groq transient → Cerebras fails              → the normal "AI unavailable" error
+```
+
+- **At most one fallback attempt per user request.** There is no Groq→Groq→Cerebras
+  chain and no retry storm. The Groq SDK keeps its own `GROQ_MAX_RETRIES`, and the
+  fallback client defaults to `CEREBRAS_MAX_RETRIES=0`.
+- **Same content, same context.** The system prompt, history, level directive, set/source
+  context, JSON mode, temperature, token budget and reasoning effort are identical for
+  both providers; only the model name differs (each provider serves its own).
+- **A task never re-tries a dead provider.** When a structured task retries an unusable
+  answer, the remaining attempts stay on the provider that answered, so one user action
+  can never spend a second Groq call after the first one failed.
+- **No double generation.** The fallback only replaces a failed _call_; the caller still
+  validates and stores its result once, exactly as before.
+
+Which errors trigger the fallback (classified in `ai-providers.ts`):
+
+| Groq outcome                                                                                 | Fallback? |
+| -------------------------------------------------------------------------------------------- | --------- |
+| `429` rate limit, `408`/`409`/`425`                                                          | yes       |
+| `5xx` (500/502/503/504 and Cloudflare's 52x) — provider unavailable                          | yes       |
+| `401`/`403` (our key rejected) and `404` (model retired)                                     | yes       |
+| timeout (`APIConnectionTimeoutError`, our own watchdog abort)                                | yes       |
+| network failure (`APIConnectionError`, `ECONNRESET`, `ENOTFOUND`, `fetch failed`, …)         | yes       |
+| `400`/`405`/`422`, schema/validation failures, our own bugs, an explicitly disabled fallback | no        |
+
+The rule behind the last row: a request _we_ built wrong would fail at the second
+provider too, so it is reported as-is instead of being masked — and it never costs a
+second upstream call. Image OCR pins a Groq-only vision model and opts out of the
+fallback explicitly; audio transcription has no fallback either (Cerebras serves chat
+completions only).
+
+When both providers are down the student sees the error the primary produced — the same
+clean `AI_*` envelope as before the fallback existed, never an upstream message, status
+or body.
 
 ## Running locally
 
@@ -44,6 +108,8 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 # optional, enables AI answers:
 #   put GROQ_API_KEY=gsk_... into backend/.env
+# optional, enables the Cerebras fallback provider:
+#   put CEREBRAS_API_KEY=csk-... into backend/.env
 
 npm run dev:backend     # http://localhost:4000
 npm run dev:frontend    # http://localhost:5173
@@ -333,10 +399,12 @@ prompt carries one compact rule:
 
 ### Logging
 
-Every AI action logs one line with `action`, `model`, `reasoningEffort`,
+Every AI action logs one line with `action`, `provider`, `model`, `reasoningEffort`,
 `durationMs`, `outcome`, token counts (including `reasoningTokens`) and safe
-counters (`ai.action.completed`, `ai.action.failed`, `ai.study.finished`). Never
-logged: the API key, prompts, answers or personal data.
+counters (`ai.action.completed`, `ai.action.failed`, `ai.study.finished`). A fallback
+adds non-sensitive lines (`ai.provider.fallback`, and `.completed` or `.failed`) with
+`from`/`to` and the failure reason — `ai.action.failed` is still only logged when the
+action really failed — never the API key, prompts, answers or personal data.
 
 ## System prompt
 
@@ -365,15 +433,19 @@ task prompt. `ai-inference.test.ts` fails if that starts to grow.
 Every AI request emits one structured JSON log line
 (`backend/src/lib/logger.ts`, set `LOG_IN_TESTS=true` to see them in tests):
 
-- `ai.action.completed` — `action`, `model`, `reasoningEffort`, `durationMs`,
+- `ai.action.completed` — `action`, `provider`, `model`, `reasoningEffort`, `durationMs`,
   `outcome`, `inputTokens`, `outputTokens`, `reasoningTokens`, `totalTokens` plus
   safe size counters (`historyItems`, `answerChars`, …)
-- `ai.action.failed` — `action`, `model`, `reasoningEffort`, `durationMs`,
-  `outcome`, `errorCode`, `httpStatus`
+- `ai.action.failed` — `action`, `provider`, `model`, `reasoningEffort`, `durationMs`,
+  `outcome`, `errorCode`, `httpStatus` — once per failed action, so without a configured
+  fallback the logging is exactly what it was before
+- `ai.provider.fallback` / `.completed` / `.failed` — `action`, `from`, `to`, `reason`
+  (and the mapped error codes), so it is always clear whether Groq or Cerebras answered
 
-Never logged: the API key, bearer tokens, the student's prompt, the AI answer or any
-other personal data. Sensitive-looking log fields are redacted by key name as a safety
-net.
+`provider=groq` / `provider=cerebras` is the only provider detail that is logged; it is an
+identifier, not a credential. Never logged: an API key, bearer tokens, the student's
+prompt, the AI answer or any other personal data. Sensitive-looking log fields are
+redacted by key name as a safety net.
 
 ## Live test plan
 

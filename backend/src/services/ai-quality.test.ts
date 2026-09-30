@@ -35,6 +35,8 @@ describe('school quality regression probes', () => {
     async (example) => {
       vi.mocked(requestChat).mockResolvedValue({
         text: example.good,
+        model: 'test-model',
+        provider: 'groq',
         inputTokens: null,
         outputTokens: null,
         reasoningTokens: null,

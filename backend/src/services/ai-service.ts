@@ -2,12 +2,13 @@
  * Lerno AI service — free chat with the built-in study assistant.
  *
  * The API key lives server-side only; it is never returned, logged, or shipped
- * to the frontend. Only the student's chat text is sent to Groq — no emails,
- * profile data, or other account information.
+ * to the frontend. Only the student's chat text is sent to the provider — no
+ * emails, profile data, or other account information.
  *
  * Request pipeline:
- *   validate (route) → normalize history (bounded context) → Groq call
- *   → leak check on the answer → friendly error mapping → structured log line
+ *   validate (route) → normalize history (bounded context) → provider call
+ *   (Groq first, Cerebras as the one-shot fallback) → leak check on the answer
+ *   → friendly error mapping → structured log line
  *
  * Structured learning features (set actions, generation, evaluation) live in
  * `ai-learning-service.ts` and share the low-level client in `ai-completion.ts`.
@@ -133,7 +134,8 @@ export async function askLernoAi(input: AiChatInput): Promise<string> {
   if (!result.text) {
     logger.warn('ai.action.failed', {
       action: 'chat',
-      model: config.groqModel,
+      provider: result.provider,
+      model: result.model,
       reasoningEffort: result.reasoningEffort,
       durationMs: result.durationMs,
       outcome: 'empty',
@@ -147,7 +149,8 @@ export async function askLernoAi(input: AiChatInput): Promise<string> {
 
   logger.info('ai.action.completed', {
     action: 'chat',
-    model: config.groqModel,
+    provider: result.provider,
+    model: result.model,
     reasoningEffort: result.reasoningEffort,
     durationMs: result.durationMs,
     outcome: safeReply === result.text ? 'ok' : 'blocked',

@@ -124,25 +124,30 @@ production project.
 - **Start command:** `npm start`
 - **Environment variables:**
 
-  | Variable                    | Value                                               |
-  | --------------------------- | --------------------------------------------------- |
-  | `NODE_ENV`                  | `production`                                        |
-  | `PORT`                      | `10000` (Render provides one; the app reads `PORT`) |
-  | `SUPABASE_URL`              | from Supabase                                       |
-  | `SUPABASE_ANON_KEY`         | from Supabase                                       |
-  | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase (server-side only)                    |
-  | `FRONTEND_URL`              | the frontend origin(s), comma-separated             |
-  | `PUBLIC_BACKEND_URL`        | public backend origin (for MCP OAuth metadata)      |
-  | `HEALTH_CHECK_DB`           | `true` (optional cheap `SELECT 1` probe)            |
-  | `GROQ_API_KEY`              | Groq API key for Lerno AI (optional, server only)   |
-  | `GROQ_MODEL`                | default `openai/gpt-oss-120b`                       |
-  | `GROQ_MAX_OUTPUT_TOKENS`    | default `2048` (256–8192)                           |
-  | `GROQ_TEMPERATURE`          | default `0.6` (0–2)                                 |
-  | `GROQ_TIMEOUT_MS`           | default `30000`                                     |
-  | `GROQ_MAX_RETRIES`          | default `1` (0–3)                                   |
-  | `AI_RATE_LIMIT_MAX`         | AI messages per user per window, default `20`       |
-  | `AI_RATE_LIMIT_WINDOW_MS`   | default `300000` (5 minutes)                        |
-  | `AI_RATE_LIMIT_IP_MAX`      | AI messages per IP per window, default `60`         |
+  | Variable                    | Value                                                                  |
+  | --------------------------- | ---------------------------------------------------------------------- |
+  | `NODE_ENV`                  | `production`                                                           |
+  | `PORT`                      | `10000` (Render provides one; the app reads `PORT`)                    |
+  | `SUPABASE_URL`              | from Supabase                                                          |
+  | `SUPABASE_ANON_KEY`         | from Supabase                                                          |
+  | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase (server-side only)                                       |
+  | `FRONTEND_URL`              | the frontend origin(s), comma-separated                                |
+  | `PUBLIC_BACKEND_URL`        | public backend origin (for MCP OAuth metadata)                         |
+  | `HEALTH_CHECK_DB`           | `true` (optional cheap `SELECT 1` probe)                               |
+  | `GROQ_API_KEY`              | Groq API key for Lerno AI (optional, server only)                      |
+  | `GROQ_MODEL`                | default `openai/gpt-oss-120b`                                          |
+  | `GROQ_MAX_OUTPUT_TOKENS`    | default `2048` (256–8192)                                              |
+  | `GROQ_TEMPERATURE`          | default `0.6` (0–2)                                                    |
+  | `GROQ_TIMEOUT_MS`           | default `30000`                                                        |
+  | `GROQ_MAX_RETRIES`          | default `1` (0–3)                                                      |
+  | `CEREBRAS_API_KEY`          | Cerebras API key for the Lerno AI **fallback** (optional, server only) |
+  | `CEREBRAS_MODEL`            | default `gpt-oss-120b`                                                 |
+  | `CEREBRAS_BASE_URL`         | default `https://api.cerebras.ai/v1` (plain HTTPS URL)                 |
+  | `CEREBRAS_TIMEOUT_MS`       | default `30000`                                                        |
+  | `CEREBRAS_MAX_RETRIES`      | default `0` (= one fallback attempt per request)                       |
+  | `AI_RATE_LIMIT_MAX`         | AI messages per user per window, default `20`                          |
+  | `AI_RATE_LIMIT_WINDOW_MS`   | default `300000` (5 minutes)                                           |
+  | `AI_RATE_LIMIT_IP_MAX`      | AI messages per IP per window, default `60`                            |
 
 | `GROQ_JSON_MODE` | default `true` |
 | `GROQ_VISION_MODEL` | vision model for image OCR, default `meta-llama/llama-4-scout-17b-16e-instruct` |
@@ -158,6 +163,17 @@ Lerno AI is optional: without `GROQ_API_KEY` the rest of the app works and the
 AI endpoint answers a clean `503` (see [`AI.md`](AI.md)). The AI settings below
 are all optional and fall back to the documented defaults; out-of-range values
 stop the service at boot instead of failing at runtime.
+
+**AI providers (Groq primary, Cerebras fallback).** Groq answers every request.
+When a Groq call fails in a way another provider can fix — `429` rate limit,
+timeout, network error, provider-side outage (`5xx`, rejected key, retired model)
+— the _same_ request (identical system prompt, context, sampling and budget) is
+sent to [Cerebras](https://cloud.cerebras.ai) `gpt-oss-120b` exactly once. If both
+providers fail the student gets the normal clean AI error, and a request that was
+malformed by us never switches provider. Both keys are **server-side only**: they
+are never sent to the frontend, never logged and never committed; setting
+`CEREBRAS_API_KEY` is optional and empty keeps Lerno AI Groq-only. Configure both
+keys in the Render dashboard (`sync: false`), never in `render.yaml`.
 
 In production the backend **refuses to start** without Supabase credentials —
 development data mode is never used in production. `PUBLIC_BACKEND_URL` is
@@ -219,5 +235,6 @@ any other origin. Local development defaults to `http://localhost:5173`.
 - [ ] UptimeRobot monitor created
 - [ ] `npm run lint && npm run typecheck && npm test` pass in CI
 - [ ] `GROQ_MODEL` / `GROQ_MAX_OUTPUT_TOKENS` set if you deviate from the defaults
+- [ ] `CEREBRAS_API_KEY` set in Render (optional) if you want the Cerebras fallback provider
 - [ ] `AI_RATE_LIMIT_MAX` reviewed for your traffic (every request costs upstream tokens)
-- [ ] No secrets in Git: `git grep -nE "gsk_|SUPABASE_SERVICE_ROLE_KEY=|GROQ_API_KEY=.*[A-Za-z0-9]{8,}"`
+- [ ] No secrets in Git: `git grep -nE "gsk_|csk-|SUPABASE_SERVICE_ROLE_KEY=|GROQ_API_KEY=.*[A-Za-z0-9]{8,}|CEREBRAS_API_KEY=.*[A-Za-z0-9]{8,}"`
