@@ -12,6 +12,12 @@
 --
 -- No table is renamed, dropped or rewritten; Study Packs from before this
 -- migration keep working exactly as they did.
+--
+-- Re-runnable: columns use "add column if not exists". The three check
+-- constraints are only replaced while they are missing or while they still
+-- have the definition from before this migration (detected by the value this
+-- migration introduces); a constraint that already allows it stays untouched
+-- and is not validated again. No row is deleted or rewritten anywhere.
 
 -- study_pack_sources ---------------------------------------------------------
 
@@ -19,22 +25,47 @@ alter table public.study_pack_sources
   add column if not exists metadata jsonb not null default '{}'::jsonb,
   add column if not exists processing_stage text;
 
-alter table public.study_pack_sources
-  drop constraint if exists study_pack_sources_status_check;
+-- status gains 'pending'; only the definition without 'pending' is replaced.
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_constraint con
+    where con.conrelid = to_regclass('public.study_pack_sources')
+      and con.conname = 'study_pack_sources_status_check'
+      and con.convalidated
+      and pg_get_constraintdef(con.oid) like '%pending%'
+  ) then
+    alter table public.study_pack_sources
+      drop constraint if exists study_pack_sources_status_check;
+    alter table public.study_pack_sources
+      add constraint study_pack_sources_status_check
+      check (status in ('pending', 'uploading', 'processing', 'ready', 'failed'));
+  end if;
+end
+$lerno$;
 
-alter table public.study_pack_sources
-  add constraint study_pack_sources_status_check
-  check (status in ('pending', 'uploading', 'processing', 'ready', 'failed'));
-
-alter table public.study_pack_sources
-  drop constraint if exists study_pack_sources_processing_stage_check;
-
-alter table public.study_pack_sources
-  add constraint study_pack_sources_processing_stage_check
-  check (
-    processing_stage is null
-    or processing_stage in ('upload', 'extract', 'normalize', 'analyze', 'generate', 'review')
-  );
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_constraint con
+    where con.conrelid = to_regclass('public.study_pack_sources')
+      and con.conname = 'study_pack_sources_processing_stage_check'
+      and con.convalidated
+      and pg_get_constraintdef(con.oid) like '%normalize%'
+  ) then
+    alter table public.study_pack_sources
+      drop constraint if exists study_pack_sources_processing_stage_check;
+    alter table public.study_pack_sources
+      add constraint study_pack_sources_processing_stage_check
+      check (
+        processing_stage is null
+        or processing_stage in ('upload', 'extract', 'normalize', 'analyze', 'generate', 'review')
+      );
+  end if;
+end
+$lerno$;
 
 comment on column public.study_pack_sources.metadata is
   'Extraction provenance: language, references (page/slide/timestamp), method, warnings. Never model output.';
@@ -47,12 +78,25 @@ alter table public.concepts
   add column if not exists difficulty text,
   add column if not exists conflict_with text;
 
-alter table public.concepts
-  drop constraint if exists concepts_difficulty_check;
-
-alter table public.concepts
-  add constraint concepts_difficulty_check
-  check (difficulty is null or difficulty in ('easy', 'medium', 'hard'));
+-- difficulty is new here; an already correct constraint is left in place.
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_constraint con
+    where con.conrelid = to_regclass('public.concepts')
+      and con.conname = 'concepts_difficulty_check'
+      and con.convalidated
+      and pg_get_constraintdef(con.oid) like '%hard%'
+  ) then
+    alter table public.concepts
+      drop constraint if exists concepts_difficulty_check;
+    alter table public.concepts
+      add constraint concepts_difficulty_check
+      check (difficulty is null or difficulty in ('easy', 'medium', 'hard'));
+  end if;
+end
+$lerno$;
 
 comment on column public.concepts.ref_label is
   'Provenance inside the source, e.g. "page 6" or "slide 8"; shown to the student.';

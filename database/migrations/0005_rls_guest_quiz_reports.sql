@@ -15,15 +15,23 @@
 --    (no user data): vandalism is wiped by the next regeneration, quiz rows
 --    and attempts are untouched, and quiz loads are rate-limited. Private
 --    sets stay owner-only.
+--
+-- Re-runnable: every policy is dropped before it is created, so this file can
+-- be executed again on a database where it already ran.
 
 -- 1. Reporters can read their own reports ------------------------------------
 
+drop policy if exists "reports_select_own" on public.reports;
 create policy "reports_select_own" on public.reports
   for select using (reporter_id = auth.uid());
 
 -- 2a. Question cleanup for public-set quizzes --------------------------------
+-- Both the old name (from 0002/0003) and the new name are dropped first: the
+-- old one has to disappear, and the new one may already exist from an earlier
+-- run of this file.
 
 drop policy if exists "quiz_questions_delete_set_owner" on public.quiz_questions;
+drop policy if exists "quiz_questions_delete_visible" on public.quiz_questions;
 
 create policy "quiz_questions_delete_visible" on public.quiz_questions
   for delete using (
@@ -38,6 +46,7 @@ create policy "quiz_questions_delete_visible" on public.quiz_questions
 -- 2b. Question generation for public-set quizzes (including guests) ----------
 
 drop policy if exists "quiz_questions_insert_authenticated" on public.quiz_questions;
+drop policy if exists "quiz_questions_insert_visible" on public.quiz_questions;
 
 create policy "quiz_questions_insert_visible" on public.quiz_questions
   for insert with check (

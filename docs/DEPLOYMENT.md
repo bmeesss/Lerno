@@ -30,6 +30,19 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
      (tables and indexes use `if not exists`; policies are dropped and recreated). The classic
      flashcard timer table `study_sessions` and all existing attempts and learning events are
      untouched.
+
+   You do not have to remember which migration was applied last: **all migrations in
+   `database/migrations` are designed to be safely re-runnable against an existing
+   Postgres/Supabase database.** Pasting the whole folder into the SQL editor and running it
+   again is supported and does not destroy, rewrite or duplicate data. See
+   [Migrations are re-runnable](#migrations-are-re-runnable) below.
+
+   Supabase's SQL editor is the recommended way to paste all files at once; the files work in
+   `psql` too. They rely on the Supabase defaults (the `anon`, `authenticated` and
+   `service_role` roles, the `auth.users` table, `auth.uid()` and `auth.jwt()`), so run them
+   against a Supabase project or a database that emulates those, not against a bare Postgres
+   cluster without them.
+
 3. Collect the credentials from _Project Settings → API_:
    - `Project URL` → `SUPABASE_URL`
    - `anon public` key → `SUPABASE_ANON_KEY` (safe for the browser; never used
@@ -47,6 +60,62 @@ Goal: a €0 MVP on free tiers — with the operational caveats from the spec.
    ```sql
    update public.profiles set role = 'admin' where id = '<your-auth-user-id>';
    ```
+
+## Migrations are re-runnable
+
+**All migrations in `database/migrations` are designed to be safely re-runnable against an
+existing Postgres/Supabase database.** That is verified against a real PostgreSQL server, not
+assumed — see [Verifying the migrations](#verifying-the-migrations) below.
+
+How the chain is meant to be used:
+
+- **Run them in order**: `0001_init.sql` first, then `0002`, … up to the newest file. Later
+  migrations build on earlier ones (they add columns, constraints and policies to the tables
+  earlier files create), so the order matters. Pasting the whole folder into the Supabase SQL
+  editor at once runs them in that order.
+- **Migrations never delete data.** There is no `drop table`, no `truncate`, no `delete from`
+  and no destructive reset anywhere in the folder. Existing rows, columns, foreign keys,
+  checks, indexes, functions, triggers and policies stay exactly as they are. A migration that
+  replaces an object (a policy, a check constraint) only replaces that object and keeps every
+  row.
+- **Running them again is safe.** A migration that already ran does nothing destructive on the
+  next run: tables and indexes use `if not exists`, triggers are created only when they are
+  missing, policies are dropped and recreated from the same definition, functions use
+  `create or replace`, and constraints are only added or replaced when the existing one is
+  missing or still has the old definition. The end state after the tenth run is byte-identical
+  to the end state after the first.
+- **A new migration is added on top.** Create `0012_<name>.sql` (next number, descriptive
+  name, additive), apply it after `0011`, and keep the same rules so the folder stays
+  re-runnable as a whole.
+- **Data migrations are logically idempotent.** The backfills (the Study Pack backfill in
+  `0007`, the confidence estimate in `0009`) are written so that a second run cannot touch
+  data. `0007` inserts only the packs/sources that are genuinely missing
+  (`on conflict (legacy_set_id) do nothing` plus an explicit `not exists`); `0009` fills the
+  confidence column in the same atomic block that creates it, because `0.5` is also a real
+  value the app writes — a plain `where confidence = 0.5` would overwrite study history.
+
+### Verifying the migrations
+
+`database/tests/migration-rerun.mjs` runs the whole chain against a real PostgreSQL server and
+checks all of the above: three consecutive runs plus one run of every file in a single
+transaction (the way the SQL editor executes a pasted script), an identical schema snapshot
+after every run (tables, columns, constraints, indexes, triggers, functions, RLS flags,
+policies, privileges), an unchanged checksum for every existing row, no duplicated backfill
+rows, and 43 row-level security probes as owner / other user / guest / admin. With
+`--baseline-dir` it also compares the result with the schema produced by the original,
+one-shot migration files.
+
+```bash
+# any reachable PostgreSQL server; the scratch databases are created and dropped
+npm install --no-save pg
+PGURL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
+  node database/tests/migration-rerun.mjs
+```
+
+The script emulates the small part of Supabase the migrations rely on (`auth.users`,
+`auth.uid()`, `auth.jwt()`, the `anon` / `authenticated` / `service_role` roles and their
+default grants). That emulation lives in the test file only and is never applied to a
+production project.
 
 ## 2. Backend (Render Web Service)
 

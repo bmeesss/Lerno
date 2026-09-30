@@ -1,6 +1,12 @@
 -- Lerno initial schema (spec §12).
 -- Run against the Supabase Postgres database (SQL editor or psql).
 -- The database lives outside Git and outside Render's filesystem.
+--
+-- Re-runnable: this file can be executed again on a database where it was
+-- already applied. Tables and indexes use "if not exists"; triggers are
+-- created only when they are missing (Postgres has no "create trigger if not
+-- exists"). Nothing is dropped, rewritten or truncated, and no existing row
+-- is touched.
 
 create extension if not exists "pgcrypto";
 
@@ -19,7 +25,7 @@ $$;
 -- profiles ------------------------------------------------------------------
 -- One row per auth user (spec §12). `role` supports the admin moderation area.
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default '',
   avatar_url text,
@@ -28,9 +34,21 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
-create trigger profiles_set_updated_at
-  before update on public.profiles
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'profiles_set_updated_at'
+      and tgrelid = to_regclass('public.profiles')
+      and not tgisinternal
+  ) then
+    create trigger profiles_set_updated_at
+      before update on public.profiles
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
 -- Auto-create a profile whenever an auth user signs up.
 create or replace function public.handle_new_user()
@@ -50,13 +68,25 @@ begin
 end;
 $$;
 
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'on_auth_user_created'
+      and tgrelid = to_regclass('auth.users')
+      and not tgisinternal
+  ) then
+    create trigger on_auth_user_created
+      after insert on auth.users
+      for each row execute function public.handle_new_user();
+  end if;
+end
+$lerno$;
 
 -- subjects ------------------------------------------------------------------
 
-create table public.subjects (
+create table if not exists public.subjects (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
   name text not null check (char_length(name) between 1 and 80),
@@ -64,17 +94,29 @@ create table public.subjects (
   updated_at timestamptz not null default now()
 );
 
-create trigger subjects_set_updated_at
-  before update on public.subjects
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'subjects_set_updated_at'
+      and tgrelid = to_regclass('public.subjects')
+      and not tgisinternal
+  ) then
+    create trigger subjects_set_updated_at
+      before update on public.subjects
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index subjects_owner_idx on public.subjects (owner_id);
+create index if not exists subjects_owner_idx on public.subjects (owner_id);
 
 -- study_sets ----------------------------------------------------------------
 -- subject_name is denormalized for display + public discovery filters; the
 -- backend keeps it in sync with subjects.name.
 
-create table public.study_sets (
+create table if not exists public.study_sets (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
   subject_id uuid references public.subjects (id) on delete set null,
@@ -89,18 +131,30 @@ create table public.study_sets (
   updated_at timestamptz not null default now()
 );
 
-create trigger study_sets_set_updated_at
-  before update on public.study_sets
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'study_sets_set_updated_at'
+      and tgrelid = to_regclass('public.study_sets')
+      and not tgisinternal
+  ) then
+    create trigger study_sets_set_updated_at
+      before update on public.study_sets
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index study_sets_owner_idx on public.study_sets (owner_id);
-create index study_sets_visibility_idx on public.study_sets (visibility);
-create index study_sets_subject_idx on public.study_sets (subject_id);
-create index study_sets_tags_idx on public.study_sets using gin (tags);
+create index if not exists study_sets_owner_idx on public.study_sets (owner_id);
+create index if not exists study_sets_visibility_idx on public.study_sets (visibility);
+create index if not exists study_sets_subject_idx on public.study_sets (subject_id);
+create index if not exists study_sets_tags_idx on public.study_sets using gin (tags);
 
 -- cards ---------------------------------------------------------------------
 
-create table public.cards (
+create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
   set_id uuid not null references public.study_sets (id) on delete cascade,
   question text not null check (char_length(question) between 1 and 2000),
@@ -110,16 +164,28 @@ create table public.cards (
   updated_at timestamptz not null default now()
 );
 
-create trigger cards_set_updated_at
-  before update on public.cards
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'cards_set_updated_at'
+      and tgrelid = to_regclass('public.cards')
+      and not tgisinternal
+  ) then
+    create trigger cards_set_updated_at
+      before update on public.cards
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index cards_set_idx on public.cards (set_id, position);
+create index if not exists cards_set_idx on public.cards (set_id, position);
 
 -- card_progress -------------------------------------------------------------
 -- Spaced-repetition state per (user, card) — spec §7.
 
-create table public.card_progress (
+create table if not exists public.card_progress (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   card_id uuid not null references public.cards (id) on delete cascade,
@@ -134,15 +200,27 @@ create table public.card_progress (
   unique (user_id, card_id)
 );
 
-create trigger card_progress_set_updated_at
-  before update on public.card_progress
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'card_progress_set_updated_at'
+      and tgrelid = to_regclass('public.card_progress')
+      and not tgisinternal
+  ) then
+    create trigger card_progress_set_updated_at
+      before update on public.card_progress
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index card_progress_user_due_idx on public.card_progress (user_id, next_review_at);
+create index if not exists card_progress_user_due_idx on public.card_progress (user_id, next_review_at);
 
 -- quizzes / quiz_questions --------------------------------------------------
 
-create table public.quizzes (
+create table if not exists public.quizzes (
   id uuid primary key default gen_random_uuid(),
   set_id uuid not null references public.study_sets (id) on delete cascade,
   title text not null default 'Quiz',
@@ -150,13 +228,25 @@ create table public.quizzes (
   updated_at timestamptz not null default now()
 );
 
-create trigger quizzes_set_updated_at
-  before update on public.quizzes
-  for each row execute function public.set_updated_at();
+do $lerno$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'quizzes_set_updated_at'
+      and tgrelid = to_regclass('public.quizzes')
+      and not tgisinternal
+  ) then
+    create trigger quizzes_set_updated_at
+      before update on public.quizzes
+      for each row execute function public.set_updated_at();
+  end if;
+end
+$lerno$;
 
-create index quizzes_set_idx on public.quizzes (set_id);
+create index if not exists quizzes_set_idx on public.quizzes (set_id);
 
-create table public.quiz_questions (
+create table if not exists public.quiz_questions (
   id uuid primary key default gen_random_uuid(),
   quiz_id uuid not null references public.quizzes (id) on delete cascade,
   prompt text not null,
@@ -166,11 +256,11 @@ create table public.quiz_questions (
   position integer not null default 0
 );
 
-create index quiz_questions_quiz_idx on public.quiz_questions (quiz_id, position);
+create index if not exists quiz_questions_quiz_idx on public.quiz_questions (quiz_id, position);
 
 -- quiz_attempts -------------------------------------------------------------
 
-create table public.quiz_attempts (
+create table if not exists public.quiz_attempts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   quiz_id uuid not null references public.quizzes (id) on delete cascade,
@@ -179,13 +269,13 @@ create table public.quiz_attempts (
   created_at timestamptz not null default now()
 );
 
-create index quiz_attempts_user_idx on public.quiz_attempts (user_id, created_at);
+create index if not exists quiz_attempts_user_idx on public.quiz_attempts (user_id, created_at);
 
 -- study_sessions ------------------------------------------------------------
 -- Guest sessions are not persisted server-side (user_id nullable only for
 -- future, explicitly-safe analytics — spec §12).
 
-create table public.study_sessions (
+create table if not exists public.study_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles (id) on delete cascade,
   set_id uuid references public.study_sets (id) on delete set null,
@@ -194,11 +284,11 @@ create table public.study_sessions (
   cards_seen integer not null default 0
 );
 
-create index study_sessions_user_idx on public.study_sessions (user_id, started_at);
+create index if not exists study_sessions_user_idx on public.study_sessions (user_id, started_at);
 
 -- favorites -----------------------------------------------------------------
 
-create table public.favorites (
+create table if not exists public.favorites (
   user_id uuid not null references public.profiles (id) on delete cascade,
   set_id uuid not null references public.study_sets (id) on delete cascade,
   created_at timestamptz not null default now(),
@@ -207,7 +297,7 @@ create table public.favorites (
 
 -- reports -------------------------------------------------------------------
 
-create table public.reports (
+create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
   reporter_id uuid not null references public.profiles (id) on delete cascade,
   target_type text not null check (target_type in ('study_set', 'card', 'profile')),
@@ -220,4 +310,4 @@ create table public.reports (
   resolved_by uuid references public.profiles (id) on delete set null
 );
 
-create index reports_status_idx on public.reports (status, created_at);
+create index if not exists reports_status_idx on public.reports (status, created_at);

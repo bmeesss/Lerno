@@ -176,6 +176,10 @@ the rating words); only theme tokens are used, so light and dark keep their cont
 
 ## Migration
 
+Every migration in `database/migrations` — including this one — is **re-runnable**: applying the
+whole folder again on an existing database is safe and never deletes data (see
+[`docs/DEPLOYMENT.md`](DEPLOYMENT.md#migrations-are-re-runnable)).
+
 `database/migrations/0011_learning_sessions.sql` is **additive** (see `docs/DEPLOYMENT.md`): it
 adds `learning_sessions`, `learning_session_items` and `mastery_snapshots`, each with own-row
 row-level security. The classic flashcard timer table `study_sessions` is untouched, which is
