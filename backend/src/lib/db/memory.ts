@@ -17,7 +17,10 @@ import type {
   ConceptRecord,
   LearningEventCreate,
   LearningEventRecord,
+  LearningSessionItemRecord,
+  LearningSessionRecord,
   FavoriteRecord,
+  MasterySnapshotRecord,
   NewCard,
   NewConcept,
   NewPracticeQuestion,
@@ -73,6 +76,10 @@ export interface MemoryState {
   testQuestions: Map<string, TestQuestionRecord[]>;
   testAttempts: TestAttemptRecord[];
   studyPlans: Map<string, StudyPlanRecord>;
+  /* Study sessions + snapshots (0011) */
+  learningSessions: Map<string, LearningSessionRecord>;
+  learningSessionItems: Map<string, LearningSessionItemRecord>;
+  masterySnapshots: Map<string, MasterySnapshotRecord>;
 }
 
 export function createMemoryState(): MemoryState {
@@ -100,6 +107,9 @@ export function createMemoryState(): MemoryState {
     testQuestions: new Map(),
     testAttempts: [],
     studyPlans: new Map(),
+    learningSessions: new Map(),
+    learningSessionItems: new Map(),
+    masterySnapshots: new Map(),
   };
 }
 
@@ -142,7 +152,7 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
     return true;
   }
 
-  return {
+  const database: Database = {
     async ping() {
       return;
     },
@@ -737,10 +747,22 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         for (const [key, concept] of [...state.concepts.entries()]) {
           if (concept.packId === id) {
             state.concepts.delete(key);
-            state.conceptMastery.delete(
-              [...state.conceptMastery.keys()].find((k) => k.endsWith(`:${key}`)) ?? '',
-            );
+            // Every student's mastery row for this concept goes with it.
+            for (const [masteryKey, mastery] of [...state.conceptMastery.entries()]) {
+              if (mastery.conceptId === key) state.conceptMastery.delete(masteryKey);
+            }
           }
+        }
+        // Mirrors the ON DELETE CASCADE of the study-session tables (0009, 0011).
+        state.learningEvents = state.learningEvents.filter((event) => event.packId !== id);
+        for (const [key, session] of [...state.learningSessions.entries()]) {
+          if (session.packId === id) state.learningSessions.delete(key);
+        }
+        for (const [key, item] of [...state.learningSessionItems.entries()]) {
+          if (item.packId === id) state.learningSessionItems.delete(key);
+        }
+        for (const [key, snapshot] of [...state.masterySnapshots.entries()]) {
+          if (snapshot.packId === id) state.masterySnapshots.delete(key);
         }
         for (const [key, question] of [...state.practiceQuestions.entries()]) {
           if (question.packId === id) state.practiceQuestions.delete(key);
@@ -957,6 +979,11 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         state.conceptMastery.set(key, saved);
         return saved;
       },
+      async upsertMany(records) {
+        const saved: ConceptMasteryRecord[] = [];
+        for (const record of records) saved.push(await database.conceptMastery.upsert(record));
+        return saved;
+      },
     },
 
     learningEvents: {
@@ -977,10 +1004,21 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         state.learningEvents.push(record);
         return record;
       },
+      async createMany(events: LearningEventCreate[]) {
+        const created: LearningEventRecord[] = [];
+        for (const event of events) created.push(await database.learningEvents.create(event));
+        return created;
+      },
       async listByUser(userId, since) {
         return state.learningEvents
           .filter((event) => event.userId === userId && (!since || event.createdAt >= since))
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async countByUser(userId, eventTypes) {
+        const wanted = new Set(eventTypes);
+        return state.learningEvents.filter(
+          (event) => event.userId === userId && wanted.has(event.eventType),
+        ).length;
       },
     },
 
@@ -1066,6 +1104,14 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         };
         state.practiceAttempts.push(record);
         return record;
+      },
+      async createMany(rows) {
+        const created: PracticeAttemptRecord[] = [];
+        for (const row of rows) created.push(await database.practiceAttempts.create(row));
+        return created;
+      },
+      async countByUser(userId) {
+        return state.practiceAttempts.filter((attempt) => attempt.userId === userId).length;
       },
       async listByUser(userId) {
         return state.practiceAttempts
@@ -1155,6 +1201,10 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
           .filter((attempt) => attempt.userId === userId)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       },
+      async totalsByUser(userId) {
+        const mine = state.testAttempts.filter((attempt) => attempt.userId === userId);
+        return { attempts: mine.length, answers: mine.reduce((sum, row) => sum + row.total, 0) };
+      },
     },
 
     studyPlans: {
@@ -1181,7 +1231,170 @@ export function createMemoryDatabase(state: MemoryState = createMemoryState()): 
         state.studyPlans.delete(packId);
       },
     },
+
+    /* ------------------------- study sessions (0011) ------------------------ */
+
+    learningSessions: {
+      async get(id) {
+        return state.learningSessions.get(id) ?? null;
+      },
+      async create(data) {
+        const timestamp = now();
+        const record: LearningSessionRecord = {
+          id: randomUUID(),
+          userId: data.userId,
+          packId: data.packId,
+          type: data.type,
+          status: data.status ?? 'not_started',
+          mode: data.mode ?? null,
+          title: data.title,
+          focusConceptId: data.focusConceptId ?? null,
+          targetConceptIds: data.targetConceptIds ?? [],
+          testId: data.testId ?? null,
+          itemCount: data.itemCount,
+          answeredCount: 0,
+          currentPosition: 0,
+          startedAt: data.startedAt ?? null,
+          completedAt: null,
+          lastActivityAt: timestamp,
+          durationSeconds: 0,
+          result: null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        state.learningSessions.set(record.id, record);
+        return record;
+      },
+      async update(id, patch) {
+        const existing = state.learningSessions.get(id);
+        if (!existing) throw new Error(`learning session ${id} not found`);
+        const record: LearningSessionRecord = {
+          ...existing,
+          status: patch.status ?? existing.status,
+          answeredCount: patch.answeredCount ?? existing.answeredCount,
+          currentPosition: patch.currentPosition ?? existing.currentPosition,
+          startedAt: patch.startedAt === undefined ? existing.startedAt : patch.startedAt,
+          completedAt: patch.completedAt === undefined ? existing.completedAt : patch.completedAt,
+          lastActivityAt: patch.lastActivityAt ?? existing.lastActivityAt,
+          durationSeconds: patch.durationSeconds ?? existing.durationSeconds,
+          result: patch.result === undefined ? existing.result : patch.result,
+          updatedAt: now(),
+        };
+        state.learningSessions.set(id, record);
+        return record;
+      },
+      async listByUser(userId, filter = {}) {
+        const statuses = filter.statuses ? new Set(filter.statuses) : null;
+        const rows = [...state.learningSessions.values()]
+          .filter((session) => session.userId === userId)
+          .filter((session) => !statuses || statuses.has(session.status))
+          .filter((session) => !filter.packId || session.packId === filter.packId)
+          .filter((session) => !filter.since || session.lastActivityAt >= filter.since)
+          .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+        return filter.limit ? rows.slice(0, filter.limit) : rows;
+      },
+      async statsByUser(userId) {
+        return [...state.learningSessions.values()]
+          .filter((session) => session.userId === userId)
+          .map((session) => ({
+            packId: session.packId,
+            type: session.type,
+            status: session.status,
+            answeredCount: session.answeredCount,
+            durationSeconds: session.durationSeconds,
+            completedAt: session.completedAt,
+            lastActivityAt: session.lastActivityAt,
+          }));
+      },
+    },
+
+    learningSessionItems: {
+      async createMany(items) {
+        const timestamp = now();
+        const created: LearningSessionItemRecord[] = items.map((item) => ({
+          id: randomUUID(),
+          sessionId: item.sessionId,
+          userId: item.userId,
+          packId: item.packId,
+          position: item.position,
+          kind: item.kind,
+          conceptId: item.conceptId ?? null,
+          questionId: item.questionId ?? null,
+          status: 'pending',
+          answer: null,
+          verdict: null,
+          rating: null,
+          masteryBefore: null,
+          masteryAfter: null,
+          responseTimeMs: null,
+          answeredAt: null,
+          createdAt: timestamp,
+        }));
+        for (const item of created) state.learningSessionItems.set(item.id, item);
+        return created;
+      },
+      async listBySession(sessionId) {
+        return [...state.learningSessionItems.values()]
+          .filter((item) => item.sessionId === sessionId)
+          .sort((a, b) => a.position - b.position);
+      },
+      async listBySessions(sessionIds) {
+        const wanted = new Set(sessionIds);
+        return [...state.learningSessionItems.values()]
+          .filter((item) => wanted.has(item.sessionId))
+          .sort((a, b) => a.sessionId.localeCompare(b.sessionId) || a.position - b.position);
+      },
+      async listSeenByUserAndPack(userId, packId) {
+        return [...state.learningSessionItems.values()]
+          .filter(
+            (item) => item.userId === userId && item.packId === packId && item.status !== 'pending',
+          )
+          .sort((a, b) => (b.answeredAt ?? '').localeCompare(a.answeredAt ?? ''));
+      },
+      async saveMany(items) {
+        for (const item of items) {
+          if (!state.learningSessionItems.has(item.id)) {
+            throw new Error(`learning session item ${item.id} not found`);
+          }
+          state.learningSessionItems.set(item.id, { ...item });
+        }
+        return items;
+      },
+    },
+
+    masterySnapshots: {
+      async upsertMany(rows) {
+        const timestamp = now();
+        const saved: MasterySnapshotRecord[] = [];
+        for (const row of rows) {
+          const key = `${row.userId}:${row.packId}:${row.day}`;
+          const existing = state.masterySnapshots.get(key);
+          const record: MasterySnapshotRecord = {
+            id: existing?.id ?? randomUUID(),
+            userId: row.userId,
+            packId: row.packId,
+            day: row.day,
+            masteryPercent: row.masteryPercent,
+            conceptsTotal: row.conceptsTotal,
+            weakConcepts: row.weakConcepts,
+            masteredConcepts: row.masteredConcepts,
+            createdAt: existing?.createdAt ?? timestamp,
+            updatedAt: timestamp,
+          };
+          state.masterySnapshots.set(key, record);
+          saved.push(record);
+        }
+        return saved;
+      },
+      async listByUser(userId, sinceDay) {
+        return [...state.masterySnapshots.values()]
+          .filter((row) => row.userId === userId && (!sinceDay || row.day >= sinceDay))
+          .sort((a, b) => a.day.localeCompare(b.day) || a.packId.localeCompare(b.packId));
+      },
+    },
   };
+
+  return database;
 }
 
 /** Helper for tests and dev auth: register a user record in the memory store. */

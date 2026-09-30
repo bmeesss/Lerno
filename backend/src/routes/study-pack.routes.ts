@@ -193,6 +193,13 @@ export function studyPackRoutes(): Router {
     validate({ params: conceptParamsSchema }),
     studyPackController.removeConcept,
   );
+  router.get(
+    '/:packId/concepts/:conceptId/source',
+    publicRateLimit,
+    optionalAuth,
+    validate({ params: conceptParamsSchema }),
+    studyPackController.conceptSource,
+  );
   router.post(
     '/:packId/concepts/:conceptId/rating',
     requireAuth,

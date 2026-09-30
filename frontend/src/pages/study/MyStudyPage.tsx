@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ButtonLink } from '../../components/ui/Button';
-import { Badge, EmptyState, LoadingRow, ProgressBar } from '../../components/ui/Primitives';
+import { Button, ButtonLink } from '../../components/ui/Button';
+import { Badge, EmptyState, LoadingRow } from '../../components/ui/Primitives';
 import { StudySetCard } from '../../components/ui/StudySetCard';
 import {
   IconArrowRight,
@@ -10,21 +10,30 @@ import {
   IconLayers,
   IconLightbulb,
   IconPlus,
-  IconQuiz,
   IconSparkles,
-  IconZap,
 } from '../../components/ui/Icons';
+import { SubjectsToday } from '../../components/my-study/SubjectsToday';
+import { TodaySection, type FallbackAction } from '../../components/my-study/TodaySection';
+import { SessionError } from '../../components/study-session/SessionCtaBar';
+import { MasteryMeter } from '../../components/study-pack/PackBits';
 import { useAsync } from '../../hooks/useAsync';
+import { useAuth } from '../../hooks/useAuth';
+import { nextActionLink } from '../../lib/nextAction';
+import { examInLabel } from '../../lib/sessionCopy';
+import { normalizeToday } from '../../lib/todayPlan';
 import { dashboardService } from '../../services/dashboardService';
 import { studyPackService } from '../../services/studyPackService';
 import { studyService } from '../../services/studyService';
 import { studySetService } from '../../services/studySetService';
 import { subjectService } from '../../services/subjectService';
-import { useAuth } from '../../hooks/useAuth';
-import { nextActionLink } from '../../lib/nextAction';
-import { examCountdownLabel, formatExamDate, todayTaskHref } from '../../lib/studyPackRoutes';
-import { MasteryMeter, formatActivity } from '../../components/study-pack/PackBits';
-import type { DashboardData, DueGroup, StudyPackToday, StudySetSummary, Subject } from '../../types';
+import type {
+  DashboardData,
+  DueGroup,
+  StudyPackSummary,
+  StudyPackToday,
+  StudySetSummary,
+  Subject,
+} from '../../types';
 
 interface MyStudyData {
   dashboard: DashboardData;
@@ -32,358 +41,184 @@ interface MyStudyData {
   recentSets: StudySetSummary[];
   subjects: Subject[];
   packToday: StudyPackToday | null;
+  /** The plan could not be loaded (as opposed to "there is nothing to plan"). */
+  todayFailed: boolean;
 }
 
-const TASK_ICONS = {
-  review: IconClock,
-  learn: IconBook,
-  practice: IconZap,
-  test: IconQuiz,
-  continue: IconBook,
-  'generate-concepts': IconLightbulb,
-  'generate-practice': IconQuiz,
-  'add-material': IconSparkles,
-} as const;
+/** Most recently studied first, then the newest material. */
+function byRecentActivity(a: StudyPackSummary, b: StudyPackSummary): number {
+  return (
+    (b.lastStudiedAt ?? '').localeCompare(a.lastStudiedAt ?? '') ||
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
 
+function hasStarted(pack: StudyPackSummary): boolean {
+  return (
+    pack.masteryPercent > 0 ||
+    pack.dueCards > 0 ||
+    pack.weakConcepts > 0 ||
+    pack.lastStudiedAt !== null
+  );
+}
+
+/**
+ * My Study: what to do today, in which order and why. One primary action (the
+ * recommended next step or the session to resume), a numbered plan behind it,
+ * one line per subject, and only then the material itself.
+ */
 export function MyStudyPage() {
   const { user } = useAuth();
-  const { data, loading, error } = useAsync<MyStudyData>(
-    async () => {
-      const [dashboard, dueGroups, recentSets, subjects, packToday] = await Promise.all([
-        dashboardService.get(),
-        studyService.dueGroups(),
-        studySetService.listMine(),
-        subjectService.list(),
-        // Packs are additive: an empty or failing pack layer never blocks My Study.
-        studyPackService.today().catch(() => null),
-      ]);
+  const { data, loading, error, reload } = useAsync<MyStudyData>(async () => {
+    const [dashboard, dueGroups, recentSets, subjects, today] = await Promise.all([
+      dashboardService.get(),
+      studyService.dueGroups(),
+      studySetService.listMine(),
+      subjectService.list(),
+      // The plan is additive: if it fails the page still works, with a clear retry.
+      studyPackService
+        .today()
+        .then((value) => ({ value, failed: false }))
+        .catch(() => ({ value: null, failed: true })),
+    ]);
 
-      return { dashboard, dueGroups, recentSets, subjects, packToday };
-    },
-    [],
-  );
+    return {
+      dashboard,
+      dueGroups,
+      recentSets,
+      subjects,
+      packToday: today.value,
+      todayFailed: today.failed,
+    };
+  }, []);
 
-  if (loading) return <LoadingRow large />;
+  if (loading && !data) return <LoadingRow large />;
 
   if (error || !data) {
     return (
       <EmptyState
         title="Could not load My Study"
         description={error ?? 'Try again in a moment.'}
-        action={<ButtonLink to="/dashboard">Back to home</ButtonLink>}
+        action={
+          <div className="session-empty-actions">
+            <Button onClick={reload}>Try again</Button>
+            <ButtonLink to="/dashboard" variant="secondary">
+              Back to home
+            </ButtonLink>
+          </div>
+        }
       />
     );
   }
 
-  const { dashboard, dueGroups, recentSets, subjects, packToday } = data;
+  const { dashboard, dueGroups, recentSets, subjects, packToday, todayFailed } = data;
+  const today = normalizeToday(packToday);
   const next = nextActionLink(dashboard.today.continueAction);
   const totalDue = dueGroups.reduce((sum, group) => sum + group.dueCount, 0);
   const firstName = user?.profile.displayName.split(/\s+/)[0] ?? 'there';
-  const tasks = packToday?.tasks ?? [];
-  const recommended = packToday?.recommended ?? tasks[0];
-  const otherTasks = tasks.slice(1);
-  const packs = packToday?.packs ?? [];
-  const exams = packToday?.exams ?? [];
-  // Real activity only: a pack counts as started when the student practised,
-  // reviewed or mastered something — never from a timer or a placeholder.
-  const finishedPacks = packs.filter(
-    (pack) => pack.masteryPercent > 0 || pack.dueCards > 0 || pack.weakConcepts > 0,
-  );
-  const untouchedPacks = packs
-    .filter((pack) => !finishedPacks.includes(pack))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const continuePack = finishedPacks[0] ?? untouchedPacks[0] ?? null;
-  const startedPack = Boolean(continuePack && finishedPacks.includes(continuePack));
-  // "Recently added" is about the material itself; the newest pack already has
-  // its own card above, so it is not repeated here.
-  const recentlyAdded = packs
-    .filter((pack) => pack.id !== continuePack?.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 4);
+  const packs = [...(packToday?.packs ?? [])].sort(byRecentActivity);
+  const hasMaterial = packs.length > 0 || recentSets.length > 0;
+
+  // Used only when the planner has nothing to offer: the long-standing next action.
+  const fallback: FallbackAction = {
+    title: dashboard.today.goalReached ? 'Today’s goal is complete.' : next.label,
+    description: dashboard.continueSet
+      ? `Continue with ${dashboard.continueSet.title}.`
+      : totalDue > 0
+        ? `${totalDue} cards are ready for review across your study packs.`
+        : 'Choose a study pack or add new material to get started.',
+    to: next.to,
+    cta: dashboard.continueSet || totalDue > 0 ? 'Start studying' : 'Explore study packs',
+  };
 
   return (
-    <div className="stack" style={{ gap: 28 }}>
+    <div className="stack my-study">
       <div className="page-header">
         <div>
           <span className="eyebrow-label">My Study</span>
           <h1>Study smarter, {firstName}</h1>
-          <p>Your study packs, reviews and next actions in one place.</p>
+          <p>Your plan for today, built from what you know and what is coming up.</p>
         </div>
-        <ButtonLink to="/study-packs/new">
+        <ButtonLink to="/study-packs/new" variant="secondary">
           <IconSparkles size={17} /> Add study material
         </ButtonLink>
       </div>
 
-      {continuePack ? (
-        <section aria-labelledby="my-study-continue">
+      {todayFailed ? (
+        <SessionError
+          message="We could not load your plan for today. Your progress is safe."
+          onRetry={reload}
+          retryLabel="Try again"
+        />
+      ) : null}
+
+      {hasMaterial ? <TodaySection today={today} fallback={fallback} /> : null}
+
+      <SubjectsToday subjects={packToday?.subjects ?? []} />
+
+      {packs.length > 0 ? (
+        <section aria-labelledby="my-study-packs">
           <div className="section-title">
             <div>
-              <h2 id="my-study-continue">
-                {startedPack ? 'Continue studying' : 'Your newest study pack'}
-              </h2>
-              <p className="muted">
-                {startedPack
-                  ? 'Pick up where you left off — Lerno knows what you have mastered.'
-                  : 'You have not started this one yet. Learn the first concepts now.'}
-              </p>
+              <h2 id="my-study-packs">Your study packs</h2>
+              <p className="muted">Open a pack to learn, practice or take a test.</p>
             </div>
             <Link to="/study-packs">
               All study packs <IconArrowRight size={15} />
             </Link>
           </div>
-          <article className="card my-study-continue">
-            <div className="my-study-continue-copy">
-              <span className="eyebrow-label">
-                {continuePack.subjectName ?? 'Study pack'}
-                {continuePack.level ? ` · ${continuePack.level}` : ''}
-              </span>
-              <h3>{continuePack.title}</h3>
-              <p className="muted">
-                {continuePack.masteryPercent}% mastered · {continuePack.concepts} concepts ·{' '}
-                {continuePack.flashcards} cards · {continuePack.practiceQuestions} questions
-              </p>
-              <MasteryMeter percent={continuePack.masteryPercent} compact />
-            </div>
-            <div className="my-study-continue-actions">
-              <Link to={`/study-packs/${continuePack.id}?tab=learn`} className="btn btn-primary">
-                <IconZap size={17} />{' '}
-                {startedPack ? 'Continue learning →' : 'Start learning →'}
-              </Link>
-              <span className="muted my-study-continue-activity">
-                {continuePack.dueCards > 0
-                  ? `${continuePack.dueCards} cards due for review`
-                  : startedPack
-                    ? `${continuePack.weakConcepts} weak concept${continuePack.weakConcepts === 1 ? '' : 's'} to work on`
-                    : 'Nothing studied yet'}
-              </span>
-            </div>
-          </article>
-        </section>
-      ) : null}
-
-      <section className="dashboard-overview">
-        <div className="study-feature">
-          <div className="study-feature-copy">
-            <span className="eyebrow-label">{recommended ? 'Recommended for you' : 'Next up'}</span>
-            <h2>
-              {recommended?.label ?? (dashboard.today.goalReached ? 'Today’s goal is complete.' : next.label)}
-            </h2>
-            <p>
-              {recommended?.description ?? (dashboard.continueSet
-                ? `Continue with ${dashboard.continueSet.title}.`
-                : totalDue > 0
-                  ? `${totalDue} cards are ready for review across your study packs.`
-                  : 'Choose a study pack or add new material to get started.')}
-            </p>
-            <ButtonLink to={recommended ? todayTaskHref(recommended) : next.to}>
-              {recommended?.type === 'practice'
-                ? 'Start practice'
-                : recommended?.type === 'review'
-                  ? 'Review now'
-                  : recommended?.type === 'continue'
-                    ? 'Continue session'
-                    : recommended?.type === 'add-material'
-                      ? 'Add study material'
-                      : recommended
-                        ? 'Start studying'
-                        : dashboard.continueSet || totalDue > 0
-                          ? 'Start studying'
-                          : 'Explore study packs'}
-              <IconArrowRight size={17} />
-            </ButtonLink>
-          </div>
-          <div className="learning-illustration" aria-hidden="true">
-            <div className="paper-card paper-back" />
-            <div className="paper-card paper-front">
-              <IconCards size={28} />
-              <span>Learn · Practice · Test</span>
-              <div className="paper-lines">
-                <i />
-                <i />
-                <i />
-              </div>
-              <span className="paper-check">
-                <IconClock size={17} /> {totalDue} cards due
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <section className="card" aria-label="Today's study progress">
-          <div className="section-title">
-            <div>
-              <h2>Today</h2>
-              <p className="muted">Keep building knowledge one session at a time.</p>
-            </div>
-            <Badge variant={dashboard.today.goalReached ? 'accent' : 'default'}>
-              {dashboard.today.completedCards}/{dashboard.today.target}
-            </Badge>
-          </div>
-          <ProgressBar value={dashboard.today.completedCards} max={Math.max(dashboard.today.target, 1)} />
-          <div className="progress-details" style={{ marginTop: 14 }}>
-            <div>
-              <dt>Due now</dt>
-              <dd>{dashboard.today.cardsDue}</dd>
-            </div>
-            <div>
-              <dt>Streak</dt>
-              <dd>{dashboard.today.streak.current} days</dd>
-            </div>
-          </div>
-        </section>
-      </section>
-
-      {otherTasks.length > 0 ? (
-        <section aria-labelledby="my-study-today">
-          <div className="section-title">
-            <div>
-              <h2 id="my-study-today">Also on your study list</h2>
-              <p className="muted">Your main action stays first; these are useful next steps.</p>
-            </div>
-          </div>
-          <div className="today-plan">
-            {otherTasks.map((task) => {
-              const Icon = TASK_ICONS[task.type];
+          <div className="set-grid">
+            {packs.slice(0, 3).map((pack) => {
+              const started = hasStarted(pack);
+              const exam = examInLabel(pack.examDaysLeft);
               return (
-                <Link key={`${task.type}-${task.packId ?? 'none'}-${task.conceptId ?? ''}`} to={todayTaskHref(task)} className="card card-interactive today-plan-item">
-                  <span className="quick-icon">
-                    <Icon />
-                  </span>
-                  <div>
-                    <strong>{task.label}</strong>
-                    <p className="muted">{task.description}</p>
+                <article key={pack.id} className="card card-interactive pack-list-card">
+                  <div className="pack-list-head">
+                    <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
+                    {pack.dueCards > 0 ? <Badge variant="accent">{pack.dueCards} due</Badge> : null}
                   </div>
-                  <IconArrowRight size={17} />
-                </Link>
+                  <h3 className="pack-list-title">
+                    <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
+                  </h3>
+                  <p className="muted pack-list-meta">
+                    {pack.masteryPercent}% mastered · {pack.concepts} concepts · {pack.flashcards}{' '}
+                    cards · {pack.practiceQuestions} questions
+                  </p>
+                  <MasteryMeter percent={pack.masteryPercent} compact />
+                  <div className="pack-list-actions">
+                    <Link
+                      to={`/study-packs/${pack.id}?tab=learn`}
+                      className="btn btn-sm btn-secondary"
+                    >
+                      {started ? 'Continue learning' : 'Start learning'}
+                    </Link>
+                    <span className="muted pack-list-open">
+                      {exam ??
+                        (pack.weakConcepts > 0
+                          ? `${pack.weakConcepts} weak concept${pack.weakConcepts === 1 ? '' : 's'}`
+                          : started
+                            ? 'Up to date'
+                            : 'Nothing studied yet')}
+                    </span>
+                  </div>
+                </article>
               );
             })}
           </div>
         </section>
       ) : null}
 
-      {exams.length > 0 ? (
-        <section aria-labelledby="my-study-exams">
+      {dueGroups.length > 0 ? (
+        <section aria-labelledby="my-study-review">
           <div className="section-title">
             <div>
-              <h2 id="my-study-exams">Exams coming up</h2>
-              <p className="muted">Study packs count down to your exam date.</p>
+              <h2 id="my-study-review">Review queue</h2>
+              <p className="muted">Flashcards that are due, straight from your sets.</p>
             </div>
-          </div>
-          <div className="exam-strip">
-            {exams.map((exam) => (
-              <Link key={exam.packId} to={`/study-packs/${exam.packId}`} className="card card-interactive exam-card">
-                <div className="exam-card-head">
-                  <Badge variant={exam.daysLeft !== null && exam.daysLeft <= 7 ? 'warning' : 'default'}>
-                    {examCountdownLabel(exam.daysLeft)}
-                  </Badge>
-                  {exam.examDate ? <span className="muted">{formatExamDate(exam.examDate)}</span> : null}
-                </div>
-                <strong>{exam.title}</strong>
-                <MasteryMeter percent={exam.masteryPercent} compact />
-                <span className="muted exam-card-meta">
-                  {exam.dueCards} due · {exam.weakConcepts} weak concept
-                  {exam.weakConcepts === 1 ? '' : 's'}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {finishedPacks.length > 0 ? (
-        <section aria-labelledby="my-study-packs">
-          <div className="section-title">
-            <div>
-              <h2 id="my-study-packs">Study packs in progress</h2>
-              <p className="muted">Continue where you left off.</p>
-            </div>
-            <Link to="/study-packs">
-              View all <IconArrowRight size={15} />
+            <Link to="/review">
+              View review <IconArrowRight size={15} />
             </Link>
           </div>
-          <div className="set-grid">
-            {finishedPacks.slice(0, 3).map((pack) => (
-              <article key={pack.id} className="card card-interactive pack-list-card">
-                <div className="pack-list-head">
-                  <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
-                  {pack.dueCards > 0 ? <Badge variant="accent">{pack.dueCards} due</Badge> : null}
-                </div>
-                <h3 className="pack-list-title">
-                  <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
-                </h3>
-                <p className="muted pack-list-meta">
-                  {pack.flashcards} cards · {pack.concepts} concepts · {pack.practiceQuestions} questions
-                </p>
-                <MasteryMeter percent={pack.masteryPercent} compact />
-                <div className="pack-list-actions">
-                  <Link to={`/study-packs/${pack.id}`} className="btn btn-sm btn-primary">
-                    <IconZap size={16} /> Continue
-                  </Link>
-                  <span className="muted pack-list-open">
-                    {pack.weakConcepts > 0
-                      ? `${pack.weakConcepts} weak concept${pack.weakConcepts === 1 ? '' : 's'}`
-                      : 'Up to date'}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {recentlyAdded.length > 0 ? (
-        <section aria-labelledby="my-study-recent">
-          <div className="section-title">
-            <div>
-              <h2 id="my-study-recent">Recently added</h2>
-              <p className="muted">The material you brought in most recently.</p>
-            </div>
-            <Link to="/study-packs">
-              View all <IconArrowRight size={15} />
-            </Link>
-          </div>
-          <div className="set-grid">
-            {recentlyAdded.map((pack) => (
-              <article key={pack.id} className="card card-interactive pack-list-card">
-                <div className="pack-list-head">
-                  <span className="set-card-subject">{pack.subjectName ?? 'No subject'}</span>
-                  <Badge>{pack.masteryPercent}% mastered</Badge>
-                </div>
-                <h3 className="pack-list-title">
-                  <Link to={`/study-packs/${pack.id}`}>{pack.title}</Link>
-                </h3>
-                <p className="muted pack-list-meta">
-                  {pack.sources} source{pack.sources === 1 ? '' : 's'} · {pack.concepts} concepts ·{' '}
-                  {pack.flashcards} cards · {pack.practiceQuestions} questions
-                </p>
-                <MasteryMeter percent={pack.masteryPercent} compact />
-                <div className="pack-list-actions">
-                  <Link to={`/study-packs/${pack.id}?tab=learn`} className="btn btn-sm btn-secondary">
-                    <IconZap size={16} /> {pack.masteryPercent > 0 ? 'Continue' : 'Start learning'}
-                  </Link>
-                  <span className="muted pack-list-open">
-                    Added {new Date(pack.createdAt).toLocaleDateString()} ·{' '}
-                    {formatActivity(pack.updatedAt)}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section>
-        <div className="section-title">
-          <div>
-            <h2>Review queue</h2>
-            <p className="muted">Lerno chooses what needs your attention next.</p>
-          </div>
-          <Link to="/review">
-            View review <IconArrowRight size={15} />
-          </Link>
-        </div>
-
-        {dueGroups.length > 0 ? (
           <div className="stack" style={{ gap: 10 }}>
             {dueGroups.slice(0, 6).map((group) => (
               <Link key={group.setId} to={`/sets/${group.setId}/study`} className="list-row">
@@ -401,41 +236,38 @@ export function MyStudyPage() {
               </Link>
             ))}
           </div>
-        ) : (
-          <EmptyState
-            icon={<IconClock />}
-            title="Nothing is due right now"
-            description="Learn something new or practice one of your study packs."
-            action={
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <ButtonLink to="/study-packs">Open study packs</ButtonLink>
-                <ButtonLink to="/study-packs/new" variant="secondary">
-                  Add study material
-                </ButtonLink>
-              </div>
-            }
-          />
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section>
-        <div className="section-title">
-          <div>
-            <h2>My study material</h2>
-            <p className="muted">Sets and packs you can keep studying today.</p>
+      {recentSets.length > 0 ? (
+        <section aria-labelledby="my-study-material">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-material">My study material</h2>
+              <p className="muted">Sets you can keep studying today.</p>
+            </div>
+            <Link to="/sets">
+              View sets <IconArrowRight size={15} />
+            </Link>
           </div>
-          <Link to="/sets">
-            View sets <IconArrowRight size={15} />
-          </Link>
-        </div>
-
-        {recentSets.length > 0 ? (
           <div className="set-grid">
             {recentSets.slice(0, 6).map((set) => (
               <StudySetCard key={set.id} set={set} />
             ))}
-            <Link to="/study-packs/new" className="card card-interactive" style={{ minHeight: 190 }}>
-              <div className="stack" style={{ gap: 10, height: '100%', justifyContent: 'center', alignItems: 'flex-start' }}>
+            <Link
+              to="/study-packs/new"
+              className="card card-interactive"
+              style={{ minHeight: 190 }}
+            >
+              <div
+                className="stack"
+                style={{
+                  gap: 10,
+                  height: '100%',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                }}
+              >
                 <span className="quick-icon quick-icon-blue">
                   <IconPlus />
                 </span>
@@ -444,45 +276,54 @@ export function MyStudyPage() {
               </div>
             </Link>
           </div>
-        ) : (
-          <EmptyState
-            icon={<IconCards />}
-            title="Start your first Study Pack"
-            description="Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system."
-            action={
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <ButtonLink to="/study-packs/new">
-                  <IconSparkles size={17} /> Add study material
-                </ButtonLink>
-                <ButtonLink to="/sets/new" variant="secondary">
-                  Create a set manually
-                </ButtonLink>
-              </div>
-            }
-          />
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section>
-        <div className="section-title">
-          <div>
-            <h2>Subjects</h2>
-            <p className="muted">Organize your learning without losing the study flow.</p>
+      {!hasMaterial ? (
+        <EmptyState
+          icon={<IconCards />}
+          title="Start your first Study Pack"
+          description="Upload your notes, import a PDF or paste text and Lerno will turn it into a complete learning system."
+          action={
+            <div className="session-empty-actions">
+              <ButtonLink to="/study-packs/new">
+                <IconSparkles size={17} /> Add study material
+              </ButtonLink>
+              <ButtonLink to="/sets/new" variant="secondary">
+                Create a set manually
+              </ButtonLink>
+            </div>
+          }
+        />
+      ) : null}
+
+      {subjects.length > 0 ? (
+        <section aria-labelledby="my-study-subjects-list">
+          <div className="section-title">
+            <div>
+              <h2 id="my-study-subjects-list">Subjects</h2>
+              <p className="muted">
+                Open a subject to see mastery, due work and exams in one place.
+              </p>
+            </div>
+            <Link to="/subjects">
+              Manage subjects <IconArrowRight size={15} />
+            </Link>
           </div>
-          <Link to="/subjects">
-            Manage subjects <IconArrowRight size={15} />
-          </Link>
-        </div>
-
-        {subjects.length > 0 ? (
           <div className="set-grid">
             {subjects.slice(0, 6).map((subject) => (
-              <Link key={subject.id} to={`/subjects/${subject.id}`} className="card card-interactive">
+              <Link
+                key={subject.id}
+                to={`/subjects/${subject.id}`}
+                className="card card-interactive"
+              >
                 <div className="set-card-top">
                   <span className="set-card-symbol">
                     <IconBook size={22} />
                   </span>
-                  <Badge>{subject.setCount} packs</Badge>
+                  <Badge>
+                    {subject.setCount} pack{subject.setCount === 1 ? '' : 's'}
+                  </Badge>
                 </div>
                 <div className="set-card-body">
                   <span className="set-card-subject">Subject</span>
@@ -492,14 +333,8 @@ export function MyStudyPage() {
               </Link>
             ))}
           </div>
-        ) : (
-          <EmptyState
-            title="No subjects yet"
-            description="Create subjects to keep your study packs organized."
-            action={<ButtonLink to="/subjects">Create a subject</ButtonLink>}
-          />
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="quick-actions" aria-label="Study actions">
         <Link to="/study-packs">

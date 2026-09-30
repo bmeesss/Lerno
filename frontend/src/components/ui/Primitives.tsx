@@ -7,6 +7,15 @@ export function Spinner({ large }: { large?: boolean }) {
   );
 }
 
+/**
+ * A spinner for inside buttons and sentences: a `<span>` (valid inside `<p>`,
+ * `<span>` and `<button>`) that is hidden from assistive technology, because the
+ * surrounding text ("Saving…", "Checking…") already says what is happening.
+ */
+export function InlineSpinner() {
+  return <span className="spinner spinner-inline" aria-hidden="true" />;
+}
+
 /** Layout-shaped placeholders, announced once rather than as six loading cards. */
 export function LoadingRow({ large }: { large?: boolean }) {
   return (

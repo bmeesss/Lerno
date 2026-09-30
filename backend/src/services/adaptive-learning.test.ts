@@ -63,7 +63,7 @@ describe('adaptive mastery model', () => {
     expect(Date.parse(easy.nextReviewAt!) - NOW.getTime()).toBe(7 * 86_400_000);
   });
 
-  it('ranks weak, new, due, learning and mastered concepts from the current state', () => {
+  it('ranks weak, new, learning, due and mastered concepts from the current state', () => {
     const weak = { ...emptyMastery(), mastery: 0.2, attempts: 2, nextReviewAt: '2026-10-10T00:00:00Z' };
     const fresh = emptyMastery();
     const due = {
@@ -87,7 +87,7 @@ describe('adaptive mastery model', () => {
       NOW,
     );
     expect(ranked.map((entry) => entry.concept.id)).toEqual([
-      'weak', 'new', 'due', 'learning', 'mastered',
+      'weak', 'new', 'learning', 'due', 'mastered',
     ]);
     expect(isConceptDue(due, NOW)).toBe(true);
   });

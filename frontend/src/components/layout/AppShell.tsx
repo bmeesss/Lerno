@@ -100,6 +100,9 @@ export function AppShell() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const focusMatch = pathname.match(/^\/sets\/([^/]+)\/(study|practice|quiz|ai-study)$/);
+  // A study session is a focus screen too: no sidebar, no tab bar, one activity.
+  const sessionFocus = /^\/study\/sessions\/[^/]+$/.test(pathname);
+  const focusMode = Boolean(focusMatch) || sessionFocus;
   const packMatch = pathname.match(/^\/study-packs\/([^/]+)$/);
   const pageTitle =
     groups
@@ -109,12 +112,12 @@ export function AppShell() {
     'Your workspace';
 
   return (
-    <div className={`app-shell${focusMatch ? ' app-shell-focus' : ''}`}>
+    <div className={`app-shell${focusMode ? ' app-shell-focus' : ''}`}>
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
 
-      {!focusMatch && (
+      {!focusMode && (
         <aside className="sidebar">
           <div className="sidebar-brand">
             <Logo to="/dashboard" />
@@ -168,20 +171,22 @@ export function AppShell() {
           </div>
 
           <div className="workspace-crumb">
-            <span>{focusMatch ? 'Focus session' : 'Lerno'}</span>
+            <span>{focusMode ? 'Focus session' : 'Lerno'}</span>
             <span aria-hidden="true">/</span>
             <strong>
               {focusMatch
                 ? focusMatch[2] === 'ai-study'
                   ? 'AI study'
                   : focusMatch[2]!.replace(/^./, (c) => c.toUpperCase())
-                : packMatch
-                  ? 'Study pack'
-                  : pageTitle}
+                : sessionFocus
+                  ? 'Study session'
+                  : packMatch
+                    ? 'Study pack'
+                    : pageTitle}
             </strong>
           </div>
 
-          {!focusMatch && (
+          {!focusMode && (
             <form
               className="topbar-search"
               role="search"
@@ -208,6 +213,10 @@ export function AppShell() {
               <Link to={`/sets/${focusMatch[1]}`} className="btn btn-secondary btn-sm">
                 Back to set
               </Link>
+            ) : sessionFocus ? (
+              <Link to="/study" className="btn btn-secondary btn-sm">
+                My Study
+              </Link>
             ) : (
               <Link
                 to={user ? '/profile' : '/login'}
@@ -225,7 +234,7 @@ export function AppShell() {
         </main>
       </div>
 
-      {!focusMatch && (
+      {!focusMode && (
         <nav className="mobile-nav" aria-label="Mobile navigation">
           {mobileItems.map(({ to, label, Icon }) => (
             <NavLink

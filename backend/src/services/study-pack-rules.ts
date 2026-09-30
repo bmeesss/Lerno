@@ -12,13 +12,13 @@
  * tested and later replaced (e.g. by a smarter mastery model) without touching
  * services or controllers.
  */
+import { DEFAULT_TIMEZONE, todayInZone } from '../lib/timezone.js';
 import type {
   AnswerVerdict,
   CardRecord,
   ConceptMasteryRecord,
   ConceptRecord,
   PracticeQuestionRecord,
-  StudyPlanSession,
 } from '../lib/db/types.js';
 
 /* --------------------------------- grading -------------------------------- */
@@ -276,31 +276,55 @@ export function isConceptDue(state: MasteryState, now: Date = new Date()): boole
   return Number.isFinite(dueAt) && dueAt <= now.getTime();
 }
 
-/** Priority: weak → new → due/stale → learning/familiar → mastered checks. */
+export type LearnReason = 'weak' | 'new' | 'learning' | 'due' | 'confirmation';
+
+/** Learn tiers, most urgent first. */
+const LEARN_TIERS: LearnReason[] = ['weak', 'new', 'learning', 'due', 'confirmation'];
+
+/** Which Learn tier a concept is in: the single definition the ranking and the UI reason share. */
+export function learnReason(state: MasteryState, now: Date = new Date()): LearnReason {
+  if (state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD) return 'weak';
+  if (state.attempts === 0) return 'new';
+  if (state.mastery < LEARNING_MASTERY_THRESHOLD) return 'learning';
+  if (isConceptDue(state, now)) return 'due';
+  return 'confirmation';
+}
+
+/**
+ * Learn priority, from the student's live mastery state:
+ *   weak → new → learning → due → mastered confirmation.
+ *
+ * "Learning" is the 30–60% band, "due" is a familiar concept whose review date
+ * has passed, and the last tier confirms what looks mastered. Within a tier the
+ * most urgent concept goes first (lowest mastery, or longest overdue).
+ */
 export function rankLearnCandidates(
   candidates: LearnCandidate[],
   excludedIds: string[] = [],
   now: Date = new Date(),
 ): LearnCandidate[] {
   const excluded = new Set(excludedIds);
-  const priority = (candidate: LearnCandidate): number => {
-    const { state } = candidate;
-    if (state.attempts > 0 && state.mastery < WEAK_MASTERY_THRESHOLD) return 0;
-    if (state.attempts === 0) return 1;
-    if (isConceptDue(state, now)) return 2;
-    if (state.mastery < STRONG_MASTERY_THRESHOLD) return 3;
-    return 4;
-  };
+  const tierOf = (candidate: LearnCandidate): number =>
+    LEARN_TIERS.indexOf(learnReason(candidate.state, now));
+  const dueAt = (state: MasteryState): string => state.nextReviewAt ?? '';
   return candidates
     .filter(({ concept }) => !excluded.has(concept.id))
     .slice()
-    .sort((a, b) =>
-      priority(a) - priority(b) ||
-      (priority(a) === 0 || priority(a) === 3 || priority(a) === 4
-        ? a.state.mastery - b.state.mastery
-        : (a.state.nextReviewAt ?? '').localeCompare(b.state.nextReviewAt ?? '')) ||
-      a.concept.position - b.concept.position,
-    );
+    .sort((a, b) => {
+      const tierA = tierOf(a);
+      const tierB = tierOf(b);
+      if (tierA !== tierB) return tierA - tierB;
+      // Tiers with a review schedule: the longest overdue first, then weakest.
+      if (tierA === 2 || tierA === 3) {
+        return (
+          dueAt(a.state).localeCompare(dueAt(b.state)) ||
+          a.state.mastery - b.state.mastery ||
+          a.concept.position - b.concept.position
+        );
+      }
+      if (tierA === 1) return a.concept.position - b.concept.position;
+      return a.state.mastery - b.state.mastery || a.concept.position - b.concept.position;
+    });
 }
 
 export interface RankedRecommendation {
@@ -372,11 +396,19 @@ export function conceptIdForCard(card: Pick<CardRecord, 'question' | 'answer'>, 
 
 /* ---------------------------- exam + planning ----------------------------- */
 
-/** Whole days from `now` until an ISO calendar day (negative when past). */
-export function daysUntil(dayIso: string, now: Date): number {
+/**
+ * Whole calendar days from *today* until an ISO calendar day (negative when past).
+ *
+ * An exam date is a calendar day, not an instant, so "today" has to be the
+ * student's local day: at 23:30 UTC on the 8th it is already the 9th in
+ * Amsterdam, and the countdown must say so. Both sides are compared as
+ * `YYYY-MM-DD` days (pure calendar arithmetic, immune to DST), which removes the
+ * off-by-one a UTC-only comparison has around midnight.
+ */
+export function daysUntil(dayIso: string, now: Date, timeZone: string = DEFAULT_TIMEZONE): number {
   const target = Date.parse(`${dayIso}T00:00:00Z`);
   if (Number.isNaN(target)) return 0;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = Date.parse(`${todayInZone(timeZone, now)}T00:00:00Z`);
   return Math.round((target - today) / 86_400_000);
 }
 
@@ -386,109 +418,9 @@ export function addDaysIso(dayIso: string, days: number): string {
   return result.toISOString().slice(0, 10);
 }
 
-export function todayIso(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-export interface StudyPlanInput {
-  title: string;
-  days: number;
-  minutesPerDay: number;
-  /** Days actually needed for the first pass over all concepts/cards. */
-  conceptCount: number;
-  cardCount: number;
-  questionCount: number;
-  dueCards: number;
-  weakConceptNames: string[];
-  startDay: string;
-}
-
-/**
- * Builds a practical, deterministic study plan: a first pass over the material
- * (concepts), then interleaved practice and spaced review with a final exam
- * simulation. No AI required, so the plan always exists once there is an exam
- * date — it can later be enriched by the AI planner.
- */
-export function buildStudyPlan(input: StudyPlanInput): { overview: string; sessions: StudyPlanSession[] } {
-  const days = Math.max(1, Math.min(60, Math.round(input.days)));
-  const minutes = Math.max(10, Math.min(180, Math.round(input.minutesPerDay)));
-
-  // Roughly 4 concepts or 12 cards per study day as the first-pass workload.
-  const workloadDays =
-    input.conceptCount > 0 || input.cardCount > 0
-      ? Math.ceil(Math.max(input.conceptCount / 4, input.cardCount / 12))
-      : 1;
-  const learningDays = Math.max(1, Math.min(days - 1 > 0 ? days - 1 : days, workloadDays));
-  const practiceReady = input.questionCount > 0;
-
-  const sessions: StudyPlanSession[] = [];
-  for (let day = 1; day <= days; day += 1) {
-    const date = addDaysIso(input.startDay, day - 1);
-    const isExamEve = day === days;
-    const focusConcept = input.weakConceptNames[(day - 1) % Math.max(1, input.weakConceptNames.length)];
-
-    if (isExamEve) {
-      sessions.push({
-        day,
-        date,
-        focus: 'Exam simulation and final review',
-        activities: [
-          'Take one exam simulation without hints',
-          'Review every mistake from the test',
-          'Review the cards that are due today',
-        ],
-        minutes,
-      });
-      continue;
-    }
-
-    if (day <= learningDays) {
-      const activities = [
-        input.conceptCount > 0
-          ? `Learn up to ${Math.min(3, input.conceptCount)} concepts using your mastery-first queue`
-          : null,
-        input.cardCount > 0 ? 'Study the matching flashcards' : null,
-        practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
-        day === 1 && input.dueCards > 0 ? `Review ${Math.min(8, input.dueCards)} cards due now` : null,
-        focusConcept ? `Revisit weak concept: ${focusConcept}` : null,
-      ].filter((activity): activity is string => activity !== null);
-      sessions.push({
-        day,
-        date,
-        focus: input.conceptCount > 0 ? 'Learn new concepts' : 'Learn new flashcards',
-        activities: activities.length > 0 ? activities : [`Study ${input.title}`],
-        minutes,
-      });
-      continue;
-    }
-
-    const activities = [
-      focusConcept ? `Practice weak concept: ${focusConcept}` : null,
-      practiceReady ? `Practice up to ${Math.min(10, input.questionCount)} questions` : null,
-      input.dueCards > 0 ? `Review up to ${Math.min(8, input.dueCards)} due cards` : null,
-      day >= days - 2 && input.questionCount >= 3 ? 'Take a practice test and review its mistakes' : null,
-      !focusConcept && !practiceReady && input.cardCount > 0 ? 'Review flashcards to check recall' : null,
-    ].filter((activity): activity is string => activity !== null);
-    sessions.push({
-      day,
-      date,
-      focus: day % 2 === 0 ? 'Practice weak topics' : 'Spaced review',
-      activities: activities.length > 0 ? activities : ['Check your current mastery and adjust the next session'],
-      minutes,
-    });
-  }
-
-  const overviewParts = [
-    `${days} days of study at ${minutes} minutes per day.`,
-    input.conceptCount > 0 ? `${input.conceptCount} concepts to understand.` : null,
-    input.cardCount > 0 ? `${input.cardCount} flashcards to learn.` : null,
-    input.dueCards > 0 ? `${input.dueCards} cards are already due for review.` : null,
-    input.weakConceptNames.length > 0
-      ? `Weakest right now: ${input.weakConceptNames.slice(0, 3).join(', ')}.`
-      : null,
-  ].filter((part): part is string => part !== null);
-
-  return { overview: overviewParts.join(' '), sessions };
+/** Today's calendar day (YYYY-MM-DD) in the student's timezone (UTC by default). */
+export function todayIso(now: Date = new Date(), timeZone: string = DEFAULT_TIMEZONE): string {
+  return todayInZone(timeZone, now);
 }
 
 /* --------------------------- recommended action --------------------------- */

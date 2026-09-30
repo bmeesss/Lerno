@@ -25,6 +25,7 @@ import { QuizPage } from './pages/quiz/QuizPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { PracticePage } from './pages/study/PracticePage';
 import { StudyPage } from './pages/study/StudyPage';
+import { StudySessionPage } from './pages/study/StudySessionPage';
 import { AiStudyPage } from './pages/sets/AiStudyPage';
 import { MyStudyPage } from './pages/study/MyStudyPage';
 import { StudyPacksPage } from './pages/study-packs/StudyPacksPage';
@@ -69,6 +70,7 @@ export function App() {
 
         <Route path="/dashboard" element={authed(<DashboardPage />)} />
         <Route path="/study" element={authed(<MyStudyPage />)} />
+        <Route path="/study/sessions/:sessionId" element={authed(<StudySessionPage />)} />
         <Route path="/ai" element={authed(<LernoAiPage />)} />
         <Route path="/ai/studio" element={authed(<AIStudioPage />)} />
         <Route path="/subjects" element={authed(<SubjectsPage />)} />

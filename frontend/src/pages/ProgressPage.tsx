@@ -2,27 +2,44 @@ import { IconFlame } from '../components/ui/Icons';
 import { Button, ButtonLink } from '../components/ui/Button';
 import { EmptyState, LoadingRow, ProgressBar } from '../components/ui/Primitives';
 import { TodayPanel } from '../components/dashboard/TodayPanel';
+import { PackProgressCard } from '../components/progress/PackProgressCard';
+import { formatDay } from '../components/progress/TrendSparkline';
 import { useAsync } from '../hooks/useAsync';
+import { formatMinutes } from '../lib/studyPackRoutes';
 import { progressService } from '../services/progressService';
-import { studyPackService } from '../services/studyPackService';
-import type { ProgressStats, StudyPackSummary, TodaySummary, WeekSummary } from '../types';
+import type { ProgressStats, StudyProgressOverview, TodaySummary, WeekSummary } from '../types';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <section className="card stat-card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-sub">{sub}</div>
+    </section>
+  );
+}
+
+/**
+ * Progress: real study data only. Mastery comes from concepts, time from
+ * active study, trends only appear once there are enough real days, and an
+ * empty account says so instead of drawing a chart.
+ */
 export function ProgressPage() {
-  const { data, loading, error, reload } = useAsync<ProgressStats>(() => progressService.get(), []);
+  const study = useAsync<StudyProgressOverview>(() => progressService.study(), []);
+  const { data: legacy } = useAsync<ProgressStats>(() => progressService.get(), []);
   const { data: today } = useAsync<TodaySummary>(() => progressService.today(), []);
   const { data: week } = useAsync<WeekSummary>(() => progressService.week(), []);
-  const { data: packs } = useAsync<StudyPackSummary[]>(() => studyPackService.list(), []);
 
-  if (loading) return <LoadingRow large />;
-  if (error || !data) {
+  if (study.loading && !study.data) return <LoadingRow large />;
+  if (study.error || !study.data) {
     return (
       <EmptyState
         title="Could not load progress"
-        description={error ?? 'Try again in a moment.'}
+        description={study.error ?? 'Try again in a moment.'}
         action={
-          <Button variant="secondary" onClick={reload}>
+          <Button variant="secondary" onClick={study.reload}>
             Try again
           </Button>
         }
@@ -30,171 +47,229 @@ export function ProgressPage() {
     );
   }
 
+  const overview = study.data;
+  const { overall, streak } = overview;
+
   return (
-    <>
+    <div className="stack progress-page" style={{ gap: 28 }}>
       <div className="page-header">
         <div>
           <h1>Progress</h1>
-          <p>Honest numbers about your study activity.</p>
+          <p>Honest numbers from your real study activity.</p>
         </div>
-        <ButtonLink to="/review">Go to review</ButtonLink>
+        {overview.hasActivity ? (
+          <ButtonLink to="/study" size="lg">
+            Continue studying
+          </ButtonLink>
+        ) : null}
       </div>
 
-      <div className="progress-highlights">
-        <section className="card stat-card progress-highlight">
-          <div className="stat-label">Cards studied</div>
-          <div className="stat-value">{data.cardsStudied}</div>
-          <div className="stat-sub">Unique cards with progress</div>
-          <IconFlame size={24} />
-        </section>
-        <section className="card stat-card">
-          <div className="stat-label">Flashcard accuracy</div>
-          <div className="stat-value">
-            {data.accuracy === null ? '—' : `${Math.round(data.accuracy * 100)}%`}
-          </div>
-          <div className="stat-sub">
-            {data.correctAnswers} correct · {data.incorrectAnswers} incorrect
-          </div>
-        </section>
-        <section className="card stat-card">
-          <div className="stat-label">Study streak</div>
-          <div className="stat-value">
-            {data.streakDays} <span className="stat-unit">days</span>
-          </div>
-          <div className="stat-sub">
-            {data.longestStreak > 0
-              ? `Best ${data.longestStreak} days`
-              : 'Study today to start one'}
-          </div>
-        </section>
-      </div>
-      <dl className="progress-details">
-        <div>
-          <dt>Study time</dt>
-          <dd>{formatMinutes(data.studyTimeMinutes)}</dd>
-        </div>
-        <div>
-          <dt>Quiz attempts</dt>
-          <dd>{data.quizAttempts}</dd>
-        </div>
-        <div>
-          <dt>Quiz accuracy</dt>
-          <dd>{data.quizAccuracy === null ? '—' : `${Math.round(data.quizAccuracy * 100)}%`}</dd>
-        </div>
-        <div>
-          <dt>Due now</dt>
-          <dd>{data.dueCards}</dd>
-        </div>
-      </dl>
-      <div className="progress-activity">
-        {week ? <WeekPanel week={week} /> : null}
-        {today ? <TodayPanel today={today} showAction={false} /> : null}
-      </div>
-
-      {packs && packs.length > 0 ? (
-        <section aria-labelledby="pack-progress-heading" className="stack" style={{ gap: 16, marginBottom: 28 }}>
-          <div className="section-title">
-            <div>
-              <h2 id="pack-progress-heading">Study Pack mastery</h2>
-              <p className="muted">Mastery is averaged across concepts, not cards opened.</p>
-            </div>
-          </div>
-          <div className="progress-highlights">
-            <section className="card stat-card">
-              <div className="stat-label">Overall mastery</div>
-              <div className="stat-value">
-                {formatPackMastery(packs)}
-              </div>
-              <div className="stat-sub">Across {packs.reduce((sum, pack) => sum + pack.concepts, 0)} concepts</div>
-            </section>
-            <section className="card stat-card">
-              <div className="stat-label">Strong concepts</div>
-              <div className="stat-value">{packs.reduce((sum, pack) => sum + pack.masteredConcepts, 0)}</div>
-              <div className="stat-sub">85% mastery or higher</div>
-            </section>
-            <section className="card stat-card">
-              <div className="stat-label">Learning / weak</div>
-              <div className="stat-value">
-                {packs.reduce((sum, pack) => sum + pack.learningConcepts + pack.weakConcepts, 0)}
-              </div>
-              <div className="stat-sub">
-                {packs.reduce((sum, pack) => sum + pack.weakConcepts, 0)} weak ·{' '}
-                {packs.reduce((sum, pack) => sum + pack.learningConcepts, 0)} learning
-              </div>
-            </section>
-          </div>
-          <div className="stack" style={{ gap: 12 }}>
-            {packs.map((pack) => (
-              <div key={pack.id} className="subject-row">
-                <div className="subject-row-top">
-                  <span style={{ fontWeight: 600 }}>{pack.title}</span>
-                  <span className="muted" style={{ fontSize: '0.825rem' }}>
-                    {pack.masteryPercent}% · {pack.masteredConcepts}/{pack.concepts} concepts mastered
-                  </span>
-                </div>
-                <ProgressBar value={pack.masteryPercent} max={100} />
-                <div className="muted" style={{ fontSize: '0.825rem', marginTop: 6 }}>
-                  {pack.weakConcepts} weak · {pack.learningConcepts} learning · {pack.dueCards} cards due ·{' '}
-                  {pack.practiceAnswers} questions answered · {pack.testsCompleted} tests completed
-                  {pack.lastStudiedAt ? ` · last studied ${formatRelative(pack.lastStudiedAt)}` : ' · not studied yet'}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {data.subjectProgress.length > 0 ? (
-        <>
-          <div className="section-title">
-            <h2>Subject progress</h2>
-          </div>
-          <div className="stack" style={{ gap: 16, marginBottom: 28 }}>
-            {data.subjectProgress.map((subject) => (
-              <div key={subject.subjectId ?? subject.subjectName} className="subject-row">
-                <div className="subject-row-top">
-                  <span style={{ fontWeight: 600 }}>{subject.subjectName}</span>
-                  <span className="muted" style={{ fontSize: '0.825rem' }}>
-                    {subject.learnedCards} / {subject.totalCards} learned
-                    {subject.accuracy !== null
-                      ? ` · ${Math.round(subject.accuracy * 100)}% card accuracy`
-                      : ''}
-                  </span>
-                </div>
-                <ProgressBar value={subject.learnedCards} max={Math.max(subject.totalCards, 1)} />
-              </div>
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      {data.setProgress.length > 0 ? (
-        <>
-          <div className="section-title">
-            <h2>Set progress</h2>
-          </div>
-          <div className="stack" style={{ gap: 16 }}>
-            {data.setProgress.map((set) => (
-              <div key={set.setId} className="subject-row">
-                <div className="subject-row-top">
-                  <span style={{ fontWeight: 600 }}>{set.setTitle}</span>
-                  <span className="muted" style={{ fontSize: '0.825rem' }}>
-                    {set.learnedCards} / {set.totalCards} learned · {set.dueCards} due
-                  </span>
-                </div>
-                <ProgressBar value={set.learnedCards} max={Math.max(set.totalCards, 1)} />
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
+      {!overview.hasActivity ? (
         <EmptyState
           title="No study data yet"
-          description="Study a few cards and your progress will show up here."
-          action={<ButtonLink to="/discover">Find a study set</ButtonLink>}
+          description="Finish a practice session, a test or a flashcard review and your progress shows up here. Lerno only shows what you really did."
+          action={<ButtonLink to="/study">Start studying</ButtonLink>}
         />
+      ) : (
+        <>
+          <section aria-labelledby="progress-overview-title">
+            <h2 id="progress-overview-title" className="visually-hidden">
+              Overview
+            </h2>
+            <div className="study-stats">
+              <Stat
+                label="Overall mastery"
+                value={overall.masteryPercent === null ? '—' : `${overall.masteryPercent}%`}
+                sub={
+                  overall.conceptsTotal > 0
+                    ? `Across ${overall.conceptsTotal} concept${overall.conceptsTotal === 1 ? '' : 's'}`
+                    : 'No concepts yet'
+                }
+              />
+              <Stat
+                label="Study time"
+                value={
+                  overall.studySeconds > 0 && overall.studyMinutes === 0
+                    ? '< 1 min'
+                    : formatMinutes(overall.studyMinutes)
+                }
+                sub="Active time, idle gaps excluded"
+              />
+              <Stat
+                label="Questions answered"
+                value={String(overall.questionsAnswered)}
+                sub="Practice, learn checks and tests"
+              />
+              <Stat
+                label="Cards reviewed"
+                value={String(overall.cardsReviewed)}
+                sub="Flashcard reviews"
+              />
+              <Stat
+                label="Tests completed"
+                value={String(overall.testsCompleted)}
+                sub={`${overall.sessionsCompleted} session${overall.sessionsCompleted === 1 ? '' : 's'} finished`}
+              />
+              <Stat
+                label="Concepts mastered"
+                value={String(overall.conceptsMastered)}
+                sub={`of ${overall.conceptsTotal} · 85% or higher`}
+              />
+              <Stat
+                label="Recent improvement"
+                value={
+                  overall.recentImprovement
+                    ? `${overall.recentImprovement.changePercent > 0 ? '+' : ''}${overall.recentImprovement.changePercent} pts`
+                    : '—'
+                }
+                sub={
+                  overall.recentImprovement
+                    ? `Mastery over the last ${overall.recentImprovement.windowDays} days`
+                    : `Shown after ${overview.trendMinDays} days of study`
+                }
+              />
+              <Stat
+                label="Study streak"
+                value={`${streak.current} ${streak.current === 1 ? 'day' : 'days'}`}
+                sub={
+                  streak.longest > 0
+                    ? `Best ${streak.longest} ${streak.longest === 1 ? 'day' : 'days'} · finished sessions only`
+                    : 'Finish a session to start one'
+                }
+              />
+            </div>
+          </section>
+
+          {overall.improvedConcepts.length > 0 ? (
+            <section aria-labelledby="progress-improved-title">
+              <div className="section-title">
+                <div>
+                  <h2 id="progress-improved-title">Improved recently</h2>
+                  <p className="muted">Concepts that went up in your latest sessions.</p>
+                </div>
+              </div>
+              <ul className="progress-improved" role="list">
+                {overall.improvedConcepts.slice(0, 5).map((concept) => (
+                  <li key={concept.conceptId} className="card">
+                    <strong>{concept.name}</strong>
+                    <span className="progress-improved-change">
+                      {concept.beforePercent}% → {concept.afterPercent}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {overview.packs.length > 0 ? (
+            <section aria-labelledby="progress-packs-title">
+              <div className="section-title">
+                <div>
+                  <h2 id="progress-packs-title">Study packs</h2>
+                  <p className="muted">
+                    Mastery is averaged across concepts, not cards opened. As of{' '}
+                    {formatDay(overview.today)}.
+                  </p>
+                </div>
+              </div>
+              <ul className="progress-pack-list" role="list">
+                {overview.packs.map((pack) => (
+                  <PackProgressCard key={pack.packId} pack={pack} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {legacy ? (
+            <section aria-labelledby="progress-cards-title" className="stack" style={{ gap: 16 }}>
+              <div className="section-title">
+                <div>
+                  <h2 id="progress-cards-title">Flashcards and quizzes</h2>
+                  <p className="muted">Spaced repetition on your sets.</p>
+                </div>
+              </div>
+              <div className="progress-highlights">
+                <section className="card stat-card progress-highlight">
+                  <div className="stat-label">Cards studied</div>
+                  <div className="stat-value">{legacy.cardsStudied}</div>
+                  <div className="stat-sub">Unique cards with progress</div>
+                  <IconFlame size={24} />
+                </section>
+                <section className="card stat-card">
+                  <div className="stat-label">Flashcard accuracy</div>
+                  <div className="stat-value">
+                    {legacy.accuracy === null ? '—' : `${Math.round(legacy.accuracy * 100)}%`}
+                  </div>
+                  <div className="stat-sub">
+                    {legacy.correctAnswers} correct · {legacy.incorrectAnswers} incorrect
+                  </div>
+                </section>
+                <section className="card stat-card">
+                  <div className="stat-label">Quiz accuracy</div>
+                  <div className="stat-value">
+                    {legacy.quizAccuracy === null
+                      ? '—'
+                      : `${Math.round(legacy.quizAccuracy * 100)}%`}
+                  </div>
+                  <div className="stat-sub">
+                    {legacy.quizAttempts} quiz attempt{legacy.quizAttempts === 1 ? '' : 's'} ·{' '}
+                    {legacy.dueCards} cards due
+                  </div>
+                </section>
+              </div>
+              <div className="progress-activity">
+                {week ? <WeekPanel week={week} /> : null}
+                {today ? <TodayPanel today={today} showAction={false} /> : null}
+              </div>
+
+              {legacy.subjectProgress.length > 0 ? (
+                <div className="stack" style={{ gap: 16 }}>
+                  <div className="section-title">
+                    <h2>Subject progress</h2>
+                  </div>
+                  {legacy.subjectProgress.map((subject) => (
+                    <div key={subject.subjectId ?? subject.subjectName} className="subject-row">
+                      <div className="subject-row-top">
+                        <span style={{ fontWeight: 600 }}>{subject.subjectName}</span>
+                        <span className="muted" style={{ fontSize: '0.825rem' }}>
+                          {subject.learnedCards} / {subject.totalCards} learned
+                          {subject.accuracy !== null
+                            ? ` · ${Math.round(subject.accuracy * 100)}% card accuracy`
+                            : ''}
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={subject.learnedCards}
+                        max={Math.max(subject.totalCards, 1)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {legacy.setProgress.length > 0 ? (
+                <div className="stack" style={{ gap: 16 }}>
+                  <div className="section-title">
+                    <h2>Set progress</h2>
+                  </div>
+                  {legacy.setProgress.map((set) => (
+                    <div key={set.setId} className="subject-row">
+                      <div className="subject-row-top">
+                        <span style={{ fontWeight: 600 }}>{set.setTitle}</span>
+                        <span className="muted" style={{ fontSize: '0.825rem' }}>
+                          {set.learnedCards} / {set.totalCards} learned · {set.dueCards} due
+                        </span>
+                      </div>
+                      <ProgressBar value={set.learnedCards} max={Math.max(set.totalCards, 1)} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+        </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -256,26 +331,4 @@ function WeekPanel({ week }: { week: WeekSummary }) {
       </div>
     </section>
   );
-}
-
-function formatPackMastery(packs: StudyPackSummary[]): string {
-  const conceptCount = packs.reduce((sum, pack) => sum + pack.concepts, 0);
-  if (conceptCount === 0) return '—';
-  const weighted = packs.reduce((sum, pack) => sum + pack.masteryPercent * pack.concepts, 0);
-  return `${Math.round(weighted / conceptCount)}%`;
-}
-
-function formatRelative(iso: string): string {
-  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
-  if (!Number.isFinite(days)) return 'recently';
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days} days ago`;
-}
-
-function formatMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
 }

@@ -11,10 +11,20 @@ import { z } from 'zod';
  */
 
 const titleSchema = z.string().trim().min(1, 'Title is required').max(160);
+/** "2026-02-31" matches the pattern but is not a day: reject it instead of showing "exam today". */
+function isRealCalendarDay(value: string): boolean {
+  const [year, month, day] = value.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
 const examDateSchema = z
   .string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-18')
+  .refine(isRealCalendarDay, 'Use a real calendar date')
   .nullable();
 
 export const packParamsSchema = z.object({
@@ -350,6 +360,17 @@ export const tutorSchema = z.object({
     )
     .max(8)
     .default([]),
+  /**
+   * Where the tutor was opened from — a concept, or a concept inside a study
+   * session. Optional: the plain pack tutor keeps working without it.
+   */
+  context: z
+    .object({
+      conceptId: z.string().uuid('Invalid concept id').optional(),
+      sessionId: z.string().uuid('Invalid study session id').optional(),
+      itemId: z.string().uuid('Invalid session item id').optional(),
+    })
+    .optional(),
 });
 
 export type CreatePackBody = z.infer<typeof createPackSchema>;
